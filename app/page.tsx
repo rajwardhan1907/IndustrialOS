@@ -5,6 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Quotes from "@/components/Quotes";
 import { Zap, Bell, Plus, Settings } from "lucide-react";
 import Dashboard     from "@/components/Dashboard";
 import Pipeline      from "@/components/Pipeline";
@@ -174,6 +175,7 @@ export default function App() {
       case "health":    return <SystemHealth health={health} met={met} alerts={alerts} />;
       // Modules not yet built — show coming soon
       case "quotes":
+        return <Quotes />;
       case "invoicing":
       case "shipping":
       case "customers":
