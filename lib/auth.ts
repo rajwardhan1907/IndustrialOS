@@ -1,10 +1,12 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs";
 
+// Change the USERS array to use hashed passwords:
 const USERS = [
-  { id: "1", name: "Admin User",    email: "admin@demo.com",    password: "admin123",    role: "admin"    },
-  { id: "2", name: "Operator User", email: "operator@demo.com", password: "operator123", role: "operator" },
-  { id: "3", name: "Viewer User",   email: "viewer@demo.com",   password: "viewer123",   role: "viewer"   },
+  { id: "1", name: "Admin User",    email: "admin@demo.com",    password: "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi", role: "admin"    },
+  { id: "2", name: "Operator User", email: "operator@demo.com", password: "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi", role: "operator" },
+  { id: "3", name: "Viewer User",   email: "viewer@demo.com",   password: "$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi", role: "viewer"   },
 ];
 
 export const authOptions: NextAuthOptions = {
@@ -20,7 +22,9 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
         const user = USERS.find(u => u.email === credentials.email.trim().toLowerCase());
-        if (!user || credentials.password !== user.password) return null;
+        if (!user) return null;
+        const valid = await bcrypt.compare(credentials.password, user.password);
+        if (!valid) return null;
         return { id: user.id, name: user.name, email: user.email, role: user.role };
       },
     }),
