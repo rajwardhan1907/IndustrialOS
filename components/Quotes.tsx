@@ -74,9 +74,8 @@ function parsePrompt(prompt: string): Omit<Quote, "id" | "quoteNumber" | "status
   if (forMatch) customer = forMatch[1].trim();
 
   // ── Extract SKUs ──────────────────────────────────────────────────────────
-  const skuMatches = [...prompt.matchAll(/SKU[-–]?(\w+)/gi)];
-  const qtyMatches = [...prompt.matchAll(/(\d{1,6})\s*(?:units?|pcs?|pieces?|x\s*SKU)/gi)];
-
+  const skuMatches = Array.from(prompt.matchAll(/SKU[-–]?(\w+)/gi));
+  const qtyMatches = Array.from(prompt.matchAll(/(\d{1,6})\s*(?:units?|pcs?|pieces?|x\s*SKU)/gi));
   const items: LineItem[] = [];
 
   if (skuMatches.length > 0) {
