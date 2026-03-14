@@ -9,7 +9,7 @@ import Quotes from "@/components/Quotes";
 import { Zap, Bell, Plus, Settings } from "lucide-react";
 import Dashboard     from "@/components/Dashboard";
 import Pipeline      from "@/components/Pipeline";
-import OrderKanban   from "@/components/OrderKanban";
+import OrdersPage    from "@/app/(dashboard)/orders/page";
 import InventorySync from "@/components/InventorySync";
 import CRMPanel      from "@/components/CRMPanel";
 import SystemHealth  from "@/components/SystemHealth";
@@ -169,7 +169,7 @@ export default function App() {
     switch (tab) {
       case "dashboard": return <Dashboard    met={met}    chart={chart}    alerts={alerts} />;
       case "pipeline":  return <Pipeline     pipe={pipe}  setPipe={setPipe} />;
-      case "orders":    return <OrderKanban  orders={orders} advanceOrder={advanceOrder} />;
+      case "orders":    return <OrdersPage />;
       case "inventory": return <InventorySync conflicts={conflicts} resolveConflict={resolveConflict} />;
       case "crm":       return <CRMPanel     crm={crm}    setCrm={setCrm} />;
       case "health":    return <SystemHealth health={health} met={met} alerts={alerts} />;
