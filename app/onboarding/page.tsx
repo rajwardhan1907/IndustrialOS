@@ -66,6 +66,7 @@ export default function OnboardingPage() {
   const [industry,    setIndustry]    = useState<Industry | "">("");
   const [teamSize,    setTeamSize]    = useState<TeamSize | "">("");
   const [modules,     setModules]     = useState<ModuleId[]>([]);
+  const [nameError,   setNameError]   = useState("");
   const [saveError,   setSaveError]   = useState("");
   // ── Toggle a module on/off ─────────────────────────────────────────────────
   const toggleModule = (id: ModuleId) => {
