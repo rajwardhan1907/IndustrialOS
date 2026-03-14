@@ -31,21 +31,28 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 
 export default function OrdersPage() {
-  const [orders, setOrders]     = useState<Order[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [title, setTitle]       = useState("");
-  const [status, setStatus]     = useState("pending");
-  const [priority, setPriority] = useState("medium");
-  const [saving, setSaving]     = useState(false);
-  const workspaceId = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") ?? "" : "";
-  // Load orders from database
+  const [orders, setOrders]           = useState<Order[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [showForm, setShowForm]       = useState(false);
+  const [title, setTitle]             = useState("");
+  const [status, setStatus]           = useState("pending");
+  const [priority, setPriority]       = useState("medium");
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState("");
+  const [workspaceId, setWorkspaceId] = useState("");
+
+  // Read workspaceId from localStorage AFTER component mounts (avoids SSR issue)
+  useEffect(() => {
+    const id = localStorage.getItem("workspaceDbId") ?? "";
+    setWorkspaceId(id);
+  }, []);
+
   const loadOrders = async () => {
     setLoading(true);
     try {
       const res  = await fetch("/api/orders");
       const data = await res.json();
-      setOrders(data);
+      setOrders(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Failed to load orders:", err);
     } finally {
@@ -55,28 +62,36 @@ export default function OrdersPage() {
 
   useEffect(() => { loadOrders(); }, []);
 
-  // Create a new order
   const createOrder = async () => {
     if (!title.trim()) return;
+    setError("");
+
+    if (!workspaceId) {
+      setError("No workspace found. Please complete onboarding first.");
+      return;
+    }
+
     setSaving(true);
     try {
-      await fetch("/api/orders", {
+      const res = await fetch("/api/orders", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          status,
-          priority,
-          workspaceId, // we'll improve this later
-        }),
+        body: JSON.stringify({ title, status, priority, workspaceId }),
       });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setError("Save failed: " + (errData.error ?? res.statusText));
+        return;
+      }
+
       setTitle("");
       setStatus("pending");
       setPriority("medium");
       setShowForm(false);
-      await loadOrders(); // refresh list
+      await loadOrders();
     } catch (err) {
-      console.error("Failed to create order:", err);
+      setError("Network error — could not reach the server.");
     } finally {
       setSaving(false);
     }
@@ -105,17 +120,28 @@ export default function OrdersPage() {
         </button>
       </div>
 
-      {/* Warning if no workspace linked yet */}
+      {/* Warning: no workspace */}
       {!workspaceId && (
         <div style={{
           background: "#2d1515", border: "1px solid #fc8181",
           borderRadius: 10, padding: "12px 18px", marginBottom: 20,
           color: "#fc8181", fontSize: 13,
         }}>
-          ⚠️ No workspace linked yet. Please complete onboarding again to connect to the database.
+          ⚠️ No workspace linked. Please complete onboarding to connect to the database.
         </div>
       )}
-      
+
+      {/* Error message */}
+      {error && (
+        <div style={{
+          background: "#2d1515", border: "1px solid #fc8181",
+          borderRadius: 10, padding: "12px 18px", marginBottom: 20,
+          color: "#fc8181", fontSize: 13,
+        }}>
+          ❌ {error}
+        </div>
+      )}
+
       {/* New Order Form */}
       {showForm && (
         <div style={{
@@ -134,28 +160,16 @@ export default function OrdersPage() {
                 borderRadius: 8, color: C.text, fontSize: 14, outline: "none",
               }}
             />
-            <select
-              value={status}
-              onChange={e => setStatus(e.target.value)}
-              style={{
-                padding: "10px 14px", background: "#1a1d2e",
-                border: `1px solid ${C.border}`, borderRadius: 8,
-                color: C.text, fontSize: 14, cursor: "pointer",
-              }}
+            <select value={status} onChange={e => setStatus(e.target.value)}
+              style={{ padding: "10px 14px", background: "#1a1d2e", border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, cursor: "pointer" }}
             >
               <option value="pending">Pending</option>
               <option value="processing">Processing</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </select>
-            <select
-              value={priority}
-              onChange={e => setPriority(e.target.value)}
-              style={{
-                padding: "10px 14px", background: "#1a1d2e",
-                border: `1px solid ${C.border}`, borderRadius: 8,
-                color: C.text, fontSize: 14, cursor: "pointer",
-              }}
+            <select value={priority} onChange={e => setPriority(e.target.value)}
+              style={{ padding: "10px 14px", background: "#1a1d2e", border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 14, cursor: "pointer" }}
             >
               <option value="low">Low Priority</option>
               <option value="medium">Medium Priority</option>
@@ -179,17 +193,12 @@ export default function OrdersPage() {
 
       {/* Orders List */}
       {loading ? (
-        <div style={{ textAlign: "center", color: C.muted, padding: 60 }}>
-          Loading orders...
-        </div>
+        <div style={{ textAlign: "center", color: C.muted, padding: 60 }}>Loading orders...</div>
       ) : orders.length === 0 ? (
-        <div style={{
-          textAlign: "center", color: C.muted, padding: 60,
-          background: C.surface, borderRadius: 14, border: `1px solid ${C.border}`,
-        }}>
+        <div style={{ textAlign: "center", color: C.muted, padding: 60, background: C.surface, borderRadius: 14, border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
           <p style={{ fontSize: 16, fontWeight: 600 }}>No orders yet</p>
-          <p style={{ fontSize: 13 }}>Click "+ New Order" to create your first one</p>
+          <p style={{ fontSize: 13 }}>Click &quot;+ New Order&quot; to create your first one</p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -199,8 +208,7 @@ export default function OrdersPage() {
               <div key={order.id} style={{
                 background: C.surface, border: `1px solid ${C.border}`,
                 borderRadius: 12, padding: "16px 20px",
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                gap: 12,
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12,
               }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{order.title}</div>
@@ -209,15 +217,10 @@ export default function OrdersPage() {
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700, padding: "4px 10px",
-                    borderRadius: 20, background: s.bg, color: s.color,
-                    textTransform: "capitalize",
-                  }}>{order.status}</span>
-                  <span style={{
-                    fontSize: 11, fontWeight: 700,
-                    color: PRIORITY_COLORS[order.priority] ?? C.muted,
-                  }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: s.bg, color: s.color, textTransform: "capitalize" }}>
+                    {order.status}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: PRIORITY_COLORS[order.priority] ?? C.muted }}>
                     {order.priority?.toUpperCase()}
                   </span>
                 </div>
