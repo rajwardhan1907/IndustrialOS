@@ -38,7 +38,7 @@ export default function OrdersPage() {
   const [status, setStatus]     = useState("pending");
   const [priority, setPriority] = useState("medium");
   const [saving, setSaving]     = useState(false);
-
+  const workspaceId = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") ?? "" : "";
   // Load orders from database
   const loadOrders = async () => {
     setLoading(true);
@@ -67,7 +67,7 @@ export default function OrdersPage() {
           title,
           status,
           priority,
-          workspaceId: "default", // we'll improve this later
+          workspaceId, // we'll improve this later
         }),
       });
       setTitle("");
@@ -105,6 +105,17 @@ export default function OrdersPage() {
         </button>
       </div>
 
+      {/* Warning if no workspace linked yet */}
+      {!workspaceId && (
+        <div style={{
+          background: "#2d1515", border: "1px solid #fc8181",
+          borderRadius: 10, padding: "12px 18px", marginBottom: 20,
+          color: "#fc8181", fontSize: 13,
+        }}>
+          ⚠️ No workspace linked yet. Please complete onboarding again to connect to the database.
+        </div>
+      )}
+      
       {/* New Order Form */}
       {showForm && (
         <div style={{
