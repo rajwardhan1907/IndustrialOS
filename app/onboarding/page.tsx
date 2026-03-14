@@ -114,7 +114,7 @@ export default function OnboardingPage() {
 
     // Also save to real database
     try {
-      await fetch("/api/workspaces", {
+      const wsRes = await fetch("/api/workspaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -122,11 +122,14 @@ export default function OnboardingPage() {
           industry: (industry || "other") as Industry,
         }),
       });
+      const wsData = await wsRes.json();
+      // Save the real database ID so other pages can use it
+      if (wsData.id) {
+        localStorage.setItem("workspaceDbId", wsData.id);
+      }
     } catch (err) {
       console.error("Could not save workspace to database:", err);
-      // App still works because localStorage is saved above
     }
-
     router.push("/");
   };
 
