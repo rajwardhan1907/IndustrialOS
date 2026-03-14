@@ -66,8 +66,7 @@ export default function OnboardingPage() {
   const [industry,    setIndustry]    = useState<Industry | "">("");
   const [teamSize,    setTeamSize]    = useState<TeamSize | "">("");
   const [modules,     setModules]     = useState<ModuleId[]>([]);
-  const [nameError,   setNameError]   = useState("");
-
+  const [saveError,   setSaveError]   = useState("");
   // ── Toggle a module on/off ─────────────────────────────────────────────────
   const toggleModule = (id: ModuleId) => {
     setModules(prev =>
@@ -122,12 +121,21 @@ export default function OnboardingPage() {
           industry: (industry || "other") as Industry,
         }),
       });
+      if (!wsRes.ok) {
+        const errData = await wsRes.json().catch(() => ({}));
+        setSaveError("DB error: " + (errData.error ?? wsRes.statusText));
+        return; // stop here — don't go to dashboard
+      }
       const wsData = await wsRes.json();
       if (wsData.id) {
         localStorage.setItem("workspaceDbId", wsData.id);
+      } else {
+        setSaveError("Workspace saved but no ID returned. Check your database.");
+        return;
       }
-    } catch (err) {
-      console.error("Could not save workspace to database:", err);
+    } catch (err: any) {
+      setSaveError("Network error: " + (err.message ?? "Could not reach server"));
+      return;
     }
     router.push("/");
   };
@@ -445,6 +453,11 @@ export default function OnboardingPage() {
               ))}
             </div>
 
+            {saveError && (
+              <div style={{ background: "#2d1515", border: "1px solid #fc8181", borderRadius: 10, padding: "12px 18px", marginBottom: 16, color: "#fc8181", fontSize: 13 }}>
+                ❌ {saveError}
+              </div>
+            )}
             <button onClick={() => void finish()} style={{ ...btnPrimary, width: "100%", fontSize: 16, padding: "15px" }}>
               Enter my workspace →
             </button>
