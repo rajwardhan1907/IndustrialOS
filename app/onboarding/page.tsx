@@ -123,6 +123,10 @@ export default function OnboardingPage() {
         }),
       });
       const wsData = await wsRes.json();
+      if (wsData.id) {
+        localStorage.setItem("workspaceDbId", wsData.id);
+      }
+      const wsData = await wsRes.json();
       // Save the real database ID so other pages can use it
       if (wsData.id) {
         localStorage.setItem("workspaceDbId", wsData.id);
