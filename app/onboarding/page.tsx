@@ -94,7 +94,7 @@ export default function OnboardingPage() {
   const back = () => setStep(s => Math.max(s - 1, 1));
 
   // ── Finish → save workspace and go to dashboard ───────────────────────────
-  const finish = () => {
+  const finish = async () => {
     const size  = (teamSize || "1-5") as TeamSize;
     const plan  = getPlan(size);
     const allMods: ModuleId[] = ["dashboard", ...modules.filter(m => m !== "dashboard")];
@@ -109,7 +109,24 @@ export default function OnboardingPage() {
       suggestedPlan:  plan,
     };
 
+    // Save to localStorage (keeps app working as before)
     saveWorkspace(config);
+
+    // Also save to real database
+    try {
+      await fetch("/api/workspaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:     companyName.trim(),
+          industry: (industry || "other") as Industry,
+        }),
+      });
+    } catch (err) {
+      console.error("Could not save workspace to database:", err);
+      // App still works because localStorage is saved above
+    }
+
     router.push("/");
   };
 
@@ -426,7 +443,7 @@ export default function OnboardingPage() {
               ))}
             </div>
 
-            <button onClick={finish} style={{ ...btnPrimary, width: "100%", fontSize: 16, padding: "15px" }}>
+            <button onClick={() => void finish()} style={{ ...btnPrimary, width: "100%", fontSize: 16, padding: "15px" }}>
               Enter my workspace →
             </button>
             <p style={{ fontSize: 11, color: C.subtle, marginTop: 10 }}>
