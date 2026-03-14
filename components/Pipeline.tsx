@@ -60,7 +60,7 @@ export default function Pipeline({ pipe, setPipe }: any) {
                 <CheckCircle size={12} color={C.green}/>
                 <span style={{fontFamily:"monospace",color:C.muted}}>Batch #{b.id}</span>
                 <span style={{color:C.subtle}}>1,000 rows</span>
-                <span style={{marginLeft:"auto",color:C.subtle,fontSize:11}}>{(Math.random()*.8+.3).toFixed(2)}s</span>
+                <span style={{marginLeft:"auto",color:C.subtle,fontSize:11}}>{((b.id % 8) * 0.1 + 0.3).toFixed(2)}s</span>
                 <span style={{padding:"2px 9px",background:C.greenBg,color:C.green,border:`1px solid ${C.greenBorder}`,borderRadius:999,fontSize:11,fontWeight:700}}>OK</span>
               </div>
             ))}
