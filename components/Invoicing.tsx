@@ -1,0 +1,743 @@
+"use client";
+// components/Invoicing.tsx
+// Invoicing & Payments module.
+// - Invoice list with status badges
+// - Create invoice manually with line items
+// - Auto-generate from a saved quote
+// - Mark as Paid / Partial payment
+// - Overdue detection (auto-flags past due date)
+// - Saved to localStorage — same pattern as Quotes.tsx
+
+import { useState, useEffect } from "react";
+import {
+  Plus, ChevronLeft, CheckCircle, Clock, AlertCircle,
+  XCircle, Trash2, User, Calendar, Hash, DollarSign,
+  FileText, Receipt, CreditCard, RefreshCw,
+} from "lucide-react";
+import { C, fmt } from "@/lib/utils";
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface InvoiceItem {
+  id:        string;
+  desc:      string;
+  qty:       number;
+  unitPrice: number;
+  total:     number;
+}
+
+type InvoiceStatus = "unpaid" | "paid" | "overdue" | "partial";
+type PaymentTerms  = "Net 15" | "Net 30" | "Net 60" | "Prepaid" | "Cash on Delivery";
+
+interface Invoice {
+  id:            string;
+  invoiceNumber: string;
+  customer:      string;
+  items:         InvoiceItem[];
+  subtotal:      number;
+  tax:           number;
+  total:         number;
+  amountPaid:    number;
+  paymentTerms:  PaymentTerms;
+  issueDate:     string; // ISO date string
+  dueDate:       string; // ISO date string
+  status:        InvoiceStatus;
+  notes:         string;
+  createdAt:     string;
+}
+
+// ── Status config ─────────────────────────────────────────────────────────────
+const STATUS_CONFIG: Record<InvoiceStatus, {
+  label: string; color: string; bg: string; border: string; icon: any;
+}> = {
+  unpaid:  { label: "Unpaid",   color: C.amber,  bg: C.amberBg,  border: C.amberBorder,  icon: Clock       },
+  paid:    { label: "Paid",     color: C.green,  bg: C.greenBg,  border: C.greenBorder,  icon: CheckCircle },
+  overdue: { label: "Overdue",  color: C.red,    bg: C.redBg,    border: C.redBorder,    icon: AlertCircle },
+  partial: { label: "Partial",  color: C.purple, bg: C.purpleBg, border: C.purpleBorder, icon: RefreshCw   },
+};
+
+// ── Payment terms → days ──────────────────────────────────────────────────────
+const TERMS_DAYS: Record<PaymentTerms, number> = {
+  "Net 15": 15, "Net 30": 30, "Net 60": 60,
+  "Prepaid": 0, "Cash on Delivery": 0,
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const makeId      = () => Math.random().toString(36).slice(2, 9);
+const makeInvNum  = () => `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+const fmtDate     = (d: string) => new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+const fmtMoney    = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function calcDueDate(issueDate: string, terms: PaymentTerms): string {
+  const d = new Date(issueDate);
+  d.setDate(d.getDate() + TERMS_DAYS[terms]);
+  return d.toISOString().split("T")[0];
+}
+
+function deriveStatus(inv: Invoice): InvoiceStatus {
+  if (inv.amountPaid >= inv.total) return "paid";
+  if (inv.amountPaid > 0)         return "partial";
+  if (new Date(inv.dueDate) < new Date()) return "overdue";
+  return "unpaid";
+}
+
+// ── localStorage ──────────────────────────────────────────────────────────────
+const STORAGE_KEY = "industrialos_invoices";
+
+function loadInvoices(): Invoice[] {
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function saveInvoices(invs: Invoice[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(invs));
+}
+
+// ── Seed demo invoices if empty ───────────────────────────────────────────────
+function seedDemoInvoices(): Invoice[] {
+  const today = new Date();
+  const past   = (d: number) => new Date(today.getTime() - d * 86400000).toISOString().split("T")[0];
+  const future = (d: number) => new Date(today.getTime() + d * 86400000).toISOString().split("T")[0];
+
+  const demos: Invoice[] = [
+    {
+      id: "demo1", invoiceNumber: "INV-2026-0312",
+      customer: "Acme Corp",
+      items: [
+        { id: "i1", desc: "SKU-4821 — Industrial bolts M10",   qty: 6,   unitPrice: 4050,  total: 24300 },
+      ],
+      subtotal: 24300, tax: 1944, total: 26244, amountPaid: 0,
+      paymentTerms: "Net 30", issueDate: past(10), dueDate: future(20),
+      status: "unpaid", notes: "Please pay by due date.", createdAt: past(10),
+    },
+    {
+      id: "demo2", invoiceNumber: "INV-2026-0201",
+      customer: "TechWave Ltd",
+      items: [
+        { id: "i2", desc: "SKU-2210 — Conveyor belt assembly", qty: 8,   unitPrice: 5600,  total: 44800 },
+      ],
+      subtotal: 44800, tax: 3584, total: 48384, amountPaid: 48384,
+      paymentTerms: "Net 30", issueDate: past(25), dueDate: past(5),
+      status: "paid", notes: "", createdAt: past(25),
+    },
+    {
+      id: "demo3", invoiceNumber: "INV-2026-0188",
+      customer: "NovaBuild Inc",
+      items: [
+        { id: "i3", desc: "SKU-3318 — Steel framing unit",     qty: 4,   unitPrice: 3800,  total: 15200 },
+        { id: "i4", desc: "SKU-7753 — Anchor bolts (set/100)", qty: 2,   unitPrice: 4375,  total: 8750  },
+      ],
+      subtotal: 23950, tax: 1916, total: 25866, amountPaid: 0,
+      paymentTerms: "Net 30", issueDate: past(45), dueDate: past(15),
+      status: "overdue", notes: "Second reminder sent.", createdAt: past(45),
+    },
+    {
+      id: "demo4", invoiceNumber: "INV-2026-0298",
+      customer: "TechWave Ltd",
+      items: [
+        { id: "i5", desc: "SKU-9034 — Motor controller unit",  qty: 3,   unitPrice: 4200,  total: 12600 },
+      ],
+      subtotal: 12600, tax: 1008, total: 13608, amountPaid: 7000,
+      paymentTerms: "Net 60", issueDate: past(14), dueDate: future(46),
+      status: "partial", notes: "Partial payment of $7,000 received.", createdAt: past(14),
+    },
+  ];
+  return demos;
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+const Card = ({ children, style = {} }: any) => (
+  <div style={{
+    background: C.surface, border: `1px solid ${C.border}`,
+    borderRadius: 14, padding: "20px 22px", ...style,
+  }}>{children}</div>
+);
+
+const SectionTitle = ({ children }: any) => (
+  <div style={{ fontWeight: 700, fontSize: 13, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>
+    {children}
+  </div>
+);
+
+const Badge = ({ status }: { status: InvoiceStatus }) => {
+  const s = STATUS_CONFIG[status];
+  const Icon = s.icon;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5,
+      padding: "3px 10px", borderRadius: 999, fontSize: 11,
+      fontWeight: 700, color: s.color, background: s.bg, border: `1px solid ${s.border}`,
+    }}>
+      <Icon size={10} />{s.label}
+    </span>
+  );
+};
+
+const Input = ({ label, value, onChange, type = "text", placeholder = "" }: any) => (
+  <div style={{ marginBottom: 14 }}>
+    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+      {label}
+    </label>
+    <input
+      type={type}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        width: "100%", padding: "10px 12px",
+        background: C.bg, border: `1px solid ${C.border}`,
+        borderRadius: 9, color: C.text, fontSize: 13,
+        outline: "none", boxSizing: "border-box", fontFamily: "inherit",
+      }}
+    />
+  </div>
+);
+
+// ── Main Component ────────────────────────────────────────────────────────────
+export default function Invoicing() {
+  const [view,     setView]     = useState<"list" | "create" | "detail">("list");
+  const [invoices, setInvoices] = useState<Invoice[]>(() => {
+    const saved = loadInvoices();
+    if (saved.length === 0) {
+      const demo = seedDemoInvoices();
+      saveInvoices(demo);
+      return demo;
+    }
+    return saved;
+  });
+  const [selected,  setSelected]  = useState<Invoice | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payError,  setPayError]  = useState("");
+
+  // ── Auto-refresh status (overdue check) ───────────────────────────────────
+  useEffect(() => {
+    const refreshed = invoices.map(inv => ({ ...inv, status: deriveStatus(inv) }));
+    const changed   = refreshed.some((r, i) => r.status !== invoices[i].status);
+    if (changed) {
+      setInvoices(refreshed);
+      saveInvoices(refreshed);
+    }
+  }, []);
+
+  // ── New invoice form state ────────────────────────────────────────────────
+  const [formCustomer, setFormCustomer] = useState("");
+  const [formTerms,    setFormTerms]    = useState<PaymentTerms>("Net 30");
+  const [formNotes,    setFormNotes]    = useState("");
+  const [formItems,    setFormItems]    = useState<InvoiceItem[]>([
+    { id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 },
+  ]);
+  const [formError, setFormError] = useState("");
+
+  // Recalculate item total when qty or price changes
+  const updateItem = (id: string, field: "desc" | "qty" | "unitPrice", val: string) => {
+    setFormItems(prev => prev.map(it => {
+      if (it.id !== id) return it;
+      const updated = {
+        ...it,
+        [field]: field === "desc" ? val : parseFloat(val) || 0,
+      };
+      updated.total = updated.qty * updated.unitPrice;
+      return updated;
+    }));
+  };
+
+  const addItem = () =>
+    setFormItems(prev => [...prev, { id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 }]);
+
+  const removeItem = (id: string) =>
+    setFormItems(prev => prev.length > 1 ? prev.filter(it => it.id !== id) : prev);
+
+  const formSubtotal = formItems.reduce((s, it) => s + it.total, 0);
+  const formTax      = parseFloat((formSubtotal * 0.08).toFixed(2));
+  const formTotal    = parseFloat((formSubtotal + formTax).toFixed(2));
+
+  const resetForm = () => {
+    setFormCustomer(""); setFormTerms("Net 30"); setFormNotes(""); setFormError("");
+    setFormItems([{ id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 }]);
+  };
+
+  // ── Save new invoice ──────────────────────────────────────────────────────
+  const saveInvoice = () => {
+    if (!formCustomer.trim())                    { setFormError("Customer name is required."); return; }
+    if (formItems.some(it => !it.desc.trim()))   { setFormError("All line items need a description."); return; }
+    if (formItems.some(it => it.unitPrice <= 0)) { setFormError("All items need a price greater than $0."); return; }
+
+    const today    = new Date().toISOString().split("T")[0];
+    const dueDate  = calcDueDate(today, formTerms);
+
+    const newInv: Invoice = {
+      id:            makeId(),
+      invoiceNumber: makeInvNum(),
+      customer:      formCustomer.trim(),
+      items:         formItems,
+      subtotal:      formSubtotal,
+      tax:           formTax,
+      total:         formTotal,
+      amountPaid:    0,
+      paymentTerms:  formTerms,
+      issueDate:     today,
+      dueDate,
+      status:        "unpaid",
+      notes:         formNotes.trim(),
+      createdAt:     new Date().toISOString(),
+    };
+
+    const updated = [newInv, ...invoices];
+    setInvoices(updated);
+    saveInvoices(updated);
+    setSelected(newInv);
+    resetForm();
+    setView("detail");
+  };
+
+  // ── Delete invoice ────────────────────────────────────────────────────────
+  const deleteInvoice = (id: string) => {
+    const updated = invoices.filter(inv => inv.id !== id);
+    setInvoices(updated);
+    saveInvoices(updated);
+    setSelected(null);
+    setView("list");
+  };
+
+  // ── Record payment ────────────────────────────────────────────────────────
+  const recordPayment = () => {
+    if (!selected) return;
+    const amount = parseFloat(payAmount);
+    if (isNaN(amount) || amount <= 0) { setPayError("Enter a valid amount."); return; }
+    const remaining = selected.total - selected.amountPaid;
+    if (amount > remaining)           { setPayError(`Max payment is ${fmtMoney(remaining)}.`); return; }
+
+    const newPaid = selected.amountPaid + amount;
+    const updated = invoices.map(inv => {
+      if (inv.id !== selected.id) return inv;
+      const upd = { ...inv, amountPaid: newPaid };
+      upd.status = deriveStatus(upd);
+      return upd;
+    });
+    setInvoices(updated);
+    saveInvoices(updated);
+    const refreshed = updated.find(i => i.id === selected.id)!;
+    setSelected(refreshed);
+    setPayAmount("");
+    setPayError("");
+  };
+
+  // ── Mark fully paid ───────────────────────────────────────────────────────
+  const markFullyPaid = () => {
+    if (!selected) return;
+    const updated = invoices.map(inv => {
+      if (inv.id !== selected.id) return inv;
+      return { ...inv, amountPaid: inv.total, status: "paid" as InvoiceStatus };
+    });
+    setInvoices(updated);
+    saveInvoices(updated);
+    setSelected(updated.find(i => i.id === selected.id)!);
+    setPayAmount("");
+    setPayError("");
+  };
+
+  // ── Summary stats ─────────────────────────────────────────────────────────
+  const totalOutstanding = invoices
+    .filter(i => i.status !== "paid")
+    .reduce((s, i) => s + (i.total - i.amountPaid), 0);
+  const overdueCount = invoices.filter(i => i.status === "overdue").length;
+  const paidThisMonth = invoices
+    .filter(i => i.status === "paid" && new Date(i.createdAt).getMonth() === new Date().getMonth())
+    .reduce((s, i) => s + i.total, 0);
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VIEW: LIST
+  // ══════════════════════════════════════════════════════════════════════════
+  if (view === "list") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Invoicing & Payments</h1>
+          <p style={{ color: C.muted, fontSize: 13 }}>Track payments, manage overdue invoices, record receipts.</p>
+        </div>
+        <button
+          onClick={() => { resetForm(); setView("create"); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "10px 20px", borderRadius: 10,
+            background: `linear-gradient(135deg, ${C.blue}, ${C.purple})`,
+            border: "none", color: "#fff", fontSize: 13,
+            fontWeight: 700, cursor: "pointer",
+          }}
+        >
+          <Plus size={15} /> New Invoice
+        </button>
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+        {[
+          { label: "Outstanding",     value: fmtMoney(totalOutstanding), color: C.amber,  bg: C.amberBg,  border: C.amberBorder,  icon: DollarSign  },
+          { label: "Overdue",         value: `${overdueCount} invoice${overdueCount !== 1 ? "s" : ""}`, color: C.red, bg: C.redBg, border: C.redBorder, icon: AlertCircle },
+          { label: "Paid This Month", value: fmtMoney(paidThisMonth),    color: C.green,  bg: C.greenBg,  border: C.greenBorder,  icon: CheckCircle },
+        ].map((s, i) => {
+          const Icon = s.icon;
+          return (
+            <div key={i} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: C.surface, border: `1px solid ${s.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon size={17} color={s.color} />
+              </div>
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.value}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{s.label}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Overdue alert banner */}
+      {overdueCount > 0 && (
+        <div style={{ padding: "12px 16px", background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 10, fontSize: 13, color: C.red, display: "flex", alignItems: "center", gap: 10 }}>
+          <AlertCircle size={15} />
+          <strong>{overdueCount} overdue invoice{overdueCount !== 1 ? "s" : ""}</strong> — follow up with customers to collect payment.
+        </div>
+      )}
+
+      {/* Invoice table */}
+      {invoices.length === 0 ? (
+        <Card style={{ textAlign: "center", padding: "60px 24px" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🧾</div>
+          <h3 style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 8 }}>No invoices yet</h3>
+          <p style={{ color: C.muted, fontSize: 14, marginBottom: 24 }}>Create your first invoice to start tracking payments.</p>
+          <button
+            onClick={() => { resetForm(); setView("create"); }}
+            style={{ padding: "11px 24px", borderRadius: 10, background: `linear-gradient(135deg,${C.blue},${C.purple})`, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+          >
+            Create First Invoice
+          </button>
+        </Card>
+      ) : (
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
+                {["Invoice #", "Customer", "Amount", "Paid", "Due Date", "Status", ""].map((h, i) => (
+                  <th key={i} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((inv, i) => (
+                <tr
+                  key={inv.id}
+                  onClick={() => { setSelected(inv); setPayAmount(""); setPayError(""); setView("detail"); }}
+                  style={{ borderBottom: i < invoices.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                >
+                  <td style={{ padding: "13px 16px", fontWeight: 700, color: C.blue, fontFamily: "monospace" }}>{inv.invoiceNumber}</td>
+                  <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}>{inv.customer}</td>
+                  <td style={{ padding: "13px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(inv.total)}</td>
+                  <td style={{ padding: "13px 16px", color: inv.amountPaid > 0 ? C.green : C.subtle }}>
+                    {inv.amountPaid > 0 ? fmtMoney(inv.amountPaid) : "—"}
+                  </td>
+                  <td style={{ padding: "13px 16px", color: inv.status === "overdue" ? C.red : C.muted }}>
+                    {fmtDate(inv.dueDate)}
+                  </td>
+                  <td style={{ padding: "13px 16px" }}><Badge status={inv.status} /></td>
+                  <td style={{ padding: "13px 16px", color: C.subtle, fontSize: 11 }}>{fmtDate(inv.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VIEW: CREATE
+  // ══════════════════════════════════════════════════════════════════════════
+  if (view === "create") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 820 }}>
+
+      {/* Back */}
+      <button onClick={() => { resetForm(); setView("list"); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0 }}>
+        <ChevronLeft size={16} /> Back to Invoices
+      </button>
+
+      <div>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>New Invoice</h1>
+        <p style={{ color: C.muted, fontSize: 13 }}>Fill in the details below. Tax (8%) is calculated automatically.</p>
+      </div>
+
+      {/* Customer + Terms */}
+      <Card>
+        <SectionTitle>Invoice Details</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <Input label="Customer Name *" value={formCustomer} onChange={setFormCustomer} placeholder="e.g. Acme Corp" />
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Payment Terms
+            </label>
+            <select
+              value={formTerms}
+              onChange={e => setFormTerms(e.target.value as PaymentTerms)}
+              style={{ width: "100%", padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none", fontFamily: "inherit" }}
+            >
+              {(["Net 15", "Net 30", "Net 60", "Prepaid", "Cash on Delivery"] as PaymentTerms[]).map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Notes (optional)
+          </label>
+          <textarea
+            value={formNotes}
+            onChange={e => setFormNotes(e.target.value)}
+            placeholder="e.g. Payment instructions, PO number, special terms…"
+            rows={2}
+            style={{ width: "100%", padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+          />
+        </div>
+      </Card>
+
+      {/* Line items */}
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "14px 18px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>Line Items</span>
+          <button onClick={addItem} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 7, background: C.blueBg, border: `1px solid ${C.blueBorder}`, color: C.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            <Plus size={12} /> Add Item
+          </button>
+        </div>
+        <div style={{ padding: "14px 18px" }}>
+          {/* Header row */}
+          <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1.2fr 1fr 28px", gap: 10, marginBottom: 8 }}>
+            {["Description", "Qty", "Unit Price", "Total", ""].map((h, i) => (
+              <div key={i} style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</div>
+            ))}
+          </div>
+          {formItems.map(item => (
+            <div key={item.id} style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1.2fr 1fr 28px", gap: 10, marginBottom: 10 }}>
+              <input
+                value={item.desc}
+                onChange={e => updateItem(item.id, "desc", e.target.value)}
+                placeholder="e.g. SKU-4821 Industrial bolts"
+                style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", fontFamily: "inherit" }}
+              />
+              <input
+                type="number" min="1" value={item.qty}
+                onChange={e => updateItem(item.id, "qty", e.target.value)}
+                style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", textAlign: "center" }}
+              />
+              <input
+                type="number" min="0" step="0.01" value={item.unitPrice || ""}
+                onChange={e => updateItem(item.id, "unitPrice", e.target.value)}
+                placeholder="0.00"
+                style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none" }}
+              />
+              <div style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, fontWeight: 700, color: C.text }}>
+                {fmtMoney(item.total)}
+              </div>
+              <button onClick={() => removeItem(item.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <XCircle size={16} />
+              </button>
+            </div>
+          ))}
+
+          {/* Totals */}
+          <div style={{ marginTop: 14, padding: "14px 0 0", borderTop: `1px solid ${C.border}` }}>
+            {[
+              ["Subtotal", fmtMoney(formSubtotal), false],
+              ["Tax (8%)", fmtMoney(formTax),      false],
+              ["Total",    fmtMoney(formTotal),     true ],
+            ].map(([label, val, bold]) => (
+              <div key={label as string} style={{ display: "flex", justifyContent: "flex-end", gap: 40, marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: C.muted }}>{label}</span>
+                <span style={{ fontSize: bold ? 16 : 13, fontWeight: bold ? 800 : 600, color: bold ? C.text : C.muted, minWidth: 90, textAlign: "right" }}>{val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {formError && (
+        <div style={{ padding: "10px 14px", background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 9, fontSize: 13, color: C.red }}>
+          {formError}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 12 }}>
+        <button onClick={saveInvoice} style={{ flex: 1, padding: "13px", borderRadius: 10, background: `linear-gradient(135deg,${C.blue},${C.purple})`, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          Create Invoice →
+        </button>
+        <button onClick={() => { resetForm(); setView("list"); }} style={{ padding: "13px 20px", borderRadius: 10, background: C.bg, border: `1px solid ${C.border}`, color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VIEW: DETAIL
+  // ══════════════════════════════════════════════════════════════════════════
+  if (view === "detail" && selected) {
+    const remaining = selected.total - selected.amountPaid;
+    const paidPct   = Math.round((selected.amountPaid / selected.total) * 100);
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 820 }}>
+
+        {/* Back */}
+        <button onClick={() => { setSelected(null); setView("list"); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0 }}>
+          <ChevronLeft size={16} /> Back to Invoices
+        </button>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{selected.invoiceNumber}</h1>
+              <Badge status={selected.status} />
+            </div>
+            <p style={{ color: C.muted, fontSize: 13 }}>
+              Issued {fmtDate(selected.issueDate)} · Customer: <strong style={{ color: C.text }}>{selected.customer}</strong>
+            </p>
+          </div>
+          <button onClick={() => deleteInvoice(selected.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: C.redBg, border: `1px solid ${C.redBorder}`, color: C.red, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            <Trash2 size={13} /> Delete
+          </button>
+        </div>
+
+        {/* Overdue warning */}
+        {selected.status === "overdue" && (
+          <div style={{ padding: "12px 16px", background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 10, fontSize: 13, color: C.red, display: "flex", alignItems: "center", gap: 10 }}>
+            <AlertCircle size={15} />
+            This invoice was due on <strong>{fmtDate(selected.dueDate)}</strong> and has not been fully paid.
+          </div>
+        )}
+
+        {/* Info cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          {[
+            { icon: User,       label: "Customer",      value: selected.customer             },
+            { icon: Hash,       label: "Invoice #",     value: selected.invoiceNumber        },
+            { icon: Calendar,   label: "Due Date",      value: fmtDate(selected.dueDate)     },
+            { icon: FileText,   label: "Terms",         value: selected.paymentTerms         },
+          ].map(({ icon: Icon, label, value }) => (
+            <div key={label} style={{ padding: "12px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+                <Icon size={11} color={C.muted} />
+                <span style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Line items table */}
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "13px 18px 11px", borderBottom: `1px solid ${C.border}` }}>
+            <span style={{ fontWeight: 700, fontSize: 13 }}>Line Items</span>
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: C.bg }}>
+                {["Description", "Qty", "Unit Price", "Total"].map(h => (
+                  <th key={h} style={{ padding: "8px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {selected.items.map(item => (
+                <tr key={item.id} style={{ borderTop: `1px solid ${C.border}` }}>
+                  <td style={{ padding: "11px 16px", color: C.text }}>{item.desc}</td>
+                  <td style={{ padding: "11px 16px", color: C.muted }}>{item.qty.toLocaleString()}</td>
+                  <td style={{ padding: "11px 16px", color: C.muted }}>{fmtMoney(item.unitPrice)}</td>
+                  <td style={{ padding: "11px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(item.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {/* Totals */}
+          <div style={{ padding: "14px 18px", borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+            {[
+              ["Subtotal", fmtMoney(selected.subtotal), false],
+              ["Tax (8%)", fmtMoney(selected.tax),      false],
+              ["Total",    fmtMoney(selected.total),     true ],
+            ].map(([label, val, bold]) => (
+              <div key={label as string} style={{ display: "flex", gap: 40 }}>
+                <span style={{ fontSize: 13, color: C.muted, minWidth: 80 }}>{label}</span>
+                <span style={{ fontSize: bold ? 16 : 13, fontWeight: bold ? 800 : 600, color: bold ? C.text : C.muted, minWidth: 90, textAlign: "right" }}>{val}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Payment progress */}
+        {selected.status !== "paid" && (
+          <Card>
+            <SectionTitle>Payment Progress</SectionTitle>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
+              <span style={{ color: C.muted }}>Paid: <strong style={{ color: C.green }}>{fmtMoney(selected.amountPaid)}</strong></span>
+              <span style={{ color: C.muted }}>Remaining: <strong style={{ color: C.red }}>{fmtMoney(remaining)}</strong></span>
+              <span style={{ color: C.muted }}>{paidPct}% paid</span>
+            </div>
+            <div style={{ height: 10, background: C.bg, borderRadius: 999, overflow: "hidden", border: `1px solid ${C.border}`, marginBottom: 18 }}>
+              <div style={{ height: "100%", width: `${paidPct}%`, background: `linear-gradient(90deg,${C.green},#52c89a)`, borderRadius: 999, transition: "width 0.4s" }} />
+            </div>
+
+            {/* Record payment */}
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Record Payment ($)
+                </label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={payAmount}
+                  onChange={e => { setPayAmount(e.target.value); setPayError(""); }}
+                  placeholder={`Up to ${fmtMoney(remaining)}`}
+                  style={{ width: "100%", padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+              <button onClick={recordPayment} style={{ padding: "10px 18px", borderRadius: 9, background: C.blueBg, border: `1px solid ${C.blueBorder}`, color: C.blue, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                <CreditCard size={13} style={{ marginRight: 6, verticalAlign: "middle" }} />
+                Record
+              </button>
+              <button onClick={markFullyPaid} style={{ padding: "10px 18px", borderRadius: 9, background: C.greenBg, border: `1px solid ${C.greenBorder}`, color: C.green, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                <CheckCircle size={13} style={{ marginRight: 6, verticalAlign: "middle" }} />
+                Mark Fully Paid
+              </button>
+            </div>
+            {payError && (
+              <div style={{ marginTop: 8, fontSize: 12, color: C.red }}>{payError}</div>
+            )}
+          </Card>
+        )}
+
+        {/* Already paid */}
+        {selected.status === "paid" && (
+          <div style={{ padding: "14px 18px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 12, fontSize: 14, color: C.green, display: "flex", alignItems: "center", gap: 10 }}>
+            <CheckCircle size={18} />
+            <div>
+              <strong>Fully paid</strong> — {fmtMoney(selected.total)} received.
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
+        {selected.notes && (
+          <Card>
+            <SectionTitle>Notes</SectionTitle>
+            <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{selected.notes}</p>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  return null;
+}
