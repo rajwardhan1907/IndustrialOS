@@ -1,18 +1,19 @@
 "use client";
 // app/page.tsx
-// Now checks if onboarding is done. If not → sends to /onboarding.
-// Tabs are now DYNAMIC — built from whatever modules the company picked.
+// Checks if onboarding is done. If not → sends to /onboarding.
+// Tabs are DYNAMIC — built from whatever modules the company picked.
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Quotes from "@/components/Quotes";
 import { Zap, Bell, Plus, Settings } from "lucide-react";
 import Dashboard     from "@/components/Dashboard";
 import Pipeline      from "@/components/Pipeline";
-import OrdersPage    from "@/app/(dashboard)/orders/page";
+import OrderKanban   from "@/components/OrderKanban";
 import InventorySync from "@/components/InventorySync";
 import CRMPanel      from "@/components/CRMPanel";
 import SystemHealth  from "@/components/SystemHealth";
+import Quotes        from "@/components/Quotes";
+import Invoicing     from "@/components/Invoicing";   // ← NEW
 import { C, STAGES } from "@/lib/utils";
 import {
   loadWorkspace, WorkspaceConfig, ModuleId, CustomTab,
@@ -20,7 +21,7 @@ import {
 import {
   LayoutDashboard, ShoppingCart, Package, FileText,
   Receipt, Truck, Users, Factory, BarChart2,
-  GitMerge, Upload, Heart, Link as LinkIcon, List, Kanban, FileEdit,
+  GitMerge, Upload, Heart, Link as LinkIcon,
 } from "lucide-react";
 
 // ── Map module id → tab definition ──────────────────────────────────────────
@@ -82,9 +83,9 @@ function CustomTabContent({ tab }: { tab: CustomTab }) {
 
 export default function App() {
   const router = useRouter();
-  const [workspace,  setWorkspace]  = useState<WorkspaceConfig | null>(null);
-  const [tab,        setTab]        = useState("dashboard");
-  const [loading,    setLoading]    = useState(true);
+  const [workspace, setWorkspace] = useState<WorkspaceConfig | null>(null);
+  const [tab,       setTab]       = useState("dashboard");
+  const [loading,   setLoading]   = useState(true);
 
   // ── Load workspace from localStorage ────────────────────────────────────
   useEffect(() => {
@@ -147,12 +148,12 @@ export default function App() {
   // ── Build tab list from active modules + custom tabs ──────────────────────
   const moduleTabs = workspace.modules.map(id => ({
     id,
-    label: MODULE_TABS[id]?.label || id,
-    icon:  MODULE_TABS[id]?.icon  || LayoutDashboard,
+    label:  MODULE_TABS[id]?.label || id,
+    icon:   MODULE_TABS[id]?.icon  || LayoutDashboard,
     custom: false,
   }));
 
-  const customTabs = workspace.customTabs.map(ct => ({
+  const customTabList = workspace.customTabs.map(ct => ({
     id:     ct.id,
     label:  ct.label,
     icon:   null,
@@ -161,22 +162,19 @@ export default function App() {
     data:   ct,
   }));
 
-  const allTabs = [...moduleTabs, ...customTabs];
+  const allTabs = [...moduleTabs, ...customTabList];
 
   // ── Render active tab content ─────────────────────────────────────────────
   const renderContent = () => {
-    // Built-in module tabs
     switch (tab) {
-      case "dashboard": return <Dashboard    met={met}    chart={chart}    alerts={alerts} />;
-      case "pipeline":  return <Pipeline     pipe={pipe}  setPipe={setPipe} />;
-      case "orders":    return <OrdersPage />;
+      case "dashboard": return <Dashboard     met={met}       chart={chart}    alerts={alerts} />;
+      case "pipeline":  return <Pipeline      pipe={pipe}     setPipe={setPipe} />;
+      case "orders":    return <OrderKanban   orders={orders} advanceOrder={advanceOrder} />;
       case "inventory": return <InventorySync conflicts={conflicts} resolveConflict={resolveConflict} />;
-      case "crm":       return <CRMPanel     crm={crm}    setCrm={setCrm} />;
-      case "health":    return <SystemHealth health={health} met={met} alerts={alerts} />;
-      // Modules not yet built — show coming soon
-      case "quotes":
-        return <Quotes />;
-      case "invoicing":
+      case "crm":       return <CRMPanel      crm={crm}       setCrm={setCrm} />;
+      case "health":    return <SystemHealth  health={health} met={met} alerts={alerts} />;
+      case "quotes":    return <Quotes />;
+      case "invoicing": return <Invoicing />;   // ← NOW LIVE
       case "shipping":
       case "customers":
       case "suppliers":
@@ -186,7 +184,6 @@ export default function App() {
     // Custom tabs
     const customTab = workspace.customTabs.find(ct => ct.id === tab);
     if (customTab) return <CustomTabContent tab={customTab} />;
-
     return <ComingSoon label={tab} />;
   };
 
@@ -285,7 +282,7 @@ export default function App() {
 
         {/* ── + Add Tab button ── */}
         <button
-          onClick={() => {/* We'll build this in the next phase */}}
+          onClick={() => {/* Phase 2+ — coming next */}}
           style={{
             display: "flex", alignItems: "center", gap: 4,
             padding: "12px 14px", fontSize: 12, fontWeight: 600,
