@@ -13,6 +13,7 @@ import SystemHealth  from "@/components/SystemHealth";
 import Quotes        from "@/components/Quotes";
 import Invoicing     from "@/components/Invoicing";
 import Suppliers    from "@/components/Suppliers";
+import Shipping     from "@/components/Shipping";
 import { C } from "@/lib/utils";
 import {
   loadWorkspace, saveWorkspace, WorkspaceConfig, ModuleId, CustomTab,
@@ -42,7 +43,7 @@ const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
 // ── Add every newly built module here — auto-migration handles the rest ───────
 const BUILT_MODULES: ModuleId[] = [
   "dashboard", "orders", "inventory", "quotes",
-  "invoicing", "suppliers", "crm", "pipeline", "health",
+  "invoicing", "suppliers", "shipping", "crm", "pipeline", "health",
 ];
 
 // ── Coming soon placeholder ───────────────────────────────────────────────────
@@ -149,7 +150,7 @@ export default function App() {
       case "quotes":    return <Quotes />;
       case "invoicing": return <Invoicing />;
       case "suppliers": return <Suppliers />;
-      case "shipping":
+      case "shipping":  return <Shipping />;
       case "customers":
       case "analytics":
         return <ComingSoon label={MODULE_TABS[tab as ModuleId]?.label || tab} />;
