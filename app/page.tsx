@@ -1,7 +1,5 @@
 "use client";
 // app/page.tsx
-// Checks if onboarding is done. If not → sends to /onboarding.
-// Tabs are DYNAMIC — built from whatever modules the company picked.
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -13,10 +11,10 @@ import InventorySync from "@/components/InventorySync";
 import CRMPanel      from "@/components/CRMPanel";
 import SystemHealth  from "@/components/SystemHealth";
 import Quotes        from "@/components/Quotes";
-import Invoicing     from "@/components/Invoicing";   // ← NEW
+import Invoicing     from "@/components/Invoicing";
 import { C, STAGES } from "@/lib/utils";
 import {
-  loadWorkspace, WorkspaceConfig, ModuleId, CustomTab,
+  loadWorkspace, saveWorkspace, WorkspaceConfig, ModuleId, CustomTab,
 } from "@/lib/workspace";
 import {
   LayoutDashboard, ShoppingCart, Package, FileText,
@@ -39,6 +37,24 @@ const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
   pipeline:  { label: "SKU Pipeline",   icon: Upload          },
   health:    { label: "System Health",  icon: Heart           },
 };
+
+// ── ALL modules that currently have real components built ────────────────────
+// Add to this list every time a new module ships.
+// Auto-migration will add it to every existing saved workspace automatically.
+const BUILT_MODULES: ModuleId[] = [
+  "dashboard", "orders", "inventory", "quotes",
+  "invoicing", "crm", "pipeline", "health",
+];
+
+// ── Demo orders seed data ────────────────────────────────────────────────────
+const DEMO_ORDERS = [
+  { id:"ORD-10234", customer:"Acme Corp",     items:6, sku:"SKU-4821", value:24300, stage:"Shipped",   priority:"HIGH", time:"2h ago" },
+  { id:"ORD-10233", customer:"TechWave Ltd",  items:2, sku:"SKU-7753", value:8750,  stage:"Confirmed", priority:"MED",  time:"4h ago" },
+  { id:"ORD-10232", customer:"NovaBuild Inc", items:4, sku:"SKU-3318", value:15200, stage:"Picked",    priority:"LOW",  time:"6h ago" },
+  { id:"ORD-10231", customer:"TechWave Ltd",  items:3, sku:"SKU-9034", value:12600, stage:"Placed",    priority:"MED",  time:"8h ago" },
+  { id:"ORD-10230", customer:"Acme Corp",     items:8, sku:"SKU-2210", value:44800, stage:"Delivered", priority:"LOW",  time:"1d ago" },
+  { id:"ORD-10229", customer:"GlobexSupply",  items:1, sku:"SKU-5512", value:3200,  stage:"Placed",    priority:"HIGH", time:"1d ago" },
+];
 
 // ── Placeholder for modules not yet built ───────────────────────────────────
 function ComingSoon({ label }: { label: string }) {
@@ -87,24 +103,35 @@ export default function App() {
   const [tab,       setTab]       = useState("dashboard");
   const [loading,   setLoading]   = useState(true);
 
-  // ── Load workspace from localStorage ────────────────────────────────────
+  // ── Load workspace + auto-migrate new modules ────────────────────────────
   useEffect(() => {
     const ws = loadWorkspace();
     if (!ws || !ws.onboardingDone) {
       router.push("/onboarding");
       return;
     }
-    setWorkspace(ws);
+    // Auto-migration: any newly built module not yet in saved workspace gets added.
+    // Users never need to redo onboarding when a new module ships.
+    const missingModules = BUILT_MODULES.filter(m => !ws.modules.includes(m));
+    if (missingModules.length > 0) {
+      const updated = { ...ws, modules: [...ws.modules, ...missingModules] };
+      saveWorkspace(updated);
+      setWorkspace(updated);
+    } else {
+      setWorkspace(ws);
+    }
     setLoading(false);
   }, []);
 
-  // ── State for existing components ────────────────────────────────────────
+  // ── Orders — seeded with demo data ───────────────────────────────────────
+  const [orders, setOrders] = useState<any[]>(DEMO_ORDERS);
+
+  // ── Other state ──────────────────────────────────────────────────────────
   const [met] = useState({
-    opm: 0, skus: 0, sync: 0, activeOrders: 0,
+    opm: 0, skus: 0, sync: 0, activeOrders: DEMO_ORDERS.length,
     rev: 0, latency: 0, queue: 0, conflicts: 0,
   });
   const [chart]     = useState<any[]>([]);
-  const [orders,    setOrders]    = useState<any[]>([]);
   const [pipe,      setPipe]      = useState<any>(null);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [crm,       setCrm]       = useState({
@@ -130,7 +157,7 @@ export default function App() {
   const resolveConflict = (id: number) =>
     setConflicts(cs => cs.map(c => c.id === id ? { ...c, status: "resolved" } : c));
 
-  // ── Loading state ─────────────────────────────────────────────────────────
+  // ── Loading ───────────────────────────────────────────────────────────────
   if (loading || !workspace) {
     return (
       <div style={{
@@ -145,7 +172,7 @@ export default function App() {
     );
   }
 
-  // ── Build tab list from active modules + custom tabs ──────────────────────
+  // ── Build tab list ────────────────────────────────────────────────────────
   const moduleTabs = workspace.modules.map(id => ({
     id,
     label:  MODULE_TABS[id]?.label || id,
@@ -154,17 +181,17 @@ export default function App() {
   }));
 
   const customTabList = workspace.customTabs.map(ct => ({
-    id:     ct.id,
-    label:  ct.label,
-    icon:   null,
-    emoji:  ct.icon,
+    id:    ct.id,
+    label: ct.label,
+    icon:  null,
+    emoji: ct.icon,
     custom: true,
-    data:   ct,
+    data:  ct,
   }));
 
   const allTabs = [...moduleTabs, ...customTabList];
 
-  // ── Render active tab content ─────────────────────────────────────────────
+  // ── Render content ────────────────────────────────────────────────────────
   const renderContent = () => {
     switch (tab) {
       case "dashboard": return <Dashboard     met={met}       chart={chart}    alerts={alerts} />;
@@ -174,14 +201,13 @@ export default function App() {
       case "crm":       return <CRMPanel      crm={crm}       setCrm={setCrm} />;
       case "health":    return <SystemHealth  health={health} met={met} alerts={alerts} />;
       case "quotes":    return <Quotes />;
-      case "invoicing": return <Invoicing />;   // ← NOW LIVE
+      case "invoicing": return <Invoicing />;
       case "shipping":
       case "customers":
       case "suppliers":
       case "analytics":
         return <ComingSoon label={MODULE_TABS[tab as ModuleId]?.label || tab} />;
     }
-    // Custom tabs
     const customTab = workspace.customTabs.find(ct => ct.id === tab);
     if (customTab) return <CustomTabContent tab={customTab} />;
     return <ComingSoon label={tab} />;
@@ -280,7 +306,6 @@ export default function App() {
           );
         })}
 
-        {/* ── + Add Tab button ── */}
         <button
           onClick={() => {/* Phase 2+ — coming next */}}
           style={{
