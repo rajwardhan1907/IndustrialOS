@@ -9,14 +9,155 @@
 // - All saved to localStorage via lib/inventory.ts
 
 import { useState, useEffect } from "react";
-import { AlertTriangle, CheckCircle, XCircle, Zap, Package, MapPin, RefreshCw } from "lucide-react";
+import { AlertTriangle, CheckCircle, XCircle, Zap, Package, MapPin, RefreshCw, Plus, X } from "lucide-react";
 import { C } from "@/lib/utils";
 import {
-  InventoryItem, ConflictLog,
+  InventoryItem, ConflictLog, WarehouseZone,
   loadInventory, saveInventory,
   loadConflicts, saveConflicts,
   getStockStatus, STATUS_LABEL, STATUS_COLOR,
 } from "@/lib/inventory";
+
+// ── Add SKU Modal ─────────────────────────────────────────────────────────────
+function AddSKUModal({ onSave, onClose }: {
+  onSave: (item: InventoryItem) => void;
+  onClose: () => void;
+}) {
+  const [sku,          setSku]          = useState("");
+  const [name,         setName]         = useState("");
+  const [category,     setCategory]     = useState("Fasteners");
+  const [stockLevel,   setStockLevel]   = useState("0");
+  const [reorderPoint, setReorderPoint] = useState("50");
+  const [reorderQty,   setReorderQty]   = useState("100");
+  const [unitCost,     setUnitCost]     = useState("");
+  const [warehouse,    setWarehouse]    = useState("Warehouse A");
+  const [zone,         setZone]         = useState<WarehouseZone>("A");
+  const [binLocation,  setBinLocation]  = useState("");
+  const [supplier,     setSupplier]     = useState("");
+  const [error,        setError]        = useState("");
+
+  const cats = ["Fasteners","Bearings","Hydraulics","Pneumatics","Tools","Safety Gear","Structural","Electronics","Mechanical","Other"];
+
+  const inp: any = {
+    width:"100%", padding:"10px 12px", background:C.bg,
+    border:`1px solid ${C.border}`, borderRadius:9, color:C.text,
+    fontSize:13, outline:"none", boxSizing:"border-box", fontFamily:"inherit",
+  };
+  const lbl: any = {
+    display:"block", fontSize:11, fontWeight:700, color:C.muted,
+    marginBottom:5, textTransform:"uppercase", letterSpacing:"0.05em",
+  };
+
+  const submit = () => {
+    if (!sku.trim())          { setError("SKU code is required."); return; }
+    if (!name.trim())         { setError("Product name is required."); return; }
+    if (!unitCost.trim() || isNaN(parseFloat(unitCost))) { setError("Enter a valid unit cost."); return; }
+
+    const newItem: InventoryItem = {
+      id:           Math.random().toString(36).slice(2, 9),
+      sku:          sku.trim().toUpperCase(),
+      name:         name.trim(),
+      category,
+      stockLevel:   parseInt(stockLevel) || 0,
+      reorderPoint: parseInt(reorderPoint) || 50,
+      reorderQty:   parseInt(reorderQty) || 100,
+      unitCost:     parseFloat(unitCost),
+      warehouse,
+      zone,
+      binLocation:  binLocation.trim() || `${zone}-01-1`,
+      lastSynced:   new Date().toISOString(),
+      supplier:     supplier.trim() || "—",
+    };
+    onSave(newItem);
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.4)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200, padding:24 }}>
+      <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:"28px", width:"100%", maxWidth:560, boxShadow:"0 20px 60px rgba(0,0,0,0.15)", maxHeight:"90vh", overflowY:"auto" }}>
+
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
+          <h2 style={{ fontSize:17, fontWeight:800, color:C.text }}>Add New SKU</h2>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted }}><X size={18}/></button>
+        </div>
+
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 16px" }}>
+
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>SKU Code *</label>
+            <input value={sku} onChange={e=>setSku(e.target.value)} placeholder="e.g. SKU-1234" style={inp}/>
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Category</label>
+            <select value={category} onChange={e=>setCategory(e.target.value)} style={inp}>
+              {cats.map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+
+          <div style={{ marginBottom:14, gridColumn:"1/-1" }}>
+            <label style={lbl}>Product Name *</label>
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Industrial Bolts M10 (Box/100)" style={inp}/>
+          </div>
+
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Starting Stock</label>
+            <input type="number" min="0" value={stockLevel} onChange={e=>setStockLevel(e.target.value)} style={inp}/>
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Unit Cost ($) *</label>
+            <input type="number" min="0" step="0.01" value={unitCost} onChange={e=>setUnitCost(e.target.value)} placeholder="0.00" style={inp}/>
+          </div>
+
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Reorder Point</label>
+            <input type="number" min="0" value={reorderPoint} onChange={e=>setReorderPoint(e.target.value)} style={inp}/>
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Reorder Quantity</label>
+            <input type="number" min="0" value={reorderQty} onChange={e=>setReorderQty(e.target.value)} style={inp}/>
+          </div>
+
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Warehouse</label>
+            <select value={warehouse} onChange={e=>setWarehouse(e.target.value)} style={inp}>
+              {["Warehouse A","Warehouse B","Warehouse C"].map(w=><option key={w}>{w}</option>)}
+            </select>
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Zone</label>
+            <select value={zone} onChange={e=>setZone(e.target.value as WarehouseZone)} style={inp}>
+              {(["A","B","C","D"] as WarehouseZone[]).map(z=><option key={z}>Zone {z}</option>)}
+            </select>
+          </div>
+
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Bin Location</label>
+            <input value={binLocation} onChange={e=>setBinLocation(e.target.value)} placeholder="e.g. A-02-1" style={inp}/>
+          </div>
+          <div style={{ marginBottom:14 }}>
+            <label style={lbl}>Supplier</label>
+            <input value={supplier} onChange={e=>setSupplier(e.target.value)} placeholder="e.g. SteelCo Industries" style={inp}/>
+          </div>
+
+        </div>
+
+        {error && (
+          <div style={{ marginBottom:14, padding:"9px 13px", background:C.redBg, border:`1px solid ${C.redBorder}`, borderRadius:8, fontSize:13, color:C.red }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ display:"flex", gap:10 }}>
+          <button onClick={submit} style={{ flex:1, padding:"12px", borderRadius:10, background:`linear-gradient(135deg,${C.blue},${C.purple})`, border:"none", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+            Add to Inventory
+          </button>
+          <button onClick={onClose} style={{ padding:"12px 18px", borderRadius:10, background:C.bg, border:`1px solid ${C.border}`, color:C.muted, fontSize:13, fontWeight:600, cursor:"pointer" }}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtMoney  = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -53,6 +194,7 @@ export default function InventorySync() {
   const [adjustErr,  setAdjustErr]  = useState("");
   const [rule,       setRule]       = useState({ cat:"Fasteners", change:"+10", type:"price" });
   const [applied,    setApplied]    = useState(false);
+  const [showAdd,    setShowAdd]    = useState(false);
 
   useEffect(() => {
     setItems(loadInventory());
@@ -94,18 +236,35 @@ export default function InventorySync() {
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
 
+      {showAdd && (
+        <AddSKUModal
+          onSave={item => {
+            const updated = [item, ...items];
+            setItems(updated);
+            saveInventory(updated);
+            setShowAdd(false);
+          }}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+
       {/* ── Header ── */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div>
           <h1 style={{ fontSize:22, fontWeight:800, color:C.text, marginBottom:4 }}>Inventory</h1>
           <p style={{ color:C.muted, fontSize:13 }}>Stock levels, warehouse locations and reorder management.</p>
         </div>
-        {alertItems.length > 0 && (
-          <div style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 16px", background:C.redBg, border:`1px solid ${C.redBorder}`, borderRadius:10, fontSize:13, color:C.red, fontWeight:700 }}>
-            <AlertTriangle size={15}/>
-            {alertItems.length} item{alertItems.length !== 1 ? "s" : ""} need reordering
-          </div>
-        )}
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          {alertItems.length > 0 && (
+            <div style={{ display:"flex", alignItems:"center", gap:8, padding:"9px 16px", background:C.redBg, border:`1px solid ${C.redBorder}`, borderRadius:10, fontSize:13, color:C.red, fontWeight:700 }}>
+              <AlertTriangle size={15}/>
+              {alertItems.length} item{alertItems.length !== 1 ? "s" : ""} need reordering
+            </div>
+          )}
+          <button onClick={() => setShowAdd(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:`linear-gradient(135deg,${C.blue},${C.purple})`, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            <Plus size={14}/> Add SKU
+          </button>
+        </div>
       </div>
 
       {/* ── Summary cards ── */}
