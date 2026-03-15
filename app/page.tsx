@@ -99,10 +99,9 @@ export default function App() {
   }, []);
 
   // ── Other component state ─────────────────────────────────────────────────
-  const [met] = useState({ opm:0, skus:0, sync:0, activeOrders:0, rev:0, latency:0, queue:0, conflicts:0 });
+  const [met] = useState({ opm:0, skus:0, sync:0, activeOrders:0, rev:0, latency:0, queue:0 });
   const [chart]     = useState<any[]>([]);
   const [pipe,      setPipe]      = useState<any>(null);
-  const [conflicts, setConflicts] = useState<any[]>([]);
   const [crm,       setCrm]       = useState({ salesforce:"disconnected", hubspot:"disconnected", zoho:"disconnected" });
   const [health] = useState([
     { name:"PostgreSQL",     status:"unknown", lat:0, up:0 },
@@ -114,8 +113,6 @@ export default function App() {
   ]);
   const alerts: any[] = [];
 
-  const resolveConflict = (id: number) =>
-    setConflicts(cs => cs.map(c => c.id === id ? { ...c, status:"resolved" } : c));
 
   // ── Loading ───────────────────────────────────────────────────────────────
   if (loading || !workspace) {
@@ -144,7 +141,7 @@ export default function App() {
       case "dashboard": return <Dashboard     met={met}       chart={chart}    alerts={alerts} />;
       case "pipeline":  return <Pipeline      pipe={pipe}     setPipe={setPipe} />;
       case "orders":    return <OrderKanban />;   // ← self-contained, no props needed
-      case "inventory": return <InventorySync conflicts={conflicts} resolveConflict={resolveConflict} />;
+      case "inventory": return <InventorySync />;
       case "crm":       return <CRMPanel      crm={crm}       setCrm={setCrm} />;
       case "health":    return <SystemHealth  health={health} met={met} alerts={alerts} />;
       case "quotes":    return <Quotes />;
