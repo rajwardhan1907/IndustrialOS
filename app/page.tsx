@@ -20,7 +20,7 @@ import Customers     from "@/components/Customers";
 import Analytics     from "@/components/Analytics";
 import Settings      from "@/components/Settings";
 
-import { C, STAGES } from "@/lib/utils";
+import { C } from "@/lib/utils";
 import { loadWorkspace, WorkspaceConfig, ModuleId, CustomTab } from "@/lib/workspace";
 
 // ── Module → tab label + icon ─────────────────────────────────────────────────
@@ -153,7 +153,6 @@ export default function App() {
   // ── Existing component state ───────────────────────────────────────────────
   const [met] = useState({ opm: 0, skus: 0, sync: 0, activeOrders: 0, rev: 0, latency: 0, queue: 0, conflicts: 0 });
   const [chart]     = useState<any[]>([]);
-  const [orders,    setOrders]    = useState<any[]>([]);
   const [pipe,      setPipe]      = useState<any>(null);
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [crm,       setCrm]       = useState({ salesforce: "disconnected", hubspot: "disconnected", zoho: "disconnected" });
@@ -166,13 +165,6 @@ export default function App() {
     { name: "File Storage",   status: "unknown", lat: 0, up: 0 },
   ]);
   const alerts: any[] = [];
-
-  const advanceOrder = (id: string) =>
-    setOrders(os => os.map(o => {
-      if (o.id !== id) return o;
-      const i = STAGES.indexOf(o.stage);
-      return i < 4 ? { ...o, stage: STAGES[i + 1] } : o;
-    }));
 
   const resolveConflict = (id: number) =>
     setConflicts(cs => cs.map(c => c.id === id ? { ...c, status: "resolved" } : c));
@@ -215,7 +207,7 @@ export default function App() {
     switch (tab) {
       case "dashboard": return <Dashboard    met={met}    chart={chart}    alerts={alerts} />;
       case "pipeline":  return <Pipeline     pipe={pipe}  setPipe={setPipe} />;
-      case "orders":    return <OrderKanban  orders={orders} advanceOrder={advanceOrder} />;
+      case "orders":    return <OrderKanban />;
       case "inventory": return <InventorySync conflicts={conflicts} resolveConflict={resolveConflict} />;
       case "crm":       return <CRMPanel     crm={crm}    setCrm={setCrm} />;
       case "health":    return <SystemHealth health={health} met={met} alerts={alerts} />;
