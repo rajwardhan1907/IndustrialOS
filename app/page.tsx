@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Zap, Bell, Plus, Settings as SettingsIcon, X } from "lucide-react";
@@ -19,11 +20,13 @@ import Invoicing     from "@/components/Invoicing";
 import Customers     from "@/components/Customers";
 import Analytics     from "@/components/Analytics";
 import Settings      from "@/components/Settings";
+import Suppliers     from "@/components/Suppliers";
+import Shipping      from "@/components/Shipping";
 
 import { C } from "@/lib/utils";
-import { loadWorkspace, WorkspaceConfig, ModuleId, CustomTab } from "@/lib/workspace";
+import { loadWorkspace, saveWorkspace, WorkspaceConfig, ModuleId, CustomTab } from "@/lib/workspace";
 
-// ── Module → tab label + icon ─────────────────────────────────────────────────
+// ── Module tab definitions ────────────────────────────────────────────────────
 const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
   dashboard: { label: "Dashboard",     icon: LayoutDashboard },
   orders:    { label: "Orders",        icon: ShoppingCart    },
@@ -39,6 +42,7 @@ const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
   health:    { label: "System Health", icon: Heart           },
 };
 
+// ── Coming soon placeholder ───────────────────────────────────────────────────
 function ComingSoon({ label }: { label: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", textAlign: "center" }}>
@@ -51,6 +55,7 @@ function ComingSoon({ label }: { label: string }) {
   );
 }
 
+// ── Custom tab content ────────────────────────────────────────────────────────
 function CustomTabContent({ tab }: { tab: CustomTab }) {
   if (tab.type === "link" && tab.url) {
     return (
@@ -73,10 +78,10 @@ function AddTabModal({ onAdd, onClose }: {
   onAdd: (label: string, emoji: string, type: CustomTab["type"], url?: string) => void;
   onClose: () => void;
 }) {
-  const [label,   setLabel]   = useState("");
-  const [emoji,   setEmoji]   = useState("📌");
-  const [type,    setType]    = useState<CustomTab["type"]>("list");
-  const [url,     setUrl]     = useState("");
+  const [label, setLabel] = useState("");
+  const [emoji, setEmoji] = useState("📌");
+  const [type,  setType]  = useState<CustomTab["type"]>("list");
+  const [url,   setUrl]   = useState("");
 
   const TAB_TYPES: { id: CustomTab["type"]; label: string; icon: string }[] = [
     { id: "list",   label: "List",   icon: "📝" },
@@ -87,17 +92,17 @@ function AddTabModal({ onAdd, onClose }: {
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16 }}>
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: "28px", width: "100%", maxWidth: 420, boxShadow: "0 24px 80px rgba(0,0,0,0.18)" }}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 28, width: "100%", maxWidth: 420, boxShadow: "0 24px 80px rgba(0,0,0,0.18)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
           <h2 style={{ fontSize: 17, fontWeight: 800, color: C.text }}>Add Custom Tab</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><X size={18} /></button>
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Emoji Icon + Tab Name</label>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Icon + Tab Name</label>
           <div style={{ display: "grid", gridTemplateColumns: "48px 1fr", gap: 8 }}>
             <input value={emoji} onChange={e => setEmoji(e.target.value)} maxLength={2}
-              style={{ padding: "9px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 18, textAlign: "center", outline: "none" }} />
+              style={{ padding: 9, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 18, textAlign: "center", outline: "none" }} />
             <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Returns Log"
               style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none" }} />
           </div>
@@ -124,7 +129,8 @@ function AddTabModal({ onAdd, onClose }: {
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
           <button onClick={onClose} style={{ padding: "9px 18px", background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-          <button onClick={() => { if (label.trim()) { onAdd(label.trim(), emoji, type, type === "link" ? url : undefined); onClose(); } }}
+          <button
+            onClick={() => { if (label.trim()) { onAdd(label.trim(), emoji, type, type === "link" ? url : undefined); onClose(); } }}
             disabled={!label.trim()}
             style={{ padding: "9px 20px", background: label.trim() ? C.blue : C.border, border: "none", borderRadius: 8, color: label.trim() ? "#fff" : C.muted, fontSize: 13, fontWeight: 700, cursor: label.trim() ? "pointer" : "not-allowed" }}>
             Add Tab
@@ -150,13 +156,19 @@ export default function App() {
     setLoading(false);
   }, []);
 
-  // ── Existing component state ───────────────────────────────────────────────
-  const [met] = useState({ opm: 0, skus: 0, sync: 0, activeOrders: 0, rev: 0, latency: 0, queue: 0, conflicts: 0 });
-  const [chart]     = useState<any[]>([]);
-  const [pipe,      setPipe]      = useState<any>(null);
-  const [conflicts, setConflicts] = useState<any[]>([]);
-  const [crm,       setCrm]       = useState({ salesforce: "disconnected", hubspot: "disconnected", zoho: "disconnected" });
-  const [health]    = useState([
+  // ── State only for components that still need it passed in ─────────────────
+  const [met] = useState({
+    opm: 0, skus: 0, sync: 0, activeOrders: 0,
+    rev: 0, latency: 0, queue: 0, conflicts: 0,
+  });
+  const [chart] = useState<any[]>([]);
+  const [pipe,  setPipe] = useState<any>(null);
+  const [crm,   setCrm]  = useState({
+    salesforce: "disconnected",
+    hubspot:    "disconnected",
+    zoho:       "disconnected",
+  });
+  const [health] = useState([
     { name: "PostgreSQL",     status: "unknown", lat: 0, up: 0 },
     { name: "Redis Cache",    status: "unknown", lat: 0, up: 0 },
     { name: "BullMQ Workers", status: "unknown", lat: 0, up: 0 },
@@ -166,17 +178,16 @@ export default function App() {
   ]);
   const alerts: any[] = [];
 
-  const resolveConflict = (id: number) =>
-    setConflicts(cs => cs.map(c => c.id === id ? { ...c, status: "resolved" } : c));
-
   // ── Add custom tab ─────────────────────────────────────────────────────────
   const addCustomTab = (label: string, icon: string, type: CustomTab["type"], url?: string) => {
     if (!workspace) return;
-    const newTab: CustomTab = { id: Math.random().toString(36).slice(2, 9), label, icon, type, url };
+    const newTab: CustomTab = {
+      id:    Math.random().toString(36).slice(2, 9),
+      label, icon, type, url,
+    };
     const updated = { ...workspace, customTabs: [...workspace.customTabs, newTab] };
-    setWorkspace(updated);
-    const { saveWorkspace } = require("@/lib/workspace");
     saveWorkspace(updated);
+    setWorkspace(updated);
     setTab(newTab.id);
   };
 
@@ -191,36 +202,46 @@ export default function App() {
     );
   }
 
-  // ── Build tabs ─────────────────────────────────────────────────────────────
+  // ── Build tab list ─────────────────────────────────────────────────────────
   const moduleTabs = workspace.modules.map(id => ({
-    id, label: MODULE_TABS[id]?.label || id, icon: MODULE_TABS[id]?.icon, emoji: undefined as string | undefined, custom: false,
+    id,
+    label:  MODULE_TABS[id]?.label || id,
+    icon:   MODULE_TABS[id]?.icon  || null,
+    emoji:  undefined as string | undefined,
+    custom: false,
   }));
-  const customTabList = workspace.customTabs.map(ct => ({
-    id: ct.id, label: ct.label, icon: null as any, emoji: ct.icon, custom: true, data: ct,
-  }));
-  const settingsTab = { id: "settings", label: "Settings", icon: SettingsIcon, emoji: undefined as string | undefined, custom: false };
-  const allTabs = [...moduleTabs, ...customTabList, settingsTab];
 
-  // ── Render content ─────────────────────────────────────────────────────────
+  const customTabList = workspace.customTabs.map(ct => ({
+    id:     ct.id,
+    label:  ct.label,
+    icon:   null as any,
+    emoji:  ct.icon,
+    custom: true,
+  }));
+
+  const allTabs = [...moduleTabs, ...customTabList];
+
+  // ── Render active tab content ──────────────────────────────────────────────
   const renderContent = () => {
-    if (tab === "settings") return <Settings workspace={workspace} onUpdate={ws => setWorkspace(ws)} />;
+    if (tab === "settings") {
+      return <Settings workspace={workspace} onUpdate={ws => { saveWorkspace(ws); setWorkspace(ws); }} />;
+    }
     switch (tab) {
-      case "dashboard": return <Dashboard    met={met}    chart={chart}    alerts={alerts} />;
-      case "pipeline":  return <Pipeline     pipe={pipe}  setPipe={setPipe} />;
+      case "dashboard": return <Dashboard    met={met}   chart={chart} alerts={alerts} />;
+      case "pipeline":  return <Pipeline     pipe={pipe} setPipe={setPipe} />;
       case "orders":    return <OrderKanban />;
-      case "inventory": return <InventorySync conflicts={conflicts} resolveConflict={resolveConflict} />;
-      case "crm":       return <CRMPanel     crm={crm}    setCrm={setCrm} />;
+      case "inventory": return <InventorySync />;
+      case "crm":       return <CRMPanel     crm={crm}   setCrm={setCrm} />;
       case "health":    return <SystemHealth health={health} met={met} alerts={alerts} />;
       case "quotes":    return <Quotes />;
       case "invoicing": return <Invoicing />;
       case "customers": return <Customers />;
       case "analytics": return <Analytics />;
-      case "shipping":
-      case "suppliers":
-        return <ComingSoon label={MODULE_TABS[tab as ModuleId]?.label || tab} />;
+      case "suppliers": return <Suppliers />;
+      case "shipping":  return <Shipping />;
     }
-    const customTab = workspace.customTabs.find(ct => ct.id === tab);
-    if (customTab) return <CustomTabContent tab={customTab} />;
+    const ct = workspace.customTabs.find(c => c.id === tab);
+    if (ct) return <CustomTabContent tab={ct} />;
     return <ComingSoon label={tab} />;
   };
 
@@ -240,43 +261,49 @@ export default function App() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <button style={{ padding: "7px 14px", background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 8, color: C.blue, fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-            onClick={() => window.open("/portal", "_blank")}>
+          <button
+            onClick={() => window.open("/portal", "_blank")}
+            style={{ padding: "7px 14px", background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 8, color: C.blue, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             Customer Portal ↗
           </button>
           <button style={{ width: 34, height: 34, background: "none", border: `1px solid ${C.border}`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <Bell size={15} color={C.muted} />
           </button>
-          <button onClick={() => setTab("settings")} style={{ width: 34, height: 34, background: tab === "settings" ? C.blueBg : "none", border: `1px solid ${tab === "settings" ? C.blueBorder : C.border}`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          <button
+            onClick={() => setTab("settings")}
+            style={{ width: 34, height: 34, background: tab === "settings" ? C.blueBg : "none", border: `1px solid ${tab === "settings" ? C.blueBorder : C.border}`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <SettingsIcon size={15} color={tab === "settings" ? C.blue : C.muted} />
           </button>
         </div>
       </div>
 
       {/* ── TABS ── */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 24px", display: "flex", overflowX: "auto", gap: 0, scrollbarWidth: "none" }}>
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 24px", display: "flex", overflowX: "auto", scrollbarWidth: "none" }}>
         {allTabs.map(t => {
           const active = tab === t.id;
           const Icon   = t.icon;
           return (
             <button key={t.id} onClick={() => setTab(t.id)} style={{
-              display: "flex", alignItems: "center", gap: 6, padding: "12px 14px",
-              fontSize: 13, fontWeight: active ? 700 : 500,
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "12px 14px", fontSize: 13, fontWeight: active ? 700 : 500,
               border: "none", borderBottom: active ? `2px solid ${C.blue}` : "2px solid transparent",
               color: active ? C.blue : C.muted, background: "none", cursor: "pointer",
               whiteSpace: "nowrap", transition: "color .15s", marginBottom: -1, flexShrink: 0,
             }}>
-              {t.emoji ? <span style={{ fontSize: 13 }}>{t.emoji}</span> : Icon ? <Icon size={13} /> : null}
+              {t.emoji
+                ? <span style={{ fontSize: 13 }}>{t.emoji}</span>
+                : Icon ? <Icon size={13} /> : null}
               {t.label}
             </button>
           );
         })}
 
         <button onClick={() => setShowAddTab(true)} style={{
-          display: "flex", alignItems: "center", gap: 4, padding: "12px 14px",
-          fontSize: 12, fontWeight: 600, border: "none", borderBottom: "2px solid transparent",
-          color: C.muted, background: "none", cursor: "pointer", whiteSpace: "nowrap",
-          marginBottom: -1, flexShrink: 0, opacity: 0.7,
+          display: "flex", alignItems: "center", gap: 4,
+          padding: "12px 14px", fontSize: 12, fontWeight: 600,
+          border: "none", borderBottom: "2px solid transparent",
+          color: C.muted, background: "none", cursor: "pointer",
+          whiteSpace: "nowrap", marginBottom: -1, flexShrink: 0, opacity: 0.7,
         }}>
           <Plus size={13} /> Add Tab
         </button>
