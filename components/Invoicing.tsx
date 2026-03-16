@@ -1,520 +1,744 @@
+
 "use client";
 // components/Invoicing.tsx
-// Full invoicing module — create invoices, track payments, overdue alerts.
-// Data saved to localStorage. Swap for API calls when DB is ready.
+// Invoicing & Payments module.
+// - Invoice list with status badges
+// - Create invoice manually with line items
+// - Auto-generate from a saved quote
+// - Mark as Paid / Partial payment
+// - Overdue detection (auto-flags past due date)
+// - Saved to localStorage — same pattern as Quotes.tsx
 
 import { useState, useEffect } from "react";
-import { C } from "@/lib/utils";
-import { Card, SectionTitle } from "./Dashboard";
 import {
-  Receipt, Plus, Search, Download, Send,
-  CheckCircle, AlertTriangle, Clock, XCircle, ChevronDown, ChevronUp,
+  Plus, ChevronLeft, CheckCircle, Clock, AlertCircle,
+  XCircle, Trash2, User, Calendar, Hash, DollarSign,
+  FileText, Receipt, CreditCard, RefreshCw,
 } from "lucide-react";
+import { C, fmt } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type InvStatus = "draft" | "sent" | "paid" | "overdue" | "partial";
-
-interface InvLine {
-  id: string; desc: string; qty: number; unit: number; total: number;
-}
-interface Invoice {
+interface InvoiceItem {
   id:        string;
-  number:    string;
-  customer:  string;
-  email:     string;
-  lines:     InvLine[];
-  subtotal:  number;
-  tax:       number;
+  desc:      string;
+  qty:       number;
+  unitPrice: number;
   total:     number;
-  status:    InvStatus;
-  issued:    string;   // ISO date string
-  due:       string;   // ISO date string
-  paidAmt:   number;
-  notes:     string;
 }
+
+type InvoiceStatus = "unpaid" | "paid" | "overdue" | "partial";
+type PaymentTerms  = "Net 15" | "Net 30" | "Net 60" | "Prepaid" | "Cash on Delivery";
+
+interface Invoice {
+  id:            string;
+  invoiceNumber: string;
+  customer:      string;
+  items:         InvoiceItem[];
+  subtotal:      number;
+  tax:           number;
+  total:         number;
+  amountPaid:    number;
+  paymentTerms:  PaymentTerms;
+  issueDate:     string; // ISO date string
+  dueDate:       string; // ISO date string
+  status:        InvoiceStatus;
+  notes:         string;
+  createdAt:     string;
+}
+
+// ── Status config ─────────────────────────────────────────────────────────────
+const STATUS_CONFIG: Record<InvoiceStatus, {
+  label: string; color: string; bg: string; border: string; icon: any;
+}> = {
+  unpaid:  { label: "Unpaid",   color: C.amber,  bg: C.amberBg,  border: C.amberBorder,  icon: Clock       },
+  paid:    { label: "Paid",     color: C.green,  bg: C.greenBg,  border: C.greenBorder,  icon: CheckCircle },
+  overdue: { label: "Overdue",  color: C.red,    bg: C.redBg,    border: C.redBorder,    icon: AlertCircle },
+  partial: { label: "Partial",  color: C.purple, bg: C.purpleBg, border: C.purpleBorder, icon: RefreshCw   },
+};
+
+// ── Payment terms → days ──────────────────────────────────────────────────────
+const TERMS_DAYS: Record<PaymentTerms, number> = {
+  "Net 15": 15, "Net 30": 30, "Net 60": 60,
+  "Prepaid": 0, "Cash on Delivery": 0,
+};
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const uid   = () => Math.random().toString(36).slice(2, 9);
-const invNo = () => `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-const today = () => new Date().toISOString().split("T")[0];
-const addDays = (d: string, n: number) => {
-  const dt = new Date(d); dt.setDate(dt.getDate() + n);
-  return dt.toISOString().split("T")[0];
-};
-const fmtDate  = (s: string) => new Date(s).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-const fmtMoney = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const makeId      = () => Math.random().toString(36).slice(2, 9);
+const makeInvNum  = () => `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+const fmtDate     = (d: string) => new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+const fmtMoney    = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function calcDueDate(issueDate: string, terms: PaymentTerms): string {
+  const d = new Date(issueDate);
+  d.setDate(d.getDate() + TERMS_DAYS[terms]);
+  return d.toISOString().split("T")[0];
+}
+
+function deriveStatus(inv: Invoice): InvoiceStatus {
+  if (inv.amountPaid >= inv.total) return "paid";
+  if (inv.amountPaid > 0)         return "partial";
+  if (new Date(inv.dueDate) < new Date()) return "overdue";
+  return "unpaid";
+}
+
+// ── localStorage ──────────────────────────────────────────────────────────────
 const STORAGE_KEY = "industrialos_invoices";
 
 function loadInvoices(): Invoice[] {
-  if (typeof window === "undefined") return SEED;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : SEED;
-  } catch { return SEED; }
-}
-function saveInvoices(list: Invoice[]) {
-  if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+  if (typeof window === "undefined") return [];
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+  catch { return []; }
 }
 
-// ── Seed data ─────────────────────────────────────────────────────────────────
-const SEED: Invoice[] = [
-  {
-    id: "s1", number: "INV-2026-0312", customer: "Acme Corp",   email: "buyer@acmecorp.com",
-    lines: [
-      { id: "l1", desc: "SKU-4821 — Industrial bolts M10 (x500)", qty: 500, unit: 48.60, total: 24300 },
-    ],
-    subtotal: 24300, tax: 1944, total: 26244, status: "overdue",
-    issued: "2026-03-05", due: "2026-03-20", paidAmt: 0, notes: "Net 15 — overdue",
-  },
-  {
-    id: "s2", number: "INV-2026-0298", customer: "TechWave Ltd", email: "purchasing@techwave.com",
-    lines: [
-      { id: "l2", desc: "SKU-2210 — Precision bearings (x800)", qty: 800, unit: 56.00, total: 44800 },
-    ],
-    subtotal: 44800, tax: 3584, total: 48384, status: "partial",
-    issued: "2026-03-01", due: "2026-03-31", paidAmt: 24000, notes: "Partial payment received Mar 15",
-  },
-  {
-    id: "s3", number: "INV-2026-0201", customer: "Acme Corp",   email: "buyer@acmecorp.com",
-    lines: [
-      { id: "l3", desc: "SKU-3318 — Stainless clamps (x200)",    qty: 200, unit: 76.00, total: 15200 },
-    ],
-    subtotal: 15200, tax: 1216, total: 16416, status: "paid",
-    issued: "2026-02-20", due: "2026-03-22", paidAmt: 16416, notes: "Paid in full",
-  },
-  {
-    id: "s4", number: "INV-2026-0188", customer: "Midland Steel", email: "orders@midlandsteel.com",
-    lines: [
-      { id: "l4", desc: "SKU-7753 — Hex bolts grade 8 (x400)",   qty: 400, unit: 46.00, total: 18400 },
-      { id: "l5", desc: "SKU-9034 — Lock washers (x1000)",        qty: 1000, unit: 4.20, total:  4200 },
-    ],
-    subtotal: 22600, tax: 1808, total: 24408, status: "sent",
-    issued: "2026-03-10", due: "2026-04-09", paidAmt: 0, notes: "Net 30",
-  },
-];
+function saveInvoices(invs: Invoice[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(invs));
+}
 
-// ── Status config ─────────────────────────────────────────────────────────────
-const STATUS_CFG: Record<InvStatus, { label: string; bg: string; color: string; border: string; icon: any }> = {
-  draft:   { label: "Draft",   bg: C.surface,   color: C.subtle,  border: C.border,       icon: Clock       },
-  sent:    { label: "Sent",    bg: C.blueBg,    color: C.blue,    border: C.blueBorder,   icon: Send        },
-  paid:    { label: "Paid",    bg: C.greenBg,   color: C.green,   border: C.greenBorder,  icon: CheckCircle },
-  overdue: { label: "Overdue", bg: C.redBg,     color: C.red,     border: C.redBorder,    icon: AlertTriangle },
-  partial: { label: "Partial", bg: C.amberBg,   color: C.amber,   border: C.amberBorder,  icon: Clock       },
-};
+// ── Seed demo invoices if empty ───────────────────────────────────────────────
+function seedDemoInvoices(): Invoice[] {
+  const today = new Date();
+  const past   = (d: number) => new Date(today.getTime() - d * 86400000).toISOString().split("T")[0];
+  const future = (d: number) => new Date(today.getTime() + d * 86400000).toISOString().split("T")[0];
 
-// ── Badge ─────────────────────────────────────────────────────────────────────
-function Badge({ status }: { status: InvStatus }) {
-  const s = STATUS_CFG[status];
+  const demos: Invoice[] = [
+    {
+      id: "demo1", invoiceNumber: "INV-2026-0312",
+      customer: "Acme Corp",
+      items: [
+        { id: "i1", desc: "SKU-4821 — Industrial bolts M10",   qty: 6,   unitPrice: 4050,  total: 24300 },
+      ],
+      subtotal: 24300, tax: 1944, total: 26244, amountPaid: 0,
+      paymentTerms: "Net 30", issueDate: past(10), dueDate: future(20),
+      status: "unpaid", notes: "Please pay by due date.", createdAt: past(10),
+    },
+    {
+      id: "demo2", invoiceNumber: "INV-2026-0201",
+      customer: "TechWave Ltd",
+      items: [
+        { id: "i2", desc: "SKU-2210 — Conveyor belt assembly", qty: 8,   unitPrice: 5600,  total: 44800 },
+      ],
+      subtotal: 44800, tax: 3584, total: 48384, amountPaid: 48384,
+      paymentTerms: "Net 30", issueDate: past(25), dueDate: past(5),
+      status: "paid", notes: "", createdAt: past(25),
+    },
+    {
+      id: "demo3", invoiceNumber: "INV-2026-0188",
+      customer: "NovaBuild Inc",
+      items: [
+        { id: "i3", desc: "SKU-3318 — Steel framing unit",     qty: 4,   unitPrice: 3800,  total: 15200 },
+        { id: "i4", desc: "SKU-7753 — Anchor bolts (set/100)", qty: 2,   unitPrice: 4375,  total: 8750  },
+      ],
+      subtotal: 23950, tax: 1916, total: 25866, amountPaid: 0,
+      paymentTerms: "Net 30", issueDate: past(45), dueDate: past(15),
+      status: "overdue", notes: "Second reminder sent.", createdAt: past(45),
+    },
+    {
+      id: "demo4", invoiceNumber: "INV-2026-0298",
+      customer: "TechWave Ltd",
+      items: [
+        { id: "i5", desc: "SKU-9034 — Motor controller unit",  qty: 3,   unitPrice: 4200,  total: 12600 },
+      ],
+      subtotal: 12600, tax: 1008, total: 13608, amountPaid: 7000,
+      paymentTerms: "Net 60", issueDate: past(14), dueDate: future(46),
+      status: "partial", notes: "Partial payment of $7,000 received.", createdAt: past(14),
+    },
+  ];
+  return demos;
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+const Card = ({ children, style = {} }: any) => (
+  <div style={{
+    background: C.surface, border: `1px solid ${C.border}`,
+    borderRadius: 14, padding: "20px 22px", ...style,
+  }}>{children}</div>
+);
+
+const SectionTitle = ({ children }: any) => (
+  <div style={{ fontWeight: 700, fontSize: 13, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 14 }}>
+    {children}
+  </div>
+);
+
+const Badge = ({ status }: { status: InvoiceStatus }) => {
+  const s = STATUS_CONFIG[status];
   const Icon = s.icon;
   return (
     <span style={{
-      display: "inline-flex", alignItems: "center", gap: 4,
-      padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700,
-      background: s.bg, color: s.color, border: `1px solid ${s.border}`,
+      display: "inline-flex", alignItems: "center", gap: 5,
+      padding: "3px 10px", borderRadius: 999, fontSize: 11,
+      fontWeight: 700, color: s.color, background: s.bg, border: `1px solid ${s.border}`,
     }}>
-      <Icon size={10} /> {s.label}
+      <Icon size={10} />{s.label}
     </span>
   );
-}
+};
 
-// ── New Invoice modal ─────────────────────────────────────────────────────────
-function NewInvoiceModal({ onSave, onClose }: { onSave: (inv: Invoice) => void; onClose: () => void }) {
-  const [customer, setCustomer] = useState("");
-  const [email,    setEmail]    = useState("");
-  const [dueIn,    setDueIn]    = useState("30");
-  const [notes,    setNotes]    = useState("Net 30");
-  const [lines, setLines] = useState<InvLine[]>([
-    { id: uid(), desc: "", qty: 1, unit: 0, total: 0 },
+const Input = ({ label, value, onChange, type = "text", placeholder = "" }: any) => (
+  <div style={{ marginBottom: 14 }}>
+    <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+      {label}
+    </label>
+    <input
+      type={type}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        width: "100%", padding: "10px 12px",
+        background: C.bg, border: `1px solid ${C.border}`,
+        borderRadius: 9, color: C.text, fontSize: 13,
+        outline: "none", boxSizing: "border-box", fontFamily: "inherit",
+      }}
+    />
+  </div>
+);
+
+// ── Main Component ────────────────────────────────────────────────────────────
+export default function Invoicing() {
+  const [view,     setView]     = useState<"list" | "create" | "detail">("list");
+  const [invoices, setInvoices] = useState<Invoice[]>(() => {
+    const saved = loadInvoices();
+    if (saved.length === 0) {
+      const demo = seedDemoInvoices();
+      saveInvoices(demo);
+      return demo;
+    }
+    return saved;
+  });
+  const [selected,  setSelected]  = useState<Invoice | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payError,  setPayError]  = useState("");
+
+  // ── Auto-refresh status (overdue check) ───────────────────────────────────
+  useEffect(() => {
+    const refreshed = invoices.map(inv => ({ ...inv, status: deriveStatus(inv) }));
+    const changed   = refreshed.some((r, i) => r.status !== invoices[i].status);
+    if (changed) {
+      setInvoices(refreshed);
+      saveInvoices(refreshed);
+    }
+  }, []);
+
+  // ── New invoice form state ────────────────────────────────────────────────
+  const [formCustomer, setFormCustomer] = useState("");
+  const [formTerms,    setFormTerms]    = useState<PaymentTerms>("Net 30");
+  const [formNotes,    setFormNotes]    = useState("");
+  const [formItems,    setFormItems]    = useState<InvoiceItem[]>([
+    { id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 },
   ]);
+  const [formError, setFormError] = useState("");
 
-  const updateLine = (id: string, field: keyof InvLine, val: string) => {
-    setLines(ls => ls.map(l => {
-      if (l.id !== id) return l;
-      const updated = { ...l, [field]: field === "desc" ? val : parseFloat(val) || 0 };
-      updated.total = parseFloat((updated.qty * updated.unit).toFixed(2));
+  // Recalculate item total when qty or price changes
+  const updateItem = (id: string, field: "desc" | "qty" | "unitPrice", val: string) => {
+    setFormItems(prev => prev.map(it => {
+      if (it.id !== id) return it;
+      const updated = {
+        ...it,
+        [field]: field === "desc" ? val : parseFloat(val) || 0,
+      };
+      updated.total = updated.qty * updated.unitPrice;
       return updated;
     }));
   };
-  const addLine    = () => setLines(ls => [...ls, { id: uid(), desc: "", qty: 1, unit: 0, total: 0 }]);
-  const removeLine = (id: string) => setLines(ls => ls.filter(l => l.id !== id));
 
-  const subtotal = lines.reduce((s, l) => s + l.total, 0);
-  const tax      = parseFloat((subtotal * 0.08).toFixed(2));
-  const total    = parseFloat((subtotal + tax).toFixed(2));
-  const issuedOn = today();
-  const dueOn    = addDays(issuedOn, parseInt(dueIn) || 30);
+  const addItem = () =>
+    setFormItems(prev => [...prev, { id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 }]);
 
-  const save = () => {
-    if (!customer.trim()) return;
-    const inv: Invoice = {
-      id: uid(), number: invNo(), customer: customer.trim(),
-      email: email.trim(), lines, subtotal: parseFloat(subtotal.toFixed(2)),
-      tax, total, status: "draft", issued: issuedOn, due: dueOn,
-      paidAmt: 0, notes,
+  const removeItem = (id: string) =>
+    setFormItems(prev => prev.length > 1 ? prev.filter(it => it.id !== id) : prev);
+
+  const formSubtotal = formItems.reduce((s, it) => s + it.total, 0);
+  const formTax      = parseFloat((formSubtotal * 0.08).toFixed(2));
+  const formTotal    = parseFloat((formSubtotal + formTax).toFixed(2));
+
+  const resetForm = () => {
+    setFormCustomer(""); setFormTerms("Net 30"); setFormNotes(""); setFormError("");
+    setFormItems([{ id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 }]);
+  };
+
+  // ── Save new invoice ──────────────────────────────────────────────────────
+  const saveInvoice = () => {
+    if (!formCustomer.trim())                    { setFormError("Customer name is required."); return; }
+    if (formItems.some(it => !it.desc.trim()))   { setFormError("All line items need a description."); return; }
+    if (formItems.some(it => it.unitPrice <= 0)) { setFormError("All items need a price greater than $0."); return; }
+
+    const today    = new Date().toISOString().split("T")[0];
+    const dueDate  = calcDueDate(today, formTerms);
+
+    const newInv: Invoice = {
+      id:            makeId(),
+      invoiceNumber: makeInvNum(),
+      customer:      formCustomer.trim(),
+      items:         formItems,
+      subtotal:      formSubtotal,
+      tax:           formTax,
+      total:         formTotal,
+      amountPaid:    0,
+      paymentTerms:  formTerms,
+      issueDate:     today,
+      dueDate,
+      status:        "unpaid",
+      notes:         formNotes.trim(),
+      createdAt:     new Date().toISOString(),
     };
-    onSave(inv);
-    onClose();
+
+    const updated = [newInv, ...invoices];
+    setInvoices(updated);
+    saveInvoices(updated);
+    setSelected(newInv);
+    resetForm();
+    setView("detail");
   };
 
-  return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 100, padding: "16px",
-    }}>
-      <div style={{
-        background: C.surface, border: `1px solid ${C.border}`,
-        borderRadius: 16, padding: "28px 28px 24px",
-        width: "100%", maxWidth: 620, maxHeight: "90vh",
-        overflowY: "auto", boxShadow: "0 24px 80px rgba(0,0,0,0.18)",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: C.text }}>New Invoice</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 20 }}>✕</button>
-        </div>
-
-        {/* Customer + email */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-          {[
-            { label: "Customer Name *", val: customer, set: setCustomer, ph: "e.g. Acme Corp" },
-            { label: "Customer Email",  val: email,    set: setEmail,    ph: "buyer@acmecorp.com" },
-          ].map(({ label, val, set, ph }) => (
-            <div key={label}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</label>
-              <input value={val} onChange={e => set(e.target.value)} placeholder={ph}
-                style={{ width: "100%", padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-            </div>
-          ))}
-        </div>
-
-        {/* Due + notes */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Due In (days)</label>
-            <select value={dueIn} onChange={e => setDueIn(e.target.value)}
-              style={{ width: "100%", padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none" }}>
-              {["7","15","30","45","60","90"].map(d => <option key={d} value={d}>Net {d}</option>)}
-            </select>
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Notes</label>
-            <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Payment terms, notes…"
-              style={{ width: "100%", padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
-          </div>
-        </div>
-
-        {/* Line items */}
-        <SectionTitle>Line Items</SectionTitle>
-        <div style={{ marginBottom: 10 }}>
-          {lines.map((l, i) => (
-            <div key={l.id} style={{ display: "grid", gridTemplateColumns: "3fr 80px 100px 100px 28px", gap: 8, marginBottom: 8, alignItems: "center" }}>
-              <input value={l.desc} onChange={e => updateLine(l.id, "desc", e.target.value)} placeholder={`Item ${i + 1} description`}
-                style={{ padding: "8px 10px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, fontSize: 12, outline: "none" }} />
-              <input type="number" value={l.qty} onChange={e => updateLine(l.id, "qty", e.target.value)} placeholder="Qty"
-                style={{ padding: "8px 8px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, fontSize: 12, outline: "none", textAlign: "right" }} />
-              <input type="number" value={l.unit} onChange={e => updateLine(l.id, "unit", e.target.value)} placeholder="Unit $"
-                style={{ padding: "8px 8px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, fontSize: 12, outline: "none", textAlign: "right" }} />
-              <div style={{ padding: "8px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, fontSize: 12, textAlign: "right", fontWeight: 600 }}>
-                {fmtMoney(l.total)}
-              </div>
-              <button onClick={() => removeLine(l.id)} disabled={lines.length === 1}
-                style={{ background: "none", border: "none", cursor: lines.length === 1 ? "not-allowed" : "pointer", color: C.red, fontSize: 16, opacity: lines.length === 1 ? 0.3 : 1 }}>✕</button>
-            </div>
-          ))}
-        </div>
-        <button onClick={addLine} style={{ fontSize: 12, fontWeight: 700, color: C.blue, background: "none", border: `1px dashed ${C.blueBorder}`, borderRadius: 7, padding: "7px 14px", cursor: "pointer", marginBottom: 20 }}>
-          + Add line item
-        </button>
-
-        {/* Totals */}
-        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
-          {[["Subtotal", fmtMoney(subtotal)], ["Tax (8%)", fmtMoney(tax)]].map(([k, v]) => (
-            <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.muted, marginBottom: 6 }}>
-              <span>{k}</span><span>{v}</span>
-            </div>
-          ))}
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 800, color: C.text, borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 4 }}>
-            <span>Total</span><span>{fmtMoney(total)}</span>
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button onClick={onClose} style={{ padding: "10px 20px", background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-          <button onClick={save} disabled={!customer.trim()}
-            style={{ padding: "10px 22px", background: customer.trim() ? C.blue : C.border, border: "none", borderRadius: 8, color: customer.trim() ? "#fff" : C.muted, fontSize: 13, fontWeight: 700, cursor: customer.trim() ? "pointer" : "not-allowed" }}>
-            Save as Draft
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Detail panel ──────────────────────────────────────────────────────────────
-function InvoiceDetail({ inv, onClose, onStatusChange, onRecordPayment }: {
-  inv: Invoice;
-  onClose: () => void;
-  onStatusChange: (id: string, s: InvStatus) => void;
-  onRecordPayment: (id: string, amt: number) => void;
-}) {
-  const [payAmt, setPayAmt] = useState("");
-  const outstanding = inv.total - inv.paidAmt;
-
-  const recordPay = () => {
-    const amt = parseFloat(payAmt);
-    if (!amt || amt <= 0) return;
-    onRecordPayment(inv.id, amt);
-    setPayAmt("");
+  // ── Delete invoice ────────────────────────────────────────────────────────
+  const deleteInvoice = (id: string) => {
+    const updated = invoices.filter(inv => inv.id !== id);
+    setInvoices(updated);
+    saveInvoices(updated);
+    setSelected(null);
+    setView("list");
   };
 
-  return (
-    <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      zIndex: 100, padding: "16px",
-    }}>
-      <div style={{
-        background: C.surface, border: `1px solid ${C.border}`,
-        borderRadius: 16, padding: "28px",
-        width: "100%", maxWidth: 560, maxHeight: "90vh",
-        overflowY: "auto", boxShadow: "0 24px 80px rgba(0,0,0,0.18)",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-          <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Invoice</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{inv.number}</div>
-          </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <Badge status={inv.status} />
-            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 20 }}>✕</button>
-          </div>
-        </div>
+  // ── Record payment ────────────────────────────────────────────────────────
+  const recordPayment = () => {
+    if (!selected) return;
+    const amount = parseFloat(payAmount);
+    if (isNaN(amount) || amount <= 0) { setPayError("Enter a valid amount."); return; }
+    const remaining = selected.total - selected.amountPaid;
+    if (amount > remaining)           { setPayError(`Max payment is ${fmtMoney(remaining)}.`); return; }
 
-        {/* Customer + dates */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 20 }}>
-          {[
-            ["Bill To",  inv.customer],
-            ["Email",    inv.email || "—"],
-            ["Issued",   fmtDate(inv.issued)],
-            ["Due",      fmtDate(inv.due)],
-          ].map(([k, v]) => (
-            <div key={k}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 3, textTransform: "uppercase", letterSpacing: "0.05em" }}>{k}</div>
-              <div style={{ fontSize: 14, color: C.text, fontWeight: 600 }}>{v}</div>
-            </div>
-          ))}
-        </div>
-
-        {/* Lines */}
-        <div style={{ background: C.bg, borderRadius: 10, overflow: "hidden", border: `1px solid ${C.border}`, marginBottom: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "3fr 60px 90px 90px", gap: 8, padding: "8px 12px", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${C.border}` }}>
-            <span>Description</span><span style={{ textAlign: "right" }}>Qty</span><span style={{ textAlign: "right" }}>Unit</span><span style={{ textAlign: "right" }}>Total</span>
-          </div>
-          {inv.lines.map(l => (
-            <div key={l.id} style={{ display: "grid", gridTemplateColumns: "3fr 60px 90px 90px", gap: 8, padding: "10px 12px", fontSize: 13, borderBottom: `1px solid ${C.border}`, color: C.text }}>
-              <span>{l.desc}</span>
-              <span style={{ textAlign: "right", color: C.muted }}>{l.qty}</span>
-              <span style={{ textAlign: "right", color: C.muted }}>{fmtMoney(l.unit)}</span>
-              <span style={{ textAlign: "right", fontWeight: 600 }}>{fmtMoney(l.total)}</span>
-            </div>
-          ))}
-          <div style={{ padding: "10px 12px" }}>
-            {[["Subtotal", fmtMoney(inv.subtotal)], ["Tax (8%)", fmtMoney(inv.tax)]].map(([k, v]) => (
-              <div key={k} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.muted, marginBottom: 4 }}>
-                <span>{k}</span><span>{v}</span>
-              </div>
-            ))}
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 15, fontWeight: 800, color: C.text, borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 4 }}>
-              <span>Total</span><span>{fmtMoney(inv.total)}</span>
-            </div>
-            {inv.paidAmt > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.green, marginTop: 6, fontWeight: 700 }}>
-                <span>Paid</span><span>{fmtMoney(inv.paidAmt)}</span>
-              </div>
-            )}
-            {outstanding > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, fontWeight: 800, color: C.red, marginTop: 4 }}>
-                <span>Outstanding</span><span>{fmtMoney(outstanding)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {inv.notes && (
-          <div style={{ fontSize: 12, color: C.muted, marginBottom: 16, padding: "8px 12px", background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
-            {inv.notes}
-          </div>
-        )}
-
-        {/* Actions */}
-        {inv.status !== "paid" && (
-          <div style={{ background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 10 }}>Record Payment</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input type="number" value={payAmt} onChange={e => setPayAmt(e.target.value)}
-                placeholder={`Up to ${fmtMoney(outstanding)}`}
-                style={{ flex: 1, padding: "8px 10px", background: C.surface, border: `1px solid ${C.greenBorder}`, borderRadius: 7, color: C.text, fontSize: 13, outline: "none" }} />
-              <button onClick={recordPay} style={{ padding: "8px 18px", background: C.green, border: "none", borderRadius: 7, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                Record
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {inv.status === "draft" && (
-            <button onClick={() => onStatusChange(inv.id, "sent")} style={{ padding: "9px 18px", background: C.blue, border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-              <Send size={13} /> Mark as Sent
-            </button>
-          )}
-          <button onClick={() => onStatusChange(inv.id, "paid")} style={{ padding: "9px 18px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 8, color: C.green, fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            <CheckCircle size={13} /> Mark Paid in Full
-          </button>
-          <button onClick={onClose} style={{ padding: "9px 18px", background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer", marginLeft: "auto" }}>
-            Close
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Main export ───────────────────────────────────────────────────────────────
-export default function Invoicing() {
-  const [invoices,  setInvoices]  = useState<Invoice[]>([]);
-  const [search,    setSearch]    = useState("");
-  const [filter,    setFilter]    = useState<InvStatus | "all">("all");
-  const [showNew,   setShowNew]   = useState(false);
-  const [selected,  setSelected]  = useState<Invoice | null>(null);
-
-  useEffect(() => { setInvoices(loadInvoices()); }, []);
-
-  const save = (list: Invoice[]) => { setInvoices(list); saveInvoices(list); };
-
-  const addInvoice = (inv: Invoice) => save([inv, ...invoices]);
-
-  const changeStatus = (id: string, status: InvStatus) => {
-    save(invoices.map(i => i.id === id ? { ...i, status, paidAmt: status === "paid" ? i.total : i.paidAmt } : i));
-    setSelected(prev => prev?.id === id ? { ...prev, status, paidAmt: status === "paid" ? prev.total : prev.paidAmt } : prev);
-  };
-
-  const recordPayment = (id: string, amt: number) => {
-    save(invoices.map(inv => {
-      if (inv.id !== id) return inv;
-      const paidAmt = Math.min(inv.total, inv.paidAmt + amt);
-      const status: InvStatus = paidAmt >= inv.total ? "paid" : "partial";
-      return { ...inv, paidAmt, status };
-    }));
-    setSelected(prev => {
-      if (!prev || prev.id !== id) return prev;
-      const paidAmt = Math.min(prev.total, prev.paidAmt + amt);
-      return { ...prev, paidAmt, status: paidAmt >= prev.total ? "paid" : "partial" };
+    const newPaid = selected.amountPaid + amount;
+    const updated = invoices.map(inv => {
+      if (inv.id !== selected.id) return inv;
+      const upd = { ...inv, amountPaid: newPaid };
+      upd.status = deriveStatus(upd);
+      return upd;
     });
+    setInvoices(updated);
+    saveInvoices(updated);
+    const refreshed = updated.find(i => i.id === selected.id)!;
+    setSelected(refreshed);
+    setPayAmount("");
+    setPayError("");
   };
 
-  const visible = invoices.filter(i => {
-    const matchFilter = filter === "all" || i.status === filter;
-    const matchSearch = !search || i.customer.toLowerCase().includes(search.toLowerCase()) || i.number.toLowerCase().includes(search.toLowerCase());
-    return matchFilter && matchSearch;
-  });
+  // ── Mark fully paid ───────────────────────────────────────────────────────
+  const markFullyPaid = () => {
+    if (!selected) return;
+    const updated = invoices.map(inv => {
+      if (inv.id !== selected.id) return inv;
+      return { ...inv, amountPaid: inv.total, status: "paid" as InvoiceStatus };
+    });
+    setInvoices(updated);
+    saveInvoices(updated);
+    setSelected(updated.find(i => i.id === selected.id)!);
+    setPayAmount("");
+    setPayError("");
+  };
 
-  // ── Summary stats ──────────────────────────────────────────────────────────
-  const totalOutstanding = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + (i.total - i.paidAmt), 0);
-  const totalOverdue     = invoices.filter(i => i.status === "overdue").reduce((s, i) => s + (i.total - i.paidAmt), 0);
-  const totalPaidMTD     = invoices.filter(i => i.status === "paid").reduce((s, i) => s + i.paidAmt, 0);
+  // ── Summary stats ─────────────────────────────────────────────────────────
+  const totalOutstanding = invoices
+    .filter(i => i.status !== "paid")
+    .reduce((s, i) => s + (i.total - i.amountPaid), 0);
+  const overdueCount = invoices.filter(i => i.status === "overdue").length;
+  const paidThisMonth = invoices
+    .filter(i => i.status === "paid" && new Date(i.createdAt).getMonth() === new Date().getMonth())
+    .reduce((s, i) => s + i.total, 0);
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+  // ══════════════════════════════════════════════════════════════════════════
+  // VIEW: LIST
+  // ══════════════════════════════════════════════════════════════════════════
+  if (view === "list") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-      {/* ── Summary cards ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-        {[
-          { label: "Outstanding",   val: fmtMoney(totalOutstanding), bg: C.blueBg,  color: C.blue,  border: C.blueBorder  },
-          { label: "Overdue",       val: fmtMoney(totalOverdue),     bg: C.redBg,   color: C.red,   border: C.redBorder   },
-          { label: "Paid (all time)", val: fmtMoney(totalPaidMTD),   bg: C.greenBg, color: C.green, border: C.greenBorder },
-        ].map(({ label, val, bg, color, border }) => (
-          <div key={label} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 12, padding: "16px 18px" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>{label}</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color }}>{val}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Toolbar ── */}
-      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: 1, minWidth: 180 }}>
-          <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.muted }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by customer or invoice no…"
-            style={{ width: "100%", padding: "8px 10px 8px 30px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Invoicing & Payments</h1>
+          <p style={{ color: C.muted, fontSize: 13 }}>Track payments, manage overdue invoices, record receipts.</p>
         </div>
-
-        <div style={{ display: "flex", gap: 6 }}>
-          {(["all","draft","sent","partial","overdue","paid"] as const).map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{
-              padding: "7px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none",
-              background: filter === f ? C.blue : C.surface,
-              color:      filter === f ? "#fff" : C.muted,
-              boxShadow:  filter === f ? `0 2px 8px ${C.blue}44` : "none",
-            }}>
-              {f === "all" ? "All" : STATUS_CFG[f].label}
-            </button>
-          ))}
-        </div>
-
-        <button onClick={() => setShowNew(true)} style={{
-          display: "flex", alignItems: "center", gap: 6,
-          padding: "8px 16px", background: C.blue, border: "none",
-          borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
-        }}>
-          <Plus size={14} /> New Invoice
+        <button
+          onClick={() => { resetForm(); setView("create"); }}
+          style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "10px 20px", borderRadius: 10,
+            background: `linear-gradient(135deg, ${C.blue}, ${C.purple})`,
+            border: "none", color: "#fff", fontSize: 13,
+            fontWeight: 700, cursor: "pointer",
+          }}
+        >
+          <Plus size={15} /> New Invoice
         </button>
       </div>
 
-      {/* ── Invoice list ── */}
-      <Card>
-        {visible.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px 0", color: C.muted }}>
-            <Receipt size={32} style={{ marginBottom: 10, opacity: 0.4 }} />
-            <div>No invoices found</div>
-          </div>
-        ) : visible.map((inv, idx) => {
-          const outstanding = inv.total - inv.paidAmt;
+      {/* Summary cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
+        {[
+          { label: "Outstanding",     value: fmtMoney(totalOutstanding), color: C.amber,  bg: C.amberBg,  border: C.amberBorder,  icon: DollarSign  },
+          { label: "Overdue",         value: `${overdueCount} invoice${overdueCount !== 1 ? "s" : ""}`, color: C.red, bg: C.redBg, border: C.redBorder, icon: AlertCircle },
+          { label: "Paid This Month", value: fmtMoney(paidThisMonth),    color: C.green,  bg: C.greenBg,  border: C.greenBorder,  icon: CheckCircle },
+        ].map((s, i) => {
+          const Icon = s.icon;
           return (
-            <div key={inv.id} onClick={() => setSelected(inv)} style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "14px 4px", cursor: "pointer",
-              borderBottom: idx < visible.length - 1 ? `1px solid ${C.border}` : "none",
-              transition: "background 0.1s",
-            }}
-              onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
-              onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 38, height: 38, background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <Receipt size={16} color={C.blue} />
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>{inv.number}</div>
-                  <div style={{ fontSize: 12, color: C.muted }}>{inv.customer} · Due {fmtDate(inv.due)}</div>
-                </div>
+            <div key={i} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: "16px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: C.surface, border: `1px solid ${s.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Icon size={17} color={s.color} />
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{fmtMoney(inv.total)}</div>
-                  {outstanding > 0 && outstanding < inv.total && (
-                    <div style={{ fontSize: 11, color: C.amber }}>{fmtMoney(outstanding)} outstanding</div>
-                  )}
-                </div>
-                <Badge status={inv.status} />
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: s.color }}>{s.value}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{s.label}</div>
               </div>
             </div>
           );
         })}
-      </Card>
+      </div>
 
-      {showNew   && <NewInvoiceModal onSave={addInvoice} onClose={() => setShowNew(false)} />}
-      {selected  && <InvoiceDetail  inv={selected} onClose={() => setSelected(null)} onStatusChange={changeStatus} onRecordPayment={recordPayment} />}
+      {/* Overdue alert banner */}
+      {overdueCount > 0 && (
+        <div style={{ padding: "12px 16px", background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 10, fontSize: 13, color: C.red, display: "flex", alignItems: "center", gap: 10 }}>
+          <AlertCircle size={15} />
+          <strong>{overdueCount} overdue invoice{overdueCount !== 1 ? "s" : ""}</strong> — follow up with customers to collect payment.
+        </div>
+      )}
+
+      {/* Invoice table */}
+      {invoices.length === 0 ? (
+        <Card style={{ textAlign: "center", padding: "60px 24px" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🧾</div>
+          <h3 style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 8 }}>No invoices yet</h3>
+          <p style={{ color: C.muted, fontSize: 14, marginBottom: 24 }}>Create your first invoice to start tracking payments.</p>
+          <button
+            onClick={() => { resetForm(); setView("create"); }}
+            style={{ padding: "11px 24px", borderRadius: 10, background: `linear-gradient(135deg,${C.blue},${C.purple})`, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+          >
+            Create First Invoice
+          </button>
+        </Card>
+      ) : (
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
+                {["Invoice #", "Customer", "Amount", "Paid", "Due Date", "Status", ""].map((h, i) => (
+                  <th key={i} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {invoices.map((inv, i) => (
+                <tr
+                  key={inv.id}
+                  onClick={() => { setSelected(inv); setPayAmount(""); setPayError(""); setView("detail"); }}
+                  style={{ borderBottom: i < invoices.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                >
+                  <td style={{ padding: "13px 16px", fontWeight: 700, color: C.blue, fontFamily: "monospace" }}>{inv.invoiceNumber}</td>
+                  <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}>{inv.customer}</td>
+                  <td style={{ padding: "13px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(inv.total)}</td>
+                  <td style={{ padding: "13px 16px", color: inv.amountPaid > 0 ? C.green : C.subtle }}>
+                    {inv.amountPaid > 0 ? fmtMoney(inv.amountPaid) : "—"}
+                  </td>
+                  <td style={{ padding: "13px 16px", color: inv.status === "overdue" ? C.red : C.muted }}>
+                    {fmtDate(inv.dueDate)}
+                  </td>
+                  <td style={{ padding: "13px 16px" }}><Badge status={inv.status} /></td>
+                  <td style={{ padding: "13px 16px", color: C.subtle, fontSize: 11 }}>{fmtDate(inv.createdAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
     </div>
   );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VIEW: CREATE
+  // ══════════════════════════════════════════════════════════════════════════
+  if (view === "create") return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 820 }}>
+
+      {/* Back */}
+      <button onClick={() => { resetForm(); setView("list"); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0 }}>
+        <ChevronLeft size={16} /> Back to Invoices
+      </button>
+
+      <div>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>New Invoice</h1>
+        <p style={{ color: C.muted, fontSize: 13 }}>Fill in the details below. Tax (8%) is calculated automatically.</p>
+      </div>
+
+      {/* Customer + Terms */}
+      <Card>
+        <SectionTitle>Invoice Details</SectionTitle>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <Input label="Customer Name *" value={formCustomer} onChange={setFormCustomer} placeholder="e.g. Acme Corp" />
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Payment Terms
+            </label>
+            <select
+              value={formTerms}
+              onChange={e => setFormTerms(e.target.value as PaymentTerms)}
+              style={{ width: "100%", padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none", fontFamily: "inherit" }}
+            >
+              {(["Net 15", "Net 30", "Net 60", "Prepaid", "Cash on Delivery"] as PaymentTerms[]).map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Notes (optional)
+          </label>
+          <textarea
+            value={formNotes}
+            onChange={e => setFormNotes(e.target.value)}
+            placeholder="e.g. Payment instructions, PO number, special terms…"
+            rows={2}
+            style={{ width: "100%", padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+          />
+        </div>
+      </Card>
+
+      {/* Line items */}
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "14px 18px 12px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontWeight: 700, fontSize: 13, color: C.text }}>Line Items</span>
+          <button onClick={addItem} style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", borderRadius: 7, background: C.blueBg, border: `1px solid ${C.blueBorder}`, color: C.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            <Plus size={12} /> Add Item
+          </button>
+        </div>
+        <div style={{ padding: "14px 18px" }}>
+          {/* Header row */}
+          <div style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1.2fr 1fr 28px", gap: 10, marginBottom: 8 }}>
+            {["Description", "Qty", "Unit Price", "Total", ""].map((h, i) => (
+              <div key={i} style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</div>
+            ))}
+          </div>
+          {formItems.map(item => (
+            <div key={item.id} style={{ display: "grid", gridTemplateColumns: "3fr 1fr 1.2fr 1fr 28px", gap: 10, marginBottom: 10 }}>
+              <input
+                value={item.desc}
+                onChange={e => updateItem(item.id, "desc", e.target.value)}
+                placeholder="e.g. SKU-4821 Industrial bolts"
+                style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", fontFamily: "inherit" }}
+              />
+              <input
+                type="number" min="1" value={item.qty}
+                onChange={e => updateItem(item.id, "qty", e.target.value)}
+                style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", textAlign: "center" }}
+              />
+              <input
+                type="number" min="0" step="0.01" value={item.unitPrice || ""}
+                onChange={e => updateItem(item.id, "unitPrice", e.target.value)}
+                placeholder="0.00"
+                style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none" }}
+              />
+              <div style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, fontWeight: 700, color: C.text }}>
+                {fmtMoney(item.total)}
+              </div>
+              <button onClick={() => removeItem(item.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <XCircle size={16} />
+              </button>
+            </div>
+          ))}
+
+          {/* Totals */}
+          <div style={{ marginTop: 14, padding: "14px 0 0", borderTop: `1px solid ${C.border}` }}>
+            {[
+              ["Subtotal", fmtMoney(formSubtotal), false],
+              ["Tax (8%)", fmtMoney(formTax),      false],
+              ["Total",    fmtMoney(formTotal),     true ],
+            ].map(([label, val, bold]) => (
+              <div key={label as string} style={{ display: "flex", justifyContent: "flex-end", gap: 40, marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: C.muted }}>{label}</span>
+                <span style={{ fontSize: bold ? 16 : 13, fontWeight: bold ? 800 : 600, color: bold ? C.text : C.muted, minWidth: 90, textAlign: "right" }}>{val}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {formError && (
+        <div style={{ padding: "10px 14px", background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 9, fontSize: 13, color: C.red }}>
+          {formError}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 12 }}>
+        <button onClick={saveInvoice} style={{ flex: 1, padding: "13px", borderRadius: 10, background: `linear-gradient(135deg,${C.blue},${C.purple})`, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+          Create Invoice →
+        </button>
+        <button onClick={() => { resetForm(); setView("list"); }} style={{ padding: "13px 20px", borderRadius: 10, background: C.bg, border: `1px solid ${C.border}`, color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // VIEW: DETAIL
+  // ══════════════════════════════════════════════════════════════════════════
+  if (view === "detail" && selected) {
+    const remaining = selected.total - selected.amountPaid;
+    const paidPct   = Math.round((selected.amountPaid / selected.total) * 100);
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 820 }}>
+
+        {/* Back */}
+        <button onClick={() => { setSelected(null); setView("list"); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0 }}>
+          <ChevronLeft size={16} /> Back to Invoices
+        </button>
+
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+              <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text }}>{selected.invoiceNumber}</h1>
+              <Badge status={selected.status} />
+            </div>
+            <p style={{ color: C.muted, fontSize: 13 }}>
+              Issued {fmtDate(selected.issueDate)} · Customer: <strong style={{ color: C.text }}>{selected.customer}</strong>
+            </p>
+          </div>
+          <button onClick={() => deleteInvoice(selected.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: C.redBg, border: `1px solid ${C.redBorder}`, color: C.red, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            <Trash2 size={13} /> Delete
+          </button>
+        </div>
+
+        {/* Overdue warning */}
+        {selected.status === "overdue" && (
+          <div style={{ padding: "12px 16px", background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 10, fontSize: 13, color: C.red, display: "flex", alignItems: "center", gap: 10 }}>
+            <AlertCircle size={15} />
+            This invoice was due on <strong>{fmtDate(selected.dueDate)}</strong> and has not been fully paid.
+          </div>
+        )}
+
+        {/* Info cards */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+          {[
+            { icon: User,       label: "Customer",      value: selected.customer             },
+            { icon: Hash,       label: "Invoice #",     value: selected.invoiceNumber        },
+            { icon: Calendar,   label: "Due Date",      value: fmtDate(selected.dueDate)     },
+            { icon: FileText,   label: "Terms",         value: selected.paymentTerms         },
+          ].map(({ icon: Icon, label, value }) => (
+            <div key={label} style={{ padding: "12px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 4 }}>
+                <Icon size={11} color={C.muted} />
+                <span style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{value}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Line items table */}
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ padding: "13px 18px 11px", borderBottom: `1px solid ${C.border}` }}>
+            <span style={{ fontWeight: 700, fontSize: 13 }}>Line Items</span>
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: C.bg }}>
+                {["Description", "Qty", "Unit Price", "Total"].map(h => (
+                  <th key={h} style={{ padding: "8px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {selected.items.map(item => (
+                <tr key={item.id} style={{ borderTop: `1px solid ${C.border}` }}>
+                  <td style={{ padding: "11px 16px", color: C.text }}>{item.desc}</td>
+                  <td style={{ padding: "11px 16px", color: C.muted }}>{item.qty.toLocaleString()}</td>
+                  <td style={{ padding: "11px 16px", color: C.muted }}>{fmtMoney(item.unitPrice)}</td>
+                  <td style={{ padding: "11px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(item.total)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {/* Totals */}
+          <div style={{ padding: "14px 18px", borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+            {[
+              ["Subtotal", fmtMoney(selected.subtotal), false],
+              ["Tax (8%)", fmtMoney(selected.tax),      false],
+              ["Total",    fmtMoney(selected.total),     true ],
+            ].map(([label, val, bold]) => (
+              <div key={label as string} style={{ display: "flex", gap: 40 }}>
+                <span style={{ fontSize: 13, color: C.muted, minWidth: 80 }}>{label}</span>
+                <span style={{ fontSize: bold ? 16 : 13, fontWeight: bold ? 800 : 600, color: bold ? C.text : C.muted, minWidth: 90, textAlign: "right" }}>{val}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* Payment progress */}
+        {selected.status !== "paid" && (
+          <Card>
+            <SectionTitle>Payment Progress</SectionTitle>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
+              <span style={{ color: C.muted }}>Paid: <strong style={{ color: C.green }}>{fmtMoney(selected.amountPaid)}</strong></span>
+              <span style={{ color: C.muted }}>Remaining: <strong style={{ color: C.red }}>{fmtMoney(remaining)}</strong></span>
+              <span style={{ color: C.muted }}>{paidPct}% paid</span>
+            </div>
+            <div style={{ height: 10, background: C.bg, borderRadius: 999, overflow: "hidden", border: `1px solid ${C.border}`, marginBottom: 18 }}>
+              <div style={{ height: "100%", width: `${paidPct}%`, background: `linear-gradient(90deg,${C.green},#52c89a)`, borderRadius: 999, transition: "width 0.4s" }} />
+            </div>
+
+            {/* Record payment */}
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Record Payment ($)
+                </label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={payAmount}
+                  onChange={e => { setPayAmount(e.target.value); setPayError(""); }}
+                  placeholder={`Up to ${fmtMoney(remaining)}`}
+                  style={{ width: "100%", padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+              <button onClick={recordPayment} style={{ padding: "10px 18px", borderRadius: 9, background: C.blueBg, border: `1px solid ${C.blueBorder}`, color: C.blue, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                <CreditCard size={13} style={{ marginRight: 6, verticalAlign: "middle" }} />
+                Record
+              </button>
+              <button onClick={markFullyPaid} style={{ padding: "10px 18px", borderRadius: 9, background: C.greenBg, border: `1px solid ${C.greenBorder}`, color: C.green, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+                <CheckCircle size={13} style={{ marginRight: 6, verticalAlign: "middle" }} />
+                Mark Fully Paid
+              </button>
+            </div>
+            {payError && (
+              <div style={{ marginTop: 8, fontSize: 12, color: C.red }}>{payError}</div>
+            )}
+          </Card>
+        )}
+
+        {/* Already paid */}
+        {selected.status === "paid" && (
+          <div style={{ padding: "14px 18px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 12, fontSize: 14, color: C.green, display: "flex", alignItems: "center", gap: 10 }}>
+            <CheckCircle size={18} />
+            <div>
+              <strong>Fully paid</strong> — {fmtMoney(selected.total)} received.
+            </div>
+          </div>
+        )}
+
+        {/* Notes */}
+        {selected.notes && (
+          <Card>
+            <SectionTitle>Notes</SectionTitle>
+            <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.6 }}>{selected.notes}</p>
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  return null;
 }
