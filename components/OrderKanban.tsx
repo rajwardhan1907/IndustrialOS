@@ -1,8 +1,7 @@
 "use client";
 // components/OrderKanban.tsx
-// Full order management — reads/writes from shared localStorage store (lib/orders.ts).
-// Portal requests appear here automatically.
-// Each order can be advanced through stages or turned into an invoice.
+// Phase 4: Now loads from DB via fetchOrdersFromDb().
+// Writes still go to localStorage immediately (fast UI) + DB in background.
 
 import { useState, useEffect } from "react";
 import { Plus, X, CheckCircle, ChevronRight, Receipt } from "lucide-react";
@@ -11,32 +10,32 @@ import { Card, SectionTitle } from "./Dashboard";
 import {
   Order, OrderStage, OrderPriority, OrderSource,
   loadOrders, saveOrders, addOrder, makeOrderId, timeAgo,
+  fetchOrdersFromDb, updateOrderInDb,
 } from "@/lib/orders";
 
 // ── Stage config ──────────────────────────────────────────────────────────────
 const STAGES: OrderStage[] = ["Placed", "Confirmed", "Picked", "Shipped", "Delivered"];
 
 const STAGE_STYLE: Record<OrderStage, { bg: string; border: string; color: string }> = {
-  Placed:    { bg: "#f0f0f0",  border: "#d0ccc5",       color: "#5a5550"  },
-  Confirmed: { bg: C.blueBg,  border: C.blueBorder,    color: C.blue     },
-  Picked:    { bg: C.amberBg, border: C.amberBorder,   color: C.amber    },
-  Shipped:   { bg: C.purpleBg,border: C.purpleBorder,  color: C.purple   },
-  Delivered: { bg: C.greenBg, border: C.greenBorder,   color: C.green    },
+  Placed:    { bg: "#f0f0f0",   border: "#d0ccc5",        color: "#5a5550"  },
+  Confirmed: { bg: C.blueBg,   border: C.blueBorder,     color: C.blue     },
+  Picked:    { bg: C.amberBg,  border: C.amberBorder,    color: C.amber    },
+  Shipped:   { bg: C.purpleBg, border: C.purpleBorder,   color: C.purple   },
+  Delivered: { bg: C.greenBg,  border: C.greenBorder,    color: C.green    },
 };
 
 const PRIORITY_STYLE: Record<OrderPriority, { bg: string; color: string; border: string }> = {
-  HIGH: { bg: C.redBg,    color: C.red,   border: C.redBorder   },
-  MED:  { bg: C.amberBg,  color: C.amber, border: C.amberBorder },
-  LOW:  { bg: "#f0f0f0",  color: C.muted, border: C.border      },
+  HIGH: { bg: C.redBg,   color: C.red,   border: C.redBorder   },
+  MED:  { bg: C.amberBg, color: C.amber, border: C.amberBorder },
+  LOW:  { bg: "#f0f0f0", color: C.muted, border: C.border      },
 };
 
 const SOURCE_LABEL: Record<OrderSource, { label: string; emoji: string }> = {
-  portal: { label: "Portal",  emoji: "🌐" },
-  manual: { label: "Manual",  emoji: "✏️"  },
-  quote:  { label: "Quote",   emoji: "📋" },
+  portal: { label: "Portal", emoji: "🌐" },
+  manual: { label: "Manual", emoji: "✏️"  },
+  quote:  { label: "Quote",  emoji: "📋" },
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtMoney = (n: number) =>
   `$${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
@@ -99,7 +98,6 @@ function NewOrderModal({ onSave, onClose }: {
         width: "100%", maxWidth: 480,
         boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
       }}>
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
           <h2 style={{ fontSize: 17, fontWeight: 800, color: C.text }}>New Order</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}>
@@ -107,7 +105,6 @@ function NewOrderModal({ onSave, onClose }: {
           </button>
         </div>
 
-        {/* Form fields */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
           <div style={{ marginBottom: 14, gridColumn: "1 / -1" }}>
             <label style={labelStyle}>Customer Name *</label>
@@ -115,7 +112,7 @@ function NewOrderModal({ onSave, onClose }: {
           </div>
           <div style={{ marginBottom: 14, gridColumn: "1 / -1" }}>
             <label style={labelStyle}>SKU / Product *</label>
-            <input value={sku} onChange={e => setSku(e.target.value)} placeholder="e.g. SKU-4821 or Industrial bolts" style={inputStyle} />
+            <input value={sku} onChange={e => setSku(e.target.value)} placeholder="e.g. SKU-4821 — Valve Assembly" style={inputStyle} />
           </div>
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle}>Quantity</label>
@@ -123,53 +120,35 @@ function NewOrderModal({ onSave, onClose }: {
           </div>
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle}>Order Value ($) *</label>
-            <input type="number" min="0" step="0.01" value={value} onChange={e => setValue(e.target.value)} placeholder="0.00" style={inputStyle} />
+            <input type="number" min="0" value={value} onChange={e => setValue(e.target.value)} placeholder="e.g. 12500" style={inputStyle} />
           </div>
           <div style={{ marginBottom: 14, gridColumn: "1 / -1" }}>
             <label style={labelStyle}>Priority</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              {(["HIGH", "MED", "LOW"] as OrderPriority[]).map(p => {
-                const s = PRIORITY_STYLE[p];
-                const active = priority === p;
-                return (
-                  <button key={p} onClick={() => setPriority(p)} style={{
-                    flex: 1, padding: "8px", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 12,
-                    background: active ? s.bg : C.bg,
-                    border: `1px solid ${active ? s.border : C.border}`,
-                    color: active ? s.color : C.muted,
-                  }}>{p}</button>
-                );
-              })}
-            </div>
+            <select value={priority} onChange={e => setPriority(e.target.value as OrderPriority)} style={inputStyle}>
+              <option value="HIGH">HIGH</option>
+              <option value="MED">MED</option>
+              <option value="LOW">LOW</option>
+            </select>
           </div>
           <div style={{ marginBottom: 14, gridColumn: "1 / -1" }}>
-            <label style={labelStyle}>Notes (optional)</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2} placeholder="Any special instructions…"
-              style={{ ...inputStyle, resize: "vertical" }} />
+            <label style={labelStyle}>Notes</label>
+            <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes" style={inputStyle} />
           </div>
         </div>
 
         {error && (
-          <div style={{ marginBottom: 14, padding: "9px 13px", background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 8, fontSize: 13, color: C.red }}>
-            {error}
-          </div>
+          <div style={{ color: C.red, fontSize: 12, marginBottom: 12 }}>{error}</div>
         )}
 
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={submit} style={{
-            flex: 1, padding: "12px", borderRadius: 10,
-            background: `linear-gradient(135deg, ${C.blue}, ${C.purple})`,
-            border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer",
-          }}>
-            Create Order
-          </button>
           <button onClick={onClose} style={{
-            padding: "12px 18px", borderRadius: 10,
-            background: C.bg, border: `1px solid ${C.border}`,
-            color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer",
-          }}>
-            Cancel
-          </button>
+            flex: 1, padding: "10px 0", borderRadius: 9, border: `1px solid ${C.border}`,
+            background: "none", color: C.muted, fontSize: 13, cursor: "pointer",
+          }}>Cancel</button>
+          <button onClick={submit} style={{
+            flex: 2, padding: "10px 0", borderRadius: 9, border: "none",
+            background: C.blue, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+          }}>Create Order</button>
         </div>
       </div>
     </div>
@@ -178,13 +157,16 @@ function NewOrderModal({ onSave, onClose }: {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function OrderKanban() {
-  const [orders,      setOrders]      = useState<Order[]>([]);
-  const [showNew,     setShowNew]     = useState(false);
-  const [invoiceMsg,  setInvoiceMsg]  = useState<string | null>(null);
+  const [orders,     setOrders]     = useState<Order[]>([]);
+  const [showNew,    setShowNew]    = useState(false);
+  const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null);
 
-  // Load from localStorage on mount
+  // Load from localStorage immediately (fast), then refresh from DB
   useEffect(() => {
-    setOrders(loadOrders());
+    setOrders(loadOrders()); // instant — from cache
+    fetchOrdersFromDb().then(dbOrders => {
+      if (dbOrders.length > 0) setOrders(dbOrders); // update with real DB data
+    });
   }, []);
 
   // ── Advance order to next stage ──────────────────────────────────────────
@@ -194,7 +176,9 @@ export default function OrderKanban() {
         if (o.id !== id) return o;
         const idx = STAGES.indexOf(o.stage);
         if (idx >= STAGES.length - 1) return o;
-        return { ...o, stage: STAGES[idx + 1] };
+        const newStage = STAGES[idx + 1];
+        updateOrderInDb(id, { stage: newStage }); // update DB in background
+        return { ...o, stage: newStage };
       });
       saveOrders(updated);
       return updated;
@@ -208,15 +192,15 @@ export default function OrderKanban() {
       saveOrders(updated);
       return updated;
     });
+    addOrder(order); // writes to DB in background
     setShowNew(false);
   };
 
   // ── Create invoice from order ────────────────────────────────────────────
   const createInvoiceFromOrder = (order: Order) => {
-    // Build an invoice object and save to invoicing localStorage store
     const INVOICE_KEY = "industrialos_invoices";
-    const today    = new Date().toISOString().split("T")[0];
-    const dueDate  = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
+    const today     = new Date().toISOString().split("T")[0];
+    const dueDate   = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
     const unitPrice = order.value / order.items;
     const subtotal  = order.value;
     const tax       = parseFloat((subtotal * 0.08).toFixed(2));
@@ -253,7 +237,6 @@ export default function OrderKanban() {
     }
   };
 
-  // ── Columns ──────────────────────────────────────────────────────────────
   const cols = STAGES.map(stage => ({
     stage,
     items: orders.filter(o => o.stage === stage),
@@ -261,7 +244,6 @@ export default function OrderKanban() {
 
   const activeCount = orders.filter(o => o.stage !== "Delivered").length;
 
-  // ── Automation log ────────────────────────────────────────────────────────
   const log = [
     { e: "Inventory reserved",     o: "ORD-10234", ico: "📦", t: "just now" },
     { e: "CRM order pushed",       o: "ORD-10233", ico: "🔌", t: "12s ago"  },
@@ -273,15 +255,10 @@ export default function OrderKanban() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
-      {/* ── New Order Modal ── */}
       {showNew && (
-        <NewOrderModal
-          onSave={handleNewOrder}
-          onClose={() => setShowNew(false)}
-        />
+        <NewOrderModal onSave={handleNewOrder} onClose={() => setShowNew(false)} />
       )}
 
-      {/* ── Invoice success message ── */}
       {invoiceMsg && (
         <div style={{
           padding: "12px 16px", background: C.greenBg, border: `1px solid ${C.greenBorder}`,
@@ -297,62 +274,45 @@ export default function OrderKanban() {
         <div>
           <div style={{ fontWeight: 800, fontSize: 18, color: C.text }}>Order Pipeline</div>
           <div style={{ color: C.muted, fontSize: 13, marginTop: 2 }}>
-            {activeCount} active order{activeCount !== 1 ? "s" : ""} · {orders.length} total
+            {activeCount} active order{activeCount !== 1 ? "s" : ""}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: C.green,
-            background: C.greenBg, border: `1px solid ${C.greenBorder}`,
-            borderRadius: 999, padding: "5px 12px",
-          }}>
-            <span style={{ width: 7, height: 7, background: C.green, borderRadius: "50%", display: "inline-block" }} />
-            Auto-advancing
-          </div>
-          <button
-            onClick={() => setShowNew(true)}
-            style={{
-              display: "flex", alignItems: "center", gap: 7,
-              padding: "9px 18px", borderRadius: 10,
-              background: `linear-gradient(135deg, ${C.blue}, ${C.purple})`,
-              border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            }}
-          >
-            <Plus size={14} /> New Order
-          </button>
-        </div>
+        <button
+          onClick={() => setShowNew(true)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "9px 18px", background: C.blue, border: "none",
+            borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer",
+          }}
+        >
+          <Plus size={15} /> New Order
+        </button>
       </div>
 
       {/* ── Kanban board ── */}
-      <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 12 }}>
-        {cols.map(col => {
-          const ss = STAGE_STYLE[col.stage];
+      <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8 }}>
+        {cols.map(({ stage, items }) => {
+          const ss = STAGE_STYLE[stage];
           return (
-            <div key={col.stage} style={{ minWidth: 210, width: 210, flexShrink: 0 }}>
-              {/* Column header */}
+            <div key={stage} style={{
+              minWidth: 220, flex: "0 0 220px",
+              background: C.surface, border: `1px solid ${C.border}`,
+              borderRadius: 14, padding: "14px 12px",
+            }}>
               <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                marginBottom: 10, padding: "6px 12px", borderRadius: 8,
-                background: ss.bg, border: `1px solid ${ss.border}`,
+                display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12,
               }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: ss.color, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  {col.stage}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 700, color: ss.color }}>{col.items.length}</span>
+                <span style={{
+                  fontSize: 11, fontWeight: 800, color: ss.color,
+                  background: ss.bg, border: `1px solid ${ss.border}`,
+                  padding: "3px 10px", borderRadius: 999,
+                  textTransform: "uppercase", letterSpacing: "0.05em",
+                }}>{stage}</span>
+                <span style={{ fontSize: 11, color: C.muted }}>{items.length}</span>
               </div>
 
-              {/* Cards */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {col.items.length === 0 && (
-                  <div style={{
-                    padding: "20px 12px", textAlign: "center",
-                    border: `1px dashed ${C.border}`, borderRadius: 10,
-                    color: C.subtle, fontSize: 12,
-                  }}>
-                    No orders
-                  </div>
-                )}
-                {col.items.map(o => {
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {items.map(o => {
                   const ps  = PRIORITY_STYLE[o.priority];
                   const src = SOURCE_LABEL[o.source];
                   return (
@@ -363,7 +323,6 @@ export default function OrderKanban() {
                       borderRadius: 10, padding: "10px 12px",
                       boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
                     }}>
-                      {/* Order ID + priority */}
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
                         <span style={{ fontFamily: "monospace", fontSize: 11, color: C.blue }}>{o.id}</span>
                         <span style={{
@@ -371,28 +330,18 @@ export default function OrderKanban() {
                           background: ps.bg, color: ps.color, border: `1px solid ${ps.border}`,
                         }}>{o.priority}</span>
                       </div>
-
-                      {/* Customer */}
                       <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {o.customer}
                       </div>
-
-                      {/* SKU + items */}
                       <div style={{ fontSize: 11, color: C.subtle, marginBottom: 4 }}>
                         {o.items} unit{o.items !== 1 ? "s" : ""} · {o.sku}
                       </div>
-
-                      {/* Value */}
                       <div style={{ fontSize: 14, fontWeight: 800, color: C.green, marginBottom: 6 }}>
                         {fmtMoney(o.value)}
                       </div>
-
-                      {/* Source badge */}
                       <div style={{ fontSize: 10, color: C.subtle, marginBottom: 8 }}>
                         {src.emoji} {src.label} · {o.time}
                       </div>
-
-                      {/* Notes */}
                       {o.notes && (
                         <div style={{
                           fontSize: 11, color: C.muted, marginBottom: 8,
@@ -402,8 +351,6 @@ export default function OrderKanban() {
                           {o.notes}
                         </div>
                       )}
-
-                      {/* Actions */}
                       <div style={{ display: "flex", gap: 6 }}>
                         {o.stage !== "Delivered" ? (
                           <button
