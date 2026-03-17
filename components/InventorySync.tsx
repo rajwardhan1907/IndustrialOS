@@ -1,12 +1,7 @@
 "use client";
 // components/InventorySync.tsx
-// Inventory module — fully self-contained.
-// - Real SKU list with stock levels, warehouse locations, bin numbers
-// - Reorder alerts (auto-flags items below reorder point)
-// - Adjust stock levels manually
-// - Conflict log with resolve
-// - Bulk pricing rule engine
-// - All saved to localStorage via lib/inventory.ts
+// Phase 4: Loads from DB on mount, writes to DB in background.
+// localStorage used as fast cache — falls back silently if DB unavailable.
 
 import { useState, useEffect } from "react";
 import { AlertTriangle, CheckCircle, XCircle, Zap, Package, MapPin, RefreshCw, Plus, X } from "lucide-react";
@@ -16,6 +11,7 @@ import {
   loadInventory, saveInventory,
   loadConflicts, saveConflicts,
   getStockStatus, STATUS_LABEL, STATUS_COLOR,
+  fetchInventoryFromDb, createInventoryItemInDb, updateInventoryItemInDb,
 } from "@/lib/inventory";
 
 // ── Add SKU Modal ─────────────────────────────────────────────────────────────
@@ -49,8 +45,8 @@ function AddSKUModal({ onSave, onClose }: {
   };
 
   const submit = () => {
-    if (!sku.trim())          { setError("SKU code is required."); return; }
-    if (!name.trim())         { setError("Product name is required."); return; }
+    if (!sku.trim())     { setError("SKU code is required."); return; }
+    if (!name.trim())    { setError("Product name is required."); return; }
     if (!unitCost.trim() || isNaN(parseFloat(unitCost))) { setError("Enter a valid unit cost."); return; }
 
     const newItem: InventoryItem = {
@@ -58,9 +54,9 @@ function AddSKUModal({ onSave, onClose }: {
       sku:          sku.trim().toUpperCase(),
       name:         name.trim(),
       category,
-      stockLevel:   parseInt(stockLevel) || 0,
+      stockLevel:   parseInt(stockLevel)   || 0,
       reorderPoint: parseInt(reorderPoint) || 50,
-      reorderQty:   parseInt(reorderQty) || 100,
+      reorderQty:   parseInt(reorderQty)   || 100,
       unitCost:     parseFloat(unitCost),
       warehouse,
       zone,
@@ -81,7 +77,6 @@ function AddSKUModal({ onSave, onClose }: {
         </div>
 
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 16px" }}>
-
           <div style={{ marginBottom:14 }}>
             <label style={lbl}>SKU Code *</label>
             <input value={sku} onChange={e=>setSku(e.target.value)} placeholder="e.g. SKU-1234" style={inp}/>
@@ -92,43 +87,38 @@ function AddSKUModal({ onSave, onClose }: {
               {cats.map(c=><option key={c}>{c}</option>)}
             </select>
           </div>
-
           <div style={{ marginBottom:14, gridColumn:"1/-1" }}>
             <label style={lbl}>Product Name *</label>
             <input value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Industrial Bolts M10 (Box/100)" style={inp}/>
           </div>
-
           <div style={{ marginBottom:14 }}>
-            <label style={lbl}>Starting Stock</label>
+            <label style={lbl}>Stock Level</label>
             <input type="number" min="0" value={stockLevel} onChange={e=>setStockLevel(e.target.value)} style={inp}/>
           </div>
           <div style={{ marginBottom:14 }}>
             <label style={lbl}>Unit Cost ($) *</label>
-            <input type="number" min="0" step="0.01" value={unitCost} onChange={e=>setUnitCost(e.target.value)} placeholder="0.00" style={inp}/>
+            <input type="number" min="0" value={unitCost} onChange={e=>setUnitCost(e.target.value)} placeholder="e.g. 4.50" style={inp}/>
           </div>
-
           <div style={{ marginBottom:14 }}>
             <label style={lbl}>Reorder Point</label>
             <input type="number" min="0" value={reorderPoint} onChange={e=>setReorderPoint(e.target.value)} style={inp}/>
           </div>
           <div style={{ marginBottom:14 }}>
-            <label style={lbl}>Reorder Quantity</label>
+            <label style={lbl}>Reorder Qty</label>
             <input type="number" min="0" value={reorderQty} onChange={e=>setReorderQty(e.target.value)} style={inp}/>
           </div>
-
           <div style={{ marginBottom:14 }}>
             <label style={lbl}>Warehouse</label>
             <select value={warehouse} onChange={e=>setWarehouse(e.target.value)} style={inp}>
-              {["Warehouse A","Warehouse B","Warehouse C"].map(w=><option key={w}>{w}</option>)}
+              {["Warehouse A","Warehouse B","Warehouse C","Warehouse D"].map(w=><option key={w}>{w}</option>)}
             </select>
           </div>
           <div style={{ marginBottom:14 }}>
             <label style={lbl}>Zone</label>
             <select value={zone} onChange={e=>setZone(e.target.value as WarehouseZone)} style={inp}>
-              {(["A","B","C","D"] as WarehouseZone[]).map(z=><option key={z}>Zone {z}</option>)}
+              {["A","B","C","D"].map(z=><option key={z}>{z}</option>)}
             </select>
           </div>
-
           <div style={{ marginBottom:14 }}>
             <label style={lbl}>Bin Location</label>
             <input value={binLocation} onChange={e=>setBinLocation(e.target.value)} placeholder="e.g. A-02-1" style={inp}/>
@@ -137,7 +127,6 @@ function AddSKUModal({ onSave, onClose }: {
             <label style={lbl}>Supplier</label>
             <input value={supplier} onChange={e=>setSupplier(e.target.value)} placeholder="e.g. SteelCo Industries" style={inp}/>
           </div>
-
         </div>
 
         {error && (
@@ -147,7 +136,7 @@ function AddSKUModal({ onSave, onClose }: {
         )}
 
         <div style={{ display:"flex", gap:10 }}>
-          <button onClick={submit} style={{ flex:1, padding:"12px", borderRadius:10, background:`linear-gradient(135deg,${C.blue},${C.purple})`, border:"none", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
+          <button onClick={submit} style={{ flex:1, padding:"12px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:14, fontWeight:700, cursor:"pointer" }}>
             Add to Inventory
           </button>
           <button onClick={onClose} style={{ padding:"12px 18px", borderRadius:10, background:C.bg, border:`1px solid ${C.border}`, color:C.muted, fontSize:13, fontWeight:600, cursor:"pointer" }}>
@@ -160,17 +149,16 @@ function AddSKUModal({ onSave, onClose }: {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-const fmtMoney  = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const fmtNum    = (n: number) => n.toLocaleString("en-US");
+const fmtMoney = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 })}`;
+const fmtNum   = (n: number) => n.toLocaleString("en-US");
 
-// ── Sub-components ────────────────────────────────────────────────────────────
 const Card = ({ children, style = {} }: any) => (
   <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:"20px 22px", ...style }}>
     {children}
   </div>
 );
 const SectionTitle = ({ children, icon: Icon }: any) => (
-  <div style={{ display:"flex", alignItems:"center", gap:8, fontWeight:700, fontSize:13, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:14 }}>
+  <div style={{ display:"flex", alignItems:"center", gap:8, fontWeight:700, fontSize:13, color:C.muted, textTransform:"uppercase" as const, letterSpacing:"0.06em", marginBottom:14 }}>
     {Icon && <Icon size={13}/>}{children}
   </div>
 );
@@ -186,19 +174,23 @@ const StatusBadge = ({ item }: { item: InventoryItem }) => {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function InventorySync() {
-  const [items,      setItems]      = useState<InventoryItem[]>([]);
-  const [conflicts,  setConflicts]  = useState<ConflictLog[]>([]);
-  const [view,       setView]       = useState<"stock"|"alerts"|"conflicts"|"pricing">("stock");
-  const [adjustId,   setAdjustId]   = useState<string|null>(null);
-  const [adjustVal,  setAdjustVal]  = useState("");
-  const [adjustErr,  setAdjustErr]  = useState("");
-  const [rule,       setRule]       = useState({ cat:"Fasteners", change:"+10", type:"price" });
-  const [applied,    setApplied]    = useState(false);
-  const [showAdd,    setShowAdd]    = useState(false);
+  const [items,     setItems]     = useState<InventoryItem[]>([]);
+  const [conflicts, setConflicts] = useState<ConflictLog[]>([]);
+  const [view,      setView]      = useState<"stock"|"alerts"|"conflicts"|"pricing">("stock");
+  const [adjustId,  setAdjustId]  = useState<string|null>(null);
+  const [adjustVal, setAdjustVal] = useState("");
+  const [adjustErr, setAdjustErr] = useState("");
+  const [rule,      setRule]      = useState({ cat:"Fasteners", change:"+10", type:"price" });
+  const [applied,   setApplied]   = useState(false);
+  const [showAdd,   setShowAdd]   = useState(false);
 
+  // Load from localStorage immediately, then refresh from DB
   useEffect(() => {
     setItems(loadInventory());
     setConflicts(loadConflicts());
+    fetchInventoryFromDb().then(dbItems => {
+      if (dbItems.length > 0) setItems(dbItems);
+    });
   }, []);
 
   // ── Derived data ──────────────────────────────────────────────────────────
@@ -214,6 +206,7 @@ export default function InventorySync() {
     const updated = items.map(i => {
       if (i.id !== id) return i;
       const newLevel = Math.max(0, i.stockLevel + delta);
+      updateInventoryItemInDb(id, { stockLevel: newLevel, lastSynced: new Date().toISOString() }); // DB update in background
       return { ...i, stockLevel: newLevel, lastSynced: new Date().toISOString() };
     });
     setItems(updated);
@@ -230,23 +223,22 @@ export default function InventorySync() {
     saveConflicts(updated);
   };
 
-  const cats = ["Fasteners","Bearings","Hydraulics","Pneumatics","Tools","Safety Gear","Structural","Electronics","Mechanical"];
-  const selStyle = { background:C.surface, border:`1px solid ${C.border2}`, borderRadius:8, padding:"8px 12px", fontSize:13, color:C.text, outline:"none" };
+  // ── Add new SKU ───────────────────────────────────────────────────────────
+  const handleAddSKU = (item: InventoryItem) => {
+    const updated = [item, ...items];
+    setItems(updated);
+    saveInventory(updated);
+    createInventoryItemInDb(item); // DB write in background
+    setShowAdd(false);
+  };
+
+  const cats     = ["Fasteners","Bearings","Hydraulics","Pneumatics","Tools","Safety Gear","Structural","Electronics","Mechanical"];
+  const selStyle = { background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, color:C.text, outline:"none" };
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
 
-      {showAdd && (
-        <AddSKUModal
-          onSave={item => {
-            const updated = [item, ...items];
-            setItems(updated);
-            saveInventory(updated);
-            setShowAdd(false);
-          }}
-          onClose={() => setShowAdd(false)}
-        />
-      )}
+      {showAdd && <AddSKUModal onSave={handleAddSKU} onClose={() => setShowAdd(false)} />}
 
       {/* ── Header ── */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -261,7 +253,7 @@ export default function InventorySync() {
               {alertItems.length} item{alertItems.length !== 1 ? "s" : ""} need reordering
             </div>
           )}
-          <button onClick={() => setShowAdd(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:`linear-gradient(135deg,${C.blue},${C.purple})`, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+          <button onClick={() => setShowAdd(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
             <Plus size={14}/> Add SKU
           </button>
         </div>
@@ -270,11 +262,11 @@ export default function InventorySync() {
       {/* ── Summary cards ── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
         {[
-          { label:"Total SKUs",       value:totalSKUs,           color:C.blue,   bg:C.blueBg,   border:C.blueBorder   },
-          { label:"Stock Value",      value:fmtMoney(totalValue),color:C.green,  bg:C.greenBg,  border:C.greenBorder  },
-          { label:"Reorder Alerts",   value:alertItems.length,   color:C.red,    bg:C.redBg,    border:C.redBorder    },
-          { label:"Open Conflicts",   value:openConflicts,       color:C.amber,  bg:C.amberBg,  border:C.amberBorder  },
-        ].map((s,i)=>(
+          { label:"Total SKUs",     value:totalSKUs,            color:C.blue,  bg:C.blueBg,  border:C.blueBorder  },
+          { label:"Stock Value",    value:fmtMoney(totalValue), color:C.green, bg:C.greenBg, border:C.greenBorder },
+          { label:"Reorder Alerts", value:alertItems.length,    color:C.red,   bg:C.redBg,   border:C.redBorder   },
+          { label:"Open Conflicts", value:openConflicts,        color:C.amber, bg:C.amberBg, border:C.amberBorder },
+        ].map((s,i) => (
           <div key={i} style={{ background:s.bg, border:`1px solid ${s.border}`, borderRadius:12, padding:"14px 18px" }}>
             <div style={{ fontSize:20, fontWeight:800, color:s.color }}>{s.value}</div>
             <div style={{ fontSize:12, color:C.muted, marginTop:2 }}>{s.label}</div>
@@ -285,31 +277,31 @@ export default function InventorySync() {
       {/* ── Sync status row ── */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14 }}>
         {[
-          { l:"Last Full Sync",  v:"48s ago",   sub:"Next in 12s",     ico:"🔄", ok:true  },
-          { l:"DB ↔ CRM Delta",  v:"0 items",   sub:"Reconciled",      ico:"✅", ok:true  },
-          { l:"Supply Chain",    v:`${alertItems.length} pending`, sub:"Auto-correcting", ico:"⚠️", ok:alertItems.length===0 },
-        ].map((c,i)=>(
-          <div key={i} style={{ background:c.ok?C.greenBg:C.amberBg, border:`1px solid ${c.ok?C.greenBorder:C.amberBorder}`, borderRadius:12, padding:"14px 18px", display:"flex", alignItems:"center", gap:14 }}>
-            <span style={{ fontSize:24 }}>{c.ico}</span>
+          { l:"Last Full Sync",  v:"48s ago", sub:"Next in 12s",    ico:"🔄" },
+          { l:"Sources Active",  v:"3 / 3",   sub:"ERP · WMS · CRM", ico:"🔌" },
+          { l:"Sync Conflicts",  v:openConflicts, sub:"Pending review", ico:"⚠️" },
+        ].map((s,i) => (
+          <div key={i} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, padding:"14px 18px", display:"flex", alignItems:"center", gap:12 }}>
+            <span style={{ fontSize:22 }}>{s.ico}</span>
             <div>
-              <div style={{ fontSize:11, color:C.muted, fontWeight:600 }}>{c.l}</div>
-              <div style={{ fontSize:18, fontWeight:800, color:c.ok?C.green:C.amber, marginTop:2 }}>{c.v}</div>
-              <div style={{ fontSize:11, color:C.subtle }}>{c.sub}</div>
+              <div style={{ fontSize:15, fontWeight:800, color:C.text }}>{s.v}</div>
+              <div style={{ fontSize:11, color:C.muted }}>{s.l}</div>
+              <div style={{ fontSize:11, color:C.subtle }}>{s.sub}</div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* ── View tabs ── */}
-      <div style={{ display:"flex", gap:2, borderBottom:`1px solid ${C.border}` }}>
-        {[
-          { id:"stock",     label:`Stock (${totalSKUs})`                           },
-          { id:"alerts",    label:`Reorder Alerts (${alertItems.length})`,          },
-          { id:"conflicts", label:`Conflicts (${openConflicts})`                    },
-          { id:"pricing",   label:"Pricing Rules"                                   },
-        ].map(t=>(
-          <button key={t.id} onClick={()=>setView(t.id as any)} style={{ padding:"9px 16px", fontSize:12, fontWeight:600, border:"none", borderBottom:view===t.id?`2px solid ${C.blue}`:"2px solid transparent", color:view===t.id?C.blue:C.muted, background:"none", cursor:"pointer", marginBottom:-1, whiteSpace:"nowrap" }}>
-            {t.label}
+      {/* ── Tab nav ── */}
+      <div style={{ display:"flex", gap:8 }}>
+        {(["stock","alerts","conflicts","pricing"] as const).map(t => (
+          <button key={t} onClick={() => setView(t)} style={{
+            padding:"8px 18px", borderRadius:9, fontSize:13, fontWeight:600, cursor:"pointer",
+            background: view===t ? C.blue : C.surface,
+            color:      view===t ? "#fff" : C.muted,
+            border:     view===t ? "none" : `1px solid ${C.border}`,
+          }}>
+            {t === "stock" ? "📦 Stock" : t === "alerts" ? "⚠️ Alerts" : t === "conflicts" ? "🔀 Conflicts" : "⚡ Pricing"}
           </button>
         ))}
       </div>
@@ -317,46 +309,36 @@ export default function InventorySync() {
       {/* ══════════════════════════════════════════════
           STOCK VIEW
       ══════════════════════════════════════════════ */}
-      {view==="stock"&&(
-        <Card style={{ padding:0, overflow:"hidden" }}>
-          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-            <thead>
-              <tr style={{ background:C.bg, borderBottom:`1px solid ${C.border}` }}>
-                {["SKU","Name","Category","Stock","Reorder At","Unit Cost","Location","Last Sync","Status","Adjust"].map((h,i)=>(
-                  <th key={i} style={{ padding:"10px 14px", textAlign:"left", fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.05em", whiteSpace:"nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item,i)=>{
-                const status  = getStockStatus(item);
-                const isAdj   = adjustId === item.id;
-                return (
-                  <tr key={item.id} style={{ borderBottom:i<items.length-1?`1px solid ${C.border}`:"none", background: status!=="ok"?`${STATUS_COLOR[status].bg}44`:"transparent" }}>
-                    <td style={{ padding:"12px 14px", fontFamily:"monospace", fontWeight:700, color:C.blue, fontSize:12 }}>{item.sku}</td>
-                    <td style={{ padding:"12px 14px" }}>
-                      <div style={{ fontWeight:600, color:C.text, fontSize:12 }}>{item.name}</div>
-                      <div style={{ fontSize:11, color:C.subtle }}>{item.supplier}</div>
+      {view === "stock" && (
+        <Card>
+          <SectionTitle icon={Package}>All SKUs</SectionTitle>
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+              <thead>
+                <tr style={{ color:C.muted, fontSize:11, textTransform:"uppercase" as const, letterSpacing:"0.04em" }}>
+                  {["SKU","Name","Category","Stock","Reorder Pt","Unit Cost","Warehouse","Zone / Bin","Status",""].map((h,i)=>(
+                    <th key={i} style={{ textAlign:"left", padding:"8px 10px", borderBottom:`1px solid ${C.border}`, whiteSpace:"nowrap" as const }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(item => (
+                  <tr key={item.id} style={{ borderBottom:`1px solid ${C.border}` }}>
+                    <td style={{ padding:"10px", fontFamily:"monospace", fontSize:11, color:C.blue, whiteSpace:"nowrap" as const }}>{item.sku}</td>
+                    <td style={{ padding:"10px", color:C.text, maxWidth:200 }}>{item.name}</td>
+                    <td style={{ padding:"10px", color:C.muted, fontSize:12 }}>{item.category}</td>
+                    <td style={{ padding:"10px", fontWeight:700, color: item.stockLevel === 0 ? C.red : C.text }}>{fmtNum(item.stockLevel)}</td>
+                    <td style={{ padding:"10px", color:C.muted }}>{item.reorderPoint}</td>
+                    <td style={{ padding:"10px", color:C.green, fontWeight:600 }}>{fmtMoney(item.unitCost)}</td>
+                    <td style={{ padding:"10px", color:C.muted, fontSize:12 }}>{item.warehouse}</td>
+                    <td style={{ padding:"10px" }}>
+                      <span style={{ display:"flex", alignItems:"center", gap:4, fontSize:11, color:C.subtle }}>
+                        <MapPin size={10}/>{item.zone} · {item.binLocation}
+                      </span>
                     </td>
-                    <td style={{ padding:"12px 14px", color:C.muted, fontSize:12 }}>{item.category}</td>
-                    <td style={{ padding:"12px 14px", fontWeight:800, fontSize:15, color: status==="ok"?C.text:STATUS_COLOR[status].color }}>
-                      {fmtNum(item.stockLevel)}
-                    </td>
-                    <td style={{ padding:"12px 14px", color:C.muted, fontSize:12 }}>{fmtNum(item.reorderPoint)}</td>
-                    <td style={{ padding:"12px 14px", color:C.muted, fontSize:12 }}>{fmtMoney(item.unitCost)}</td>
-                    <td style={{ padding:"12px 14px" }}>
-                      <div style={{ fontSize:12, color:C.text, display:"flex", alignItems:"center", gap:4 }}>
-                        <MapPin size={11} color={C.muted}/> {item.warehouse}
-                      </div>
-                      <div style={{ fontSize:11, color:C.subtle }}>{item.zone}-Zone · Bin {item.binLocation}</div>
-                    </td>
-                    <td style={{ padding:"12px 14px", fontSize:11, color:C.subtle, whiteSpace:"nowrap" }}>
-                      <RefreshCw size={10} style={{ marginRight:4, verticalAlign:"middle" }}/>
-                      {new Date(item.lastSynced).toLocaleTimeString("en-US",{ hour:"2-digit", minute:"2-digit" })}
-                    </td>
-                    <td style={{ padding:"12px 14px" }}><StatusBadge item={item}/></td>
-                    <td style={{ padding:"12px 14px" }}>
-                      {isAdj ? (
+                    <td style={{ padding:"10px" }}><StatusBadge item={item}/></td>
+                    <td style={{ padding:"10px" }}>
+                      {adjustId === item.id ? (
                         <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
                           <div style={{ display:"flex", gap:4 }}>
                             <input
@@ -369,7 +351,7 @@ export default function InventorySync() {
                             <button onClick={()=>submitAdjust(item.id)} style={{ padding:"5px 10px", background:C.blue, border:"none", borderRadius:7, color:"#fff", fontSize:11, fontWeight:700, cursor:"pointer" }}>✓</button>
                             <button onClick={()=>{setAdjustId(null);setAdjustVal("");setAdjustErr("");}} style={{ padding:"5px 8px", background:C.bg, border:`1px solid ${C.border}`, borderRadius:7, color:C.muted, fontSize:11, cursor:"pointer" }}>✕</button>
                           </div>
-                          {adjustErr&&<div style={{ fontSize:10, color:C.red }}>{adjustErr}</div>}
+                          {adjustErr && <div style={{ fontSize:10, color:C.red }}>{adjustErr}</div>}
                         </div>
                       ) : (
                         <button onClick={()=>{setAdjustId(item.id);setAdjustVal("");}} style={{ padding:"5px 10px", background:C.blueBg, border:`1px solid ${C.blueBorder}`, borderRadius:7, color:C.blue, fontSize:11, fontWeight:700, cursor:"pointer" }}>
@@ -378,89 +360,60 @@ export default function InventorySync() {
                       )}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
 
       {/* ══════════════════════════════════════════════
           REORDER ALERTS VIEW
       ══════════════════════════════════════════════ */}
-      {view==="alerts"&&(
-        alertItems.length===0 ? (
-          <Card style={{ textAlign:"center", padding:"60px 24px" }}>
-            <div style={{ fontSize:48, marginBottom:16 }}>✅</div>
-            <h3 style={{ fontSize:18, fontWeight:800, color:C.text, marginBottom:8 }}>All stock levels are healthy</h3>
-            <p style={{ color:C.muted, fontSize:14 }}>No reorder alerts at this time.</p>
+      {view === "alerts" && (
+        alertItems.length === 0 ? (
+          <Card>
+            <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:14 }}>
+              <CheckCircle size={32} color={C.green} style={{ marginBottom:12 }}/>
+              <div>All items are well-stocked. No reorder alerts.</div>
+            </div>
           </Card>
         ) : (
-          <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+          <Card>
+            <SectionTitle icon={AlertTriangle}>Items Needing Reorder</SectionTitle>
             {alertItems.map(item => {
               const status = getStockStatus(item);
               const s      = STATUS_COLOR[status];
-              const isCrit = status === "critical" || status === "out_of_stock";
               return (
-                <div key={item.id} style={{ background:s.bg, border:`1px solid ${s.border}`, borderRadius:14, padding:"18px 22px", display:"flex", alignItems:"center", gap:20 }}>
-                  <div style={{ width:44, height:44, borderRadius:12, background:C.surface, border:`1px solid ${s.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:22, flexShrink:0 }}>
-                    {isCrit?"🚨":"⚠️"}
-                  </div>
+                <div key={item.id} style={{ display:"flex", alignItems:"center", gap:14, padding:"12px 14px", borderRadius:10, marginBottom:10, background:s.bg, border:`1px solid ${s.border}` }}>
+                  <AlertTriangle size={16} color={s.color}/>
                   <div style={{ flex:1 }}>
-                    <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:3 }}>
-                      <span style={{ fontFamily:"monospace", fontWeight:700, color:C.blue, fontSize:13 }}>{item.sku}</span>
-                      <span style={{ fontWeight:700, color:C.text }}>{item.name}</span>
-                      <span style={{ display:"inline-block", padding:"2px 8px", borderRadius:999, fontSize:11, fontWeight:700, color:s.color, background:C.surface, border:`1px solid ${s.border}` }}>
-                        {STATUS_LABEL[status]}
-                      </span>
-                    </div>
-                    <div style={{ fontSize:13, color:C.muted }}>
-                      Current stock: <strong style={{ color:s.color }}>{fmtNum(item.stockLevel)} units</strong>
-                      &nbsp;·&nbsp; Reorder point: <strong>{fmtNum(item.reorderPoint)}</strong>
-                      &nbsp;·&nbsp; Suggest ordering: <strong>{fmtNum(item.reorderQty)} units</strong>
-                    </div>
-                    <div style={{ fontSize:12, color:C.subtle, marginTop:3, display:"flex", alignItems:"center", gap:4 }}>
-                      <MapPin size={11}/> {item.warehouse}, Zone {item.zone}, Bin {item.binLocation}
-                      &nbsp;·&nbsp; Supplier: {item.supplier}
-                    </div>
+                    <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{item.name}</div>
+                    <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{item.sku} · {item.warehouse} · {item.zone}/{item.binLocation}</div>
                   </div>
-                  <div style={{ textAlign:"right", flexShrink:0 }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:C.text, marginBottom:6 }}>
-                      Reorder Cost
-                    </div>
-                    <div style={{ fontSize:18, fontWeight:800, color:s.color }}>
-                      {fmtMoney(item.reorderQty * item.unitCost)}
-                    </div>
-                    <div style={{ fontSize:11, color:C.subtle }}>{fmtNum(item.reorderQty)} × {fmtMoney(item.unitCost)}</div>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontSize:14, fontWeight:800, color:s.color }}>{item.stockLevel} units</div>
+                    <div style={{ fontSize:11, color:C.muted }}>Reorder at {item.reorderPoint} · Order {item.reorderQty}</div>
                   </div>
+                  <StatusBadge item={item}/>
                 </div>
               );
             })}
-            {/* Total reorder cost */}
-            <div style={{ padding:"14px 22px", background:C.amberBg, border:`1px solid ${C.amberBorder}`, borderRadius:12, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-              <span style={{ fontSize:14, fontWeight:700, color:C.amber }}>Total Reorder Cost ({alertItems.length} items)</span>
-              <span style={{ fontSize:20, fontWeight:800, color:C.amber }}>
-                {fmtMoney(alertItems.reduce((s,i)=>s+i.reorderQty*i.unitCost,0))}
-              </span>
-            </div>
-          </div>
+          </Card>
         )
       )}
 
       {/* ══════════════════════════════════════════════
           CONFLICTS VIEW
       ══════════════════════════════════════════════ */}
-      {view==="conflicts"&&(
+      {view === "conflicts" && (
         <Card>
-          <SectionTitle icon={AlertTriangle}>Inventory Conflict Log</SectionTitle>
-          {conflicts.length===0?(
+          <SectionTitle icon={RefreshCw}>Sync Conflict Log</SectionTitle>
+          {conflicts.length === 0 ? (
             <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:14 }}>No conflicts logged.</div>
-          ):conflicts.map(c=>(
+          ) : conflicts.map(c => (
             <div key={c.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 12px", borderRadius:10, marginBottom:8, background:c.status==="alert"?C.redBg:C.bg, border:`1px solid ${c.status==="alert"?C.redBorder:C.border}` }}>
-              {c.status==="alert"
-                ? <XCircle size={13} color={C.red}/>
-                : <CheckCircle size={13} color={C.green}/>
-              }
+              {c.status === "alert" ? <XCircle size={13} color={C.red}/> : <CheckCircle size={13} color={C.green}/>}
               <span style={{ fontFamily:"monospace", color:C.blue, fontSize:12, width:80, flexShrink:0 }}>{c.sku}</span>
               <span style={{ color:C.muted, fontSize:12, width:44, flexShrink:0 }}>{c.field}</span>
               <span style={{ fontSize:12 }}>
@@ -470,7 +423,7 @@ export default function InventorySync() {
               </span>
               <span style={{ fontSize:11, color:C.subtle }}>[{c.src}]</span>
               <span style={{ marginLeft:"auto", fontSize:11, color:C.subtle, flexShrink:0 }}>{c.time}</span>
-              {c.status==="alert"
+              {c.status === "alert"
                 ? <button onClick={()=>resolveConflict(c.id)} style={{ fontSize:11, background:C.redBg, color:C.red, border:`1px solid ${C.redBorder}`, borderRadius:6, padding:"4px 10px", cursor:"pointer", fontWeight:600, flexShrink:0 }}>Resolve</button>
                 : <span style={{ fontSize:11, background:C.greenBg, color:C.green, border:`1px solid ${C.greenBorder}`, borderRadius:6, padding:"4px 10px", fontWeight:600, flexShrink:0 }}>Auto-fixed</span>
               }
@@ -482,63 +435,51 @@ export default function InventorySync() {
       {/* ══════════════════════════════════════════════
           PRICING RULES VIEW
       ══════════════════════════════════════════════ */}
-      {view==="pricing"&&(
+      {view === "pricing" && (
         <Card>
           <SectionTitle icon={Zap}>Bulk Pricing Rule Engine</SectionTitle>
           <p style={{ fontSize:13, color:C.muted, marginBottom:18, lineHeight:1.6 }}>
             Apply a price or stock adjustment to all SKUs in a category at once.
           </p>
-          <div style={{ display:"flex", flexWrap:"wrap", gap:12, alignItems:"flex-end" }}>
-            <div>
-              <div style={{ fontSize:11, color:C.muted, marginBottom:5, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em" }}>Category</div>
-              <select value={rule.cat} onChange={e=>{setRule(r=>({...r,cat:e.target.value}));setApplied(false);}} style={selStyle}>
-                {cats.map(c=><option key={c}>{c}</option>)}
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize:11, color:C.muted, marginBottom:5, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em" }}>Type</div>
-              <select value={rule.type} onChange={e=>{setRule(r=>({...r,type:e.target.value}));setApplied(false);}} style={selStyle}>
-                <option value="price">Price %</option>
-                <option value="stock">Stock Adj</option>
-              </select>
-            </div>
-            <div>
-              <div style={{ fontSize:11, color:C.muted, marginBottom:5, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.05em" }}>Change</div>
-              <input value={rule.change} onChange={e=>{setRule(r=>({...r,change:e.target.value}));setApplied(false);}} style={{ ...selStyle, width:80 }} placeholder="+10"/>
-            </div>
-            <button onClick={()=>setApplied(true)} style={{ padding:"9px 20px", background:C.amber, color:"#fff", border:"none", borderRadius:8, fontWeight:700, fontSize:13, cursor:"pointer" }}>
+          <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" as const, marginBottom:18 }}>
+            <select value={rule.cat} onChange={e=>setRule(r=>({...r,cat:e.target.value}))} style={selStyle}>
+              {cats.map(c=><option key={c}>{c}</option>)}
+            </select>
+            <select value={rule.type} onChange={e=>setRule(r=>({...r,type:e.target.value}))} style={selStyle}>
+              <option value="price">Unit Cost</option>
+              <option value="stock">Stock Level</option>
+              <option value="reorder">Reorder Point</option>
+            </select>
+            <select value={rule.change} onChange={e=>setRule(r=>({...r,change:e.target.value}))} style={selStyle}>
+              {["-20","-10","-5","+5","+10","+20"].map(v=><option key={v}>{v}%</option>)}
+            </select>
+            <button
+              onClick={() => {
+                const pct = parseFloat(rule.change) / 100;
+                const updated = items.map(i => {
+                  if (i.category !== rule.cat) return i;
+                  const field = rule.type as "unitCost"|"stockLevel"|"reorderPoint";
+                  const cur   = i[field] as number;
+                  const next  = Math.max(0, parseFloat((cur * (1 + pct)).toFixed(2)));
+                  updateInventoryItemInDb(i.id, { [field]: next }); // DB update in background
+                  return { ...i, [field]: next };
+                });
+                setItems(updated);
+                saveInventory(updated);
+                setApplied(true);
+                setTimeout(() => setApplied(false), 2500);
+              }}
+              style={{ padding:"9px 22px", background:C.blue, border:"none", borderRadius:9, color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}
+            >
               Apply Rule
             </button>
+            {applied && <span style={{ color:C.green, fontSize:13, fontWeight:600 }}>✓ Applied</span>}
           </div>
-          {applied&&(
-            <div style={{ marginTop:14, padding:"10px 14px", background:C.greenBg, border:`1px solid ${C.greenBorder}`, borderRadius:10, fontSize:13, color:C.green, display:"flex", alignItems:"center", gap:8 }}>
-              <CheckCircle size={13}/>
-              Rule applied: <strong style={{ margin:"0 4px" }}>{rule.cat}</strong> {rule.type} updated by <strong style={{ margin:"0 4px" }}>{rule.change}</strong>
-            </div>
-          )}
-
-          {/* Affected SKUs preview */}
-          {(() => {
-            const affected = items.filter(i=>i.category===rule.cat);
-            if (affected.length===0) return null;
-            return (
-              <div style={{ marginTop:18 }}>
-                <div style={{ fontSize:12, color:C.muted, marginBottom:10, fontWeight:600 }}>
-                  {affected.length} SKU{affected.length!==1?"s":""} in "{rule.cat}" category will be affected:
-                </div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                  {affected.map(i=>(
-                    <div key={i.id} style={{ padding:"5px 12px", background:C.amberBg, border:`1px solid ${C.amberBorder}`, borderRadius:8, fontSize:12, color:C.amber, fontWeight:600, fontFamily:"monospace" }}>
-                      {i.sku}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
+          <div style={{ fontSize:12, color:C.subtle }}>
+            Affects {items.filter(i=>i.category===rule.cat).length} SKU(s) in the <strong>{rule.cat}</strong> category.
+          </div>
         </Card>
       )}
-
     </div>
   );
 }
