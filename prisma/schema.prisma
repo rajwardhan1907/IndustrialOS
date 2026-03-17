@@ -7,33 +7,189 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ── Workspace ─────────────────────────────────────────────────────────────────
 model Workspace {
   id        String   @id @default(cuid())
   name      String
   industry  String
   createdAt DateTime @default(now())
-  users     User[]
-  orders    Order[]
+  updatedAt DateTime @updatedAt
+
+  users          User[]
+  orders         Order[]
+  invoices       Invoice[]
+  customers      Customer[]
+  quotes         Quote[]
+  inventory      InventoryItem[]
+  suppliers      Supplier[]
+  purchaseOrders PurchaseOrder[]
+  shipments      Shipment[]
 }
 
+// ── User ──────────────────────────────────────────────────────────────────────
 model User {
   id          String    @id @default(cuid())
   email       String    @unique
   password    String
-  name        String?
+  name        String
   role        String    @default("operator")
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   createdAt   DateTime  @default(now())
 }
 
+// ── Order ─────────────────────────────────────────────────────────────────────
 model Order {
   id          String    @id @default(cuid())
-  title       String
-  status      String    @default("pending")
-  priority    String    @default("medium")
+  customer    String
+  sku         String
+  items       Int       @default(1)
+  value       Float     @default(0)
+  stage       String    @default("Placed")
+  priority    String    @default("MED")
+  source      String    @default("manual")
+  notes       String    @default("")
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+}
+
+// ── Invoice ───────────────────────────────────────────────────────────────────
+model Invoice {
+  id            String    @id @default(cuid())
+  invoiceNumber String
+  customer      String
+  items         Json
+  subtotal      Float     @default(0)
+  tax           Float     @default(0)
+  total         Float     @default(0)
+  amountPaid    Float     @default(0)
+  paymentTerms  String    @default("Net 30")
+  issueDate     String
+  dueDate       String
+  status        String    @default("unpaid")
+  notes         String    @default("")
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt     DateTime  @default(now())
+}
+
+// ── Customer ──────────────────────────────────────────────────────────────────
+model Customer {
+  id          String    @id @default(cuid())
+  name        String
+  contactName String
+  email       String
+  phone       String    @default("")
+  country     String    @default("")
+  industry    String    @default("")
+  creditLimit Float     @default(0)
+  balanceDue  Float     @default(0)
+  status      String    @default("active")
+  portalCode  String    @default("")
+  notes       String    @default("")
+  orders      Json      @default("[]")
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt   DateTime  @default(now())
+}
+
+// ── Quote ─────────────────────────────────────────────────────────────────────
+model Quote {
+  id           String    @id @default(cuid())
+  quoteNumber  String
+  customer     String
+  items        Json
+  subtotal     Float     @default(0)
+  discountAmt  Float     @default(0)
+  tax          Float     @default(0)
+  total        Float     @default(0)
+  validUntil   String
+  paymentTerms String    @default("Net 30")
+  notes        String    @default("")
+  status       String    @default("draft")
+  prompt       String    @default("")
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt    DateTime  @default(now())
+}
+
+// ── Inventory Item ────────────────────────────────────────────────────────────
+model InventoryItem {
+  id           String    @id @default(cuid())
+  sku          String
+  name         String
+  category     String
+  stockLevel   Int       @default(0)
+  reorderPoint Int       @default(0)
+  reorderQty   Int       @default(0)
+  unitCost     Float     @default(0)
+  warehouse    String    @default("")
+  zone         String    @default("A")
+  binLocation  String    @default("")
+  lastSynced   String
+  supplier     String    @default("")
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt    DateTime  @default(now())
+}
+
+// ── Supplier ──────────────────────────────────────────────────────────────────
+model Supplier {
+  id           String    @id @default(cuid())
+  name         String
+  contactName  String
+  email        String
+  phone        String    @default("")
+  country      String    @default("")
+  category     String    @default("other")
+  status       String    @default("active")
+  paymentTerms String    @default("Net 30")
+  leadTimeDays Int       @default(14)
+  rating       Int       @default(3)
+  notes        String    @default("")
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt    DateTime  @default(now())
+}
+
+// ── Purchase Order ────────────────────────────────────────────────────────────
+model PurchaseOrder {
+  id           String    @id @default(cuid())
+  poNumber     String
+  supplierId   String
+  supplierName String
+  items        Json
+  subtotal     Float     @default(0)
+  tax          Float     @default(0)
+  total        Float     @default(0)
+  status       String    @default("draft")
+  paymentTerms String    @default("Net 30")
+  expectedDate String
+  notes        String    @default("")
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt    DateTime  @default(now())
+}
+
+// ── Shipment ──────────────────────────────────────────────────────────────────
+model Shipment {
+  id             String    @id @default(cuid())
+  shipmentNumber String
+  orderId        String    @default("")
+  customer       String
+  carrier        String    @default("Other")
+  trackingNumber String    @default("")
+  status         String    @default("pending")
+  origin         String    @default("")
+  destination    String    @default("")
+  weight         String    @default("")
+  dimensions     String    @default("")
+  estimatedDate  String    @default("")
+  deliveredDate  String    @default("")
+  events         Json      @default("[]")
+  notes          String    @default("")
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt      DateTime  @default(now())
 }
