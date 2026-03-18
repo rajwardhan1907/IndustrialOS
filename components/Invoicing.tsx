@@ -10,6 +10,7 @@
 // - Saved to localStorage — same pattern as Quotes.tsx
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import {
   Plus, ChevronLeft, CheckCircle, Clock, AlertCircle,
   XCircle, Trash2, User, Calendar, Hash, DollarSign,
@@ -255,6 +256,8 @@ const Input = ({ label, value, onChange, type = "text", placeholder = "" }: any)
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function Invoicing() {
+  const { data: session } = useSession();
+  const isViewer = session?.user?.role === "viewer";
   const [view,     setView]     = useState<"list" | "create" | "detail">("list");
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
     const saved = loadInvoices();
@@ -431,6 +434,7 @@ export default function Invoicing() {
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Invoicing & Payments</h1>
           <p style={{ color: C.muted, fontSize: 13 }}>Track payments, manage overdue invoices, record receipts.</p>
         </div>
+        {!isViewer && (
         <button
           onClick={() => { resetForm(); setView("create"); }}
           style={{
@@ -443,6 +447,7 @@ export default function Invoicing() {
         >
           <Plus size={15} /> New Invoice
         </button>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -679,9 +684,11 @@ export default function Invoicing() {
               Issued {fmtDate(selected.issueDate)} · Customer: <strong style={{ color: C.text }}>{selected.customer}</strong>
             </p>
           </div>
+          {!isViewer && (
           <button onClick={() => deleteInvoice(selected.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: C.redBg, border: `1px solid ${C.redBorder}`, color: C.red, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             <Trash2 size={13} /> Delete
           </button>
+          )}
         </div>
 
         {/* Overdue warning */}
@@ -750,7 +757,7 @@ export default function Invoicing() {
         </Card>
 
         {/* Payment progress */}
-        {selected.status !== "paid" && (
+        {selected.status !== "paid" && !isViewer && (
           <Card>
             <SectionTitle>Payment Progress</SectionTitle>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
