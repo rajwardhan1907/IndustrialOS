@@ -36,7 +36,7 @@ export async function POST(req: Request) {
 
     // ── Create Workspace + User in one transaction ────────────────────────
     // If either fails, both are rolled back — no orphaned records
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: typeof prisma) => {
       const workspace = await tx.workspace.create({
         data: {
           name:     companyName.trim(),
