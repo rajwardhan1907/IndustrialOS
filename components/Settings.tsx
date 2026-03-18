@@ -2,7 +2,8 @@
 // components/Settings.tsx
 // Workspace settings — company info, module toggles, custom tab creator, danger zone.
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { C } from "@/lib/utils";
 import { SectionTitle } from "./Dashboard";
 import { WorkspaceConfig, ModuleId, CustomTab, saveWorkspace, clearWorkspace } from "@/lib/workspace";
@@ -42,6 +43,8 @@ export default function Settings({ workspace, onUpdate }: {
   onUpdate: (ws: WorkspaceConfig) => void;
 }) {
   const router = useRouter();
+  const { data: session } = useSession();
+  const isAdmin = !session?.user?.role || session.user.role === "admin"; // default to true so demo users still see it
 
   // ── Company info state ─────────────────────────────────────────────────────
   const [companyName, setCompanyName] = useState(workspace.companyName);
@@ -236,6 +239,12 @@ export default function Settings({ workspace, onUpdate }: {
         </button>
       </div>
 
+      {/* Danger zone — admin only */}
+      {isAdmin && (
+      <>
+      {/* ── Users & Roles — admin only ── */}
+      <UsersSection workspaceId={typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") || "" : ""} currentUserId={session?.user?.email || ""} />
+
       {/* Danger zone */}
       <div style={{ background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 14, padding: "18px 22px" }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: C.red, marginBottom: 6 }}>Danger Zone</div>
@@ -246,6 +255,178 @@ export default function Settings({ workspace, onUpdate }: {
           Reset Workspace
         </button>
       </div>
+      </>
+      )}
+    </div>
+  );
+}
+
+// ── Users & Roles sub-component ───────────────────────────────────────────────
+const ROLES = ["admin", "operator", "viewer"] as const;
+type Role = typeof ROLES[number];
+
+const ROLE_CFG: Record<Role, { label: string; color: string; bg: string; border: string; desc: string }> = {
+  admin:    { label: "Admin",    color: "#5b8de8", bg: "rgba(91,141,232,0.1)",  border: "rgba(91,141,232,0.3)",  desc: "Full access including settings & danger zone" },
+  operator: { label: "Operator", color: "#f59e0b", bg: "rgba(245,158,11,0.1)", border: "rgba(245,158,11,0.3)",  desc: "Can create/edit orders, inventory, shipments" },
+  viewer:   { label: "Viewer",   color: "#6b7280", bg: "rgba(107,114,128,0.1)",border: "rgba(107,114,128,0.3)", desc: "Read-only access — no create or edit buttons" },
+};
+
+function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; currentUserId: string }) {
+  const [users,       setUsers]       = useState<any[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [showInvite,  setShowInvite]  = useState(false);
+  const [invName,     setInvName]     = useState("");
+  const [invEmail,    setInvEmail]    = useState("");
+  const [invRole,     setInvRole]     = useState<Role>("operator");
+  const [invError,    setInvError]    = useState("");
+  const [invLoading,  setInvLoading]  = useState(false);
+  const [invSuccess,  setInvSuccess]  = useState("");
+
+  useEffect(() => {
+    if (!workspaceId) { setLoading(false); return; }
+    fetch(`/api/users?workspaceId=${workspaceId}`)
+      .then(r => r.json())
+      .then(data => { setUsers(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [workspaceId]);
+
+  const changeRole = async (id: string, role: Role) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, role } : u));
+    await fetch("/api/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, role }),
+    });
+  };
+
+  const removeUser = async (id: string) => {
+    if (!confirm("Remove this user from the workspace?")) return;
+    setUsers(prev => prev.filter(u => u.id !== id));
+    await fetch(`/api/users?id=${id}`, { method: "DELETE" });
+  };
+
+  const inviteUser = async () => {
+    setInvError(""); setInvSuccess("");
+    if (!invName.trim()) { setInvError("Name is required."); return; }
+    if (!invEmail.trim()) { setInvError("Email is required."); return; }
+    if (!workspaceId) { setInvError("No workspace found."); return; }
+    setInvLoading(true);
+    const res = await fetch("/api/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: invName.trim(), email: invEmail.trim(), role: invRole, workspaceId }),
+    });
+    const data = await res.json();
+    setInvLoading(false);
+    if (!res.ok) { setInvError(data.error || "Failed to invite user."); return; }
+    setUsers(prev => [...prev, data]);
+    setInvSuccess(`${data.name} added! Their default password is changeme123 — tell them to update it.`);
+    setInvName(""); setInvEmail(""); setInvRole("operator");
+  };
+
+  const inp = (val: string, set: (v: string) => void, ph: string, type = "text") => (
+    <input type={type} value={val} onChange={e => set(e.target.value)} placeholder={ph}
+      style={{ width: "100%", padding: "9px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" as const }} />
+  );
+
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 22px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <SectionTitle>Users & Roles</SectionTitle>
+          <p style={{ fontSize: 12, color: C.muted, marginTop: -8 }}>Manage who has access to this workspace.</p>
+        </div>
+        <button onClick={() => { setShowInvite(v => !v); setInvError(""); setInvSuccess(""); }}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: C.blue, border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          <Plus size={13}/> Invite User
+        </button>
+      </div>
+
+      {/* Invite form */}
+      {showInvite && (
+        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "16px", marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px", marginBottom: 10 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Full Name *</label>
+              {inp(invName, setInvName, "e.g. Sarah Chen")}
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Work Email *</label>
+              {inp(invEmail, setInvEmail, "sarah@company.com", "email")}
+            </div>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Role</label>
+            <div style={{ display: "flex", gap: 8 }}>
+              {ROLES.map(r => {
+                const cfg = ROLE_CFG[r];
+                const active = invRole === r;
+                return (
+                  <button key={r} onClick={() => setInvRole(r)}
+                    style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: `1px solid ${active ? cfg.border : C.border}`, background: active ? cfg.bg : "none", color: active ? cfg.color : C.muted, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>{ROLE_CFG[invRole].desc}</p>
+          </div>
+          {invError   && <div style={{ fontSize: 12, color: C.red,   marginBottom: 8 }}>⚠️ {invError}</div>}
+          {invSuccess && <div style={{ fontSize: 12, color: C.green, marginBottom: 8 }}>✓ {invSuccess}</div>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={inviteUser} disabled={invLoading}
+              style={{ padding: "9px 20px", background: invLoading ? C.border : C.blue, border: "none", borderRadius: 8, color: invLoading ? C.muted : "#fff", fontSize: 13, fontWeight: 700, cursor: invLoading ? "not-allowed" : "pointer" }}>
+              {invLoading ? "Adding…" : "Add to Workspace"}
+            </button>
+            <button onClick={() => { setShowInvite(false); setInvError(""); setInvSuccess(""); }}
+              style={{ padding: "9px 16px", background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 13, cursor: "pointer" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* User list */}
+      {loading ? (
+        <div style={{ textAlign: "center", padding: "20px 0", color: C.muted, fontSize: 13 }}>Loading users…</div>
+      ) : users.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "20px 0", color: C.muted, fontSize: 13 }}>No users found. Invite someone above.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+          {users.map((u, i) => {
+            const role = (u.role as Role) || "operator";
+            const cfg  = ROLE_CFG[role] || ROLE_CFG.operator;
+            const isYou = u.email === currentUserId;
+            return (
+              <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: i % 2 === 0 ? C.bg : "transparent", borderRadius: 8 }}>
+                {/* Avatar */}
+                <div style={{ width: 34, height: 34, borderRadius: 10, background: cfg.bg, border: `1px solid ${cfg.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: cfg.color, flexShrink: 0 }}>
+                  {u.name?.[0]?.toUpperCase() || "?"}
+                </div>
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
+                    {u.name} {isYou && <span style={{ fontSize: 10, color: C.muted, fontWeight: 400 }}>(you)</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</div>
+                </div>
+                {/* Role selector */}
+                <select value={role} onChange={e => changeRole(u.id, e.target.value as Role)} disabled={isYou}
+                  style={{ padding: "5px 8px", background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: 7, color: cfg.color, fontSize: 11, fontWeight: 700, cursor: isYou ? "not-allowed" : "pointer", outline: "none" }}>
+                  {ROLES.map(r => <option key={r} value={r}>{ROLE_CFG[r].label}</option>)}
+                </select>
+                {/* Remove */}
+                {!isYou && (
+                  <button onClick={() => removeUser(u.id)}
+                    style={{ width: 28, height: 28, borderRadius: 7, background: C.redBg, border: `1px solid ${C.redBorder}`, color: C.red, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Trash2 size={12}/>
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
