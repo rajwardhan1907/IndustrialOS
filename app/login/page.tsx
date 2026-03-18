@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -141,6 +142,14 @@ export default function LoginPage() {
                 <span style={{ fontSize: 11, color: "#4a4f65", fontFamily: "monospace" }}>{d.email}</span>
               </button>
             ))}
+          </div>
+
+          {/* Register link */}
+          <div style={{ marginTop: 20, textAlign: "center" }}>
+            <span style={{ fontSize: 13, color: "#4a4f65" }}>New company? </span>
+            <Link href="/register" style={{ fontSize: 13, color: "#5b8de8", fontWeight: 600, textDecoration: "none" }}>
+              Create a workspace
+            </Link>
           </div>
 
         </div>
