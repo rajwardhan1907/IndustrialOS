@@ -4,6 +4,7 @@
 // localStorage used as fast cache — falls back silently if DB unavailable.
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import {
   Plus, X, ChevronLeft, ChevronRight,
   Truck, Package, MapPin, AlertTriangle,
@@ -200,6 +201,8 @@ function NewShipmentModal({ onSave, onClose }: {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function Shipping() {
+  const { data: session } = useSession();
+  const isViewer = session?.user?.role === "viewer";
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [selected,  setSelected]  = useState<Shipment | null>(null);
   const [showNew,   setShowNew]   = useState(false);
@@ -296,9 +299,11 @@ export default function Shipping() {
           <h1 style={{ fontSize:22, fontWeight:800, color:C.text, marginBottom:4 }}>Shipping & Logistics</h1>
           <p style={{ color:C.muted, fontSize:13 }}>Track shipments, manage carriers and delivery events.</p>
         </div>
+        {!isViewer && (
         <button onClick={()=>setShowNew(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
           <Plus size={14}/> New Shipment
         </button>
+        )}
       </div>
 
       {/* ── Summary cards ── */}
@@ -472,12 +477,12 @@ export default function Shipping() {
 
               {/* Action buttons */}
               <div style={{ display:"flex", gap:8 }}>
-                {selected.status !== "delivered" && selected.status !== "exception" && (
+                {selected.status !== "delivered" && selected.status !== "exception" && !isViewer && (
                   <button onClick={()=>advanceStatus(selected.id)} style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, padding:"10px 0", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
                     Advance Status <ChevronRight size={14}/>
                   </button>
                 )}
-                {selected.status !== "delivered" && selected.status !== "exception" && (
+                {selected.status !== "delivered" && selected.status !== "exception" && !isViewer && (
                   <button onClick={()=>markException(selected.id)} style={{ padding:"10px 16px", borderRadius:10, background:C.redBg, border:`1px solid ${C.redBorder}`, color:C.red, fontSize:13, fontWeight:700, cursor:"pointer" }}>
                     Exception
                   </button>
