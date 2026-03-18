@@ -4,6 +4,7 @@
 // localStorage used as fast cache — falls back silently if DB unavailable.
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import {
   Plus, ChevronLeft, X, Star, Package,
   Phone, Mail, Globe, Clock, ChevronRight,
@@ -240,6 +241,8 @@ function NewPOModal({ suppliers, onSave, onClose }: {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function Suppliers() {
+  const { data: session } = useSession();
+  const isViewer = session?.user?.role === "viewer";
   const [view,       setView]       = useState<"list"|"detail"|"pos">("list");
   const [suppliers,  setSuppliers]  = useState<Supplier[]>([]);
   const [pos,        setPOs]        = useState<PurchaseOrder[]>([]);
@@ -319,6 +322,7 @@ export default function Suppliers() {
           <h1 style={{ fontSize:22, fontWeight:800, color:C.text, marginBottom:4 }}>Suppliers & Procurement</h1>
           <p style={{ color:C.muted, fontSize:13 }}>Manage suppliers, track purchase orders and deliveries.</p>
         </div>
+        {!isViewer && (
         <div style={{ display:"flex", gap:10 }}>
           <button onClick={()=>setShowNewPO(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 16px", borderRadius:10, background:C.blueBg, border:`1px solid ${C.blueBorder}`, color:C.blue, fontSize:13, fontWeight:700, cursor:"pointer" }}>
             <FileText size={14}/> New PO
@@ -327,6 +331,7 @@ export default function Suppliers() {
             <Plus size={14}/> Add Supplier
           </button>
         </div>
+        )}
       </div>
 
       {/* ── Summary cards ── */}
@@ -484,7 +489,7 @@ export default function Suppliers() {
                             </span>
                           </div>
                         </div>
-                        {canAdv && (
+                        {canAdv && !isViewer && (
                           <button onClick={()=>advancePO(po.id)} style={{ display:"flex", alignItems:"center", gap:5, padding:"7px 14px", borderRadius:8, background:C.blueBg, border:`1px solid ${C.blueBorder}`, color:C.blue, fontSize:12, fontWeight:700, cursor:"pointer" }}>
                             Advance to next stage <ChevronRight size={12}/>
                           </button>
@@ -540,7 +545,7 @@ export default function Suppliers() {
                       </td>
                       <td style={{ padding:"13px 16px" }}>
                         <div style={{ display:"flex", gap:6 }}>
-                          {canAdv && (
+                          {canAdv && !isViewer && (
                             <button onClick={()=>advancePO(po.id)} style={{ display:"flex", alignItems:"center", gap:4, padding:"5px 10px", borderRadius:7, background:C.blueBg, border:`1px solid ${C.blueBorder}`, color:C.blue, fontSize:11, fontWeight:700, cursor:"pointer" }}>
                               Next <ChevronRight size={11}/>
                             </button>
