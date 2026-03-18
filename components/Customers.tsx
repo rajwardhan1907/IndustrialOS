@@ -95,6 +95,95 @@ function saveCustomers(list: Customer[]) {
   if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
 
+// ── DB helpers (fire-and-forget — localStorage stays primary) ─────────────────
+// Field mapping: component ↔ DB
+//   company      ↔ name          contact.name ↔ contactName
+//   balance      ↔ balanceDue    accessCode   ↔ portalCode
+//   address      ↔ country       (repurposed field)
+
+function getCustWorkspaceId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("workspaceDbId");
+}
+
+function dbToCustomer(d: any): Customer {
+  return {
+    id:          d.id,
+    company:     d.name,
+    industry:    d.industry     || "",
+    status:      (d.status as CustStatus) || "active",
+    creditLimit: d.creditLimit  || 0,
+    balance:     d.balanceDue   || 0,
+    totalSpend:  0,                // not in DB schema — defaults to 0
+    contact: {
+      name:  d.contactName || "",
+      role:  "Contact",           // not in DB schema
+      email: d.email       || "",
+      phone: d.phone       || "",
+    },
+    address:      d.country      || "", // reusing country field for address
+    accessCode:   d.portalCode   || "",
+    orders:       Array.isArray(d.orders) ? d.orders : (typeof d.orders === "string" ? JSON.parse(d.orders || "[]") : []),
+    since:        typeof d.createdAt === "string" ? d.createdAt.split("T")[0] : new Date(d.createdAt).toISOString().split("T")[0],
+    paymentTerms: "Net 30",       // not in DB schema
+    notes:        d.notes        || "",
+  };
+}
+
+async function fetchCustomersFromDb(): Promise<Customer[]> {
+  const wid = getCustWorkspaceId();
+  if (!wid) return [];
+  try {
+    const res = await fetch(`/api/customers?workspaceId=${wid}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map(dbToCustomer);
+  } catch { return []; }
+}
+
+async function createCustomerInDb(c: Customer): Promise<void> {
+  const wid = getCustWorkspaceId();
+  if (!wid) return;
+  try {
+    await fetch("/api/customers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name:        c.company,
+        contactName: c.contact.name,
+        email:       c.contact.email,
+        phone:       c.contact.phone,
+        country:     c.address,      // repurposed
+        industry:    c.industry,
+        creditLimit: c.creditLimit,
+        balanceDue:  c.balance,
+        status:      c.status,
+        portalCode:  c.accessCode,
+        notes:       c.notes,
+        orders:      c.orders,
+        workspaceId: wid,
+      }),
+    });
+  } catch {}
+}
+
+async function updateCustomerInDb(id: string, c: Partial<Customer>): Promise<void> {
+  try {
+    await fetch("/api/customers", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id,
+        ...(c.status      !== undefined && { status:      c.status }),
+        ...(c.balance     !== undefined && { balanceDue:  c.balance }),
+        ...(c.creditLimit !== undefined && { creditLimit: c.creditLimit }),
+        ...(c.notes       !== undefined && { notes:       c.notes }),
+        ...(c.orders      !== undefined && { orders:      c.orders }),
+      }),
+    });
+  } catch {}
+}
+
 const uid = () => Math.random().toString(36).slice(2, 9);
 const fmtMoney = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtDate  = (s: string) => new Date(s).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
@@ -322,13 +411,26 @@ export default function Customers() {
   const [showNew,   setShowNew]   = useState(false);
   const [selected,  setSelected]  = useState<Customer | null>(null);
 
-  useEffect(() => { setCustomers(loadCustomers()); }, []);
+  // Load localStorage immediately, then refresh from DB in background
+  useEffect(() => {
+    setCustomers(loadCustomers());
+    fetchCustomersFromDb().then(dbList => {
+      if (dbList.length > 0) {
+        setCustomers(dbList);
+        saveCustomers(dbList);
+      }
+    });
+  }, []);
 
   const save = (list: Customer[]) => { setCustomers(list); saveCustomers(list); };
 
-  const addCustomer = (c: Customer) => save([c, ...customers]);
+  const addCustomer = (c: Customer) => {
+    save([c, ...customers]);
+    createCustomerInDb(c); // fire-and-forget
+  };
   const changeStatus = (id: string, status: CustStatus) => {
     save(customers.map(c => c.id === id ? { ...c, status } : c));
+    updateCustomerInDb(id, { status }); // fire-and-forget
     setSelected(prev => prev?.id === id ? { ...prev, status } : prev);
   };
 
