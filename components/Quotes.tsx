@@ -5,6 +5,7 @@
 // All other UI (list, detail, save, delete) is unchanged.
 
 import { useState, useRef, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { fmt, C } from "@/lib/utils";
 import {
   Plus, Sparkles, ChevronLeft, FileText,
@@ -144,6 +145,8 @@ const Badge = ({ status }: { status: Quote["status"] }) => {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function Quotes() {
+  const { data: session } = useSession();
+  const isViewer = session?.user?.role === "viewer";
   const [view,      setView]     = useState<"list"|"new"|"detail">("list");
   const [quotes,    setQuotes]   = useState<Quote[]>(() => loadQuotes());
   const [prompt,    setPrompt]   = useState("");
@@ -266,9 +269,11 @@ export default function Quotes() {
           <h1 style={{ fontSize:22, fontWeight:800, color:C.text, marginBottom:4 }}>Quotes & RFQ</h1>
           <p style={{ color:C.muted, fontSize:13 }}>Generate professional quotes in seconds using plain English.</p>
         </div>
+        {!isViewer && (
         <button onClick={()=>{ resetNew(); setView("new"); }} style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", borderRadius:10, background:`linear-gradient(135deg,${C.blue},#7c5cbf)`, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:`0 4px 16px ${C.blue}44` }}>
           <Sparkles size={14}/> New AI Quote
         </button>
+        )}
       </div>
 
       {/* Stats */}
@@ -540,9 +545,11 @@ export default function Quotes() {
             Created {fmtDate(selected.createdAt)} · Customer: <strong style={{ color:C.text }}>{selected.customer}</strong>
           </p>
         </div>
+        {!isViewer && (
         <button onClick={()=>deleteQuote(selected.id)} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", borderRadius:8, background:C.redBg, border:`1px solid ${C.redBorder}`, color:C.red, fontSize:12, fontWeight:600, cursor:"pointer" }}>
           <Trash2 size={13}/> Delete
         </button>
+        )}
       </div>
 
       {/* Details */}
@@ -612,6 +619,7 @@ export default function Quotes() {
       </Card>
 
       {/* Status actions */}
+      {!isViewer && (
       <Card>
         <div style={{ fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:12 }}>Update Status</div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -627,6 +635,7 @@ export default function Quotes() {
           ))}
         </div>
       </Card>
+      )}
 
       {/* Notes */}
       {selected.notes && (
