@@ -95,6 +95,64 @@ function saveInvoices(invs: Invoice[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(invs));
 }
 
+// ── DB helpers (fire-and-forget — localStorage stays primary) ─────────────────
+function getWorkspaceId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("workspaceDbId");
+}
+
+async function fetchInvoicesFromDb(): Promise<Invoice[]> {
+  const wid = getWorkspaceId();
+  if (!wid) return [];
+  try {
+    const res = await fetch(`/api/invoices?workspaceId=${wid}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map((d: any) => ({
+      id:            d.id,
+      invoiceNumber: d.invoiceNumber,
+      customer:      d.customer,
+      items:         Array.isArray(d.items) ? d.items : JSON.parse(d.items || "[]"),
+      subtotal:      d.subtotal,
+      tax:           d.tax,
+      total:         d.total,
+      amountPaid:    d.amountPaid,
+      paymentTerms:  d.paymentTerms as PaymentTerms,
+      issueDate:     d.issueDate,
+      dueDate:       d.dueDate,
+      status:        deriveStatus(d) as InvoiceStatus,
+      notes:         d.notes,
+      createdAt:     typeof d.createdAt === "string" ? d.createdAt : new Date(d.createdAt).toISOString(),
+    }));
+  } catch { return []; }
+}
+
+async function createInvoiceInDb(inv: Invoice): Promise<void> {
+  const wid = getWorkspaceId();
+  if (!wid) return;
+  try {
+    await fetch("/api/invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...inv, workspaceId: wid }),
+    });
+  } catch {}
+}
+
+async function updateInvoiceInDb(id: string, patch: Partial<Invoice>): Promise<void> {
+  try {
+    await fetch("/api/invoices", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...patch }),
+    });
+  } catch {}
+}
+
+async function deleteInvoiceFromDb(id: string): Promise<void> {
+  try { await fetch(`/api/invoices?id=${id}`, { method: "DELETE" }); } catch {}
+}
+
 // ── Seed demo invoices if empty ───────────────────────────────────────────────
 function seedDemoInvoices(): Invoice[] {
   const today = new Date();
@@ -221,6 +279,16 @@ export default function Invoicing() {
     }
   }, []);
 
+  // ── Load from DB in background ────────────────────────────────────────────
+  useEffect(() => {
+    fetchInvoicesFromDb().then(dbInvs => {
+      if (dbInvs.length > 0) {
+        setInvoices(dbInvs);
+        saveInvoices(dbInvs);
+      }
+    });
+  }, []);
+
   // ── New invoice form state ────────────────────────────────────────────────
   const [formCustomer, setFormCustomer] = useState("");
   const [formTerms,    setFormTerms]    = useState<PaymentTerms>("Net 30");
@@ -287,6 +355,7 @@ export default function Invoicing() {
     const updated = [newInv, ...invoices];
     setInvoices(updated);
     saveInvoices(updated);
+    createInvoiceInDb(newInv); // fire-and-forget to DB
     setSelected(newInv);
     resetForm();
     setView("detail");
@@ -297,6 +366,7 @@ export default function Invoicing() {
     const updated = invoices.filter(inv => inv.id !== id);
     setInvoices(updated);
     saveInvoices(updated);
+    deleteInvoiceFromDb(id); // fire-and-forget
     setSelected(null);
     setView("list");
   };
@@ -319,6 +389,7 @@ export default function Invoicing() {
     setInvoices(updated);
     saveInvoices(updated);
     const refreshed = updated.find(i => i.id === selected.id)!;
+    updateInvoiceInDb(selected.id, { amountPaid: refreshed.amountPaid, status: refreshed.status }); // fire-and-forget
     setSelected(refreshed);
     setPayAmount("");
     setPayError("");
@@ -333,6 +404,7 @@ export default function Invoicing() {
     });
     setInvoices(updated);
     saveInvoices(updated);
+    updateInvoiceInDb(selected.id, { amountPaid: selected.total, status: "paid" }); // fire-and-forget
     setSelected(updated.find(i => i.id === selected.id)!);
     setPayAmount("");
     setPayError("");
