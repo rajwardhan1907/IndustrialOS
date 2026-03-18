@@ -256,9 +256,11 @@ export default function InventorySync() {
               {alertItems.length} item{alertItems.length !== 1 ? "s" : ""} need reordering
             </div>
           )}
-          <button onClick={() => setShowAdd(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", display: isViewer ? "none" : "flex" }}>
+          {!isViewer && (
+          <button onClick={() => setShowAdd(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
             <Plus size={14}/> Add SKU
           </button>
+          )}
         </div>
       </div>
 
