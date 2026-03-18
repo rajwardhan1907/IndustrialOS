@@ -4,6 +4,7 @@
 // Writes still go to localStorage immediately (fast UI) + DB in background.
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Plus, X, CheckCircle, ChevronRight, Receipt } from "lucide-react";
 import { C } from "@/lib/utils";
 import { Card, SectionTitle } from "./Dashboard";
@@ -157,6 +158,8 @@ function NewOrderModal({ onSave, onClose }: {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function OrderKanban() {
+  const { data: session } = useSession();
+  const isViewer = session?.user?.role === "viewer";
   const [orders,     setOrders]     = useState<Order[]>([]);
   const [showNew,    setShowNew]    = useState(false);
   const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null);
@@ -277,6 +280,7 @@ export default function OrderKanban() {
             {activeCount} active order{activeCount !== 1 ? "s" : ""}
           </div>
         </div>
+        {!isViewer && (
         <button
           onClick={() => setShowNew(true)}
           style={{
@@ -287,6 +291,7 @@ export default function OrderKanban() {
         >
           <Plus size={15} /> New Order
         </button>
+        )}
       </div>
 
       {/* ── Kanban board ── */}
