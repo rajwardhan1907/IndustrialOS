@@ -67,7 +67,65 @@ function saveQuotes(qs: Quote[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(qs));
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── DB helpers (fire-and-forget — localStorage stays primary) ─────────────────
+function getQuoteWorkspaceId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("workspaceDbId");
+}
+
+async function fetchQuotesFromDb(): Promise<Quote[]> {
+  const wid = getQuoteWorkspaceId();
+  if (!wid) return [];
+  try {
+    const res = await fetch(`/api/quotes?workspaceId=${wid}`);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.map((d: any) => ({
+      id:           d.id,
+      quoteNumber:  d.quoteNumber,
+      customer:     d.customer,
+      items:        Array.isArray(d.items) ? d.items : JSON.parse(d.items || "[]"),
+      subtotal:     d.subtotal,
+      discountAmt:  d.discountAmt,
+      tax:          d.tax,
+      total:        d.total,
+      validUntil:   d.validUntil,
+      paymentTerms: d.paymentTerms,
+      notes:        d.notes,
+      status:       d.status as Quote["status"],
+      prompt:       d.prompt,
+      createdAt:    typeof d.createdAt === "string" ? d.createdAt : new Date(d.createdAt).toISOString(),
+    }));
+  } catch { return []; }
+}
+
+async function createQuoteInDb(q: Quote): Promise<void> {
+  const wid = getQuoteWorkspaceId();
+  if (!wid) return;
+  try {
+    await fetch("/api/quotes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...q, workspaceId: wid }),
+    });
+  } catch {}
+}
+
+async function updateQuoteInDb(id: string, patch: Partial<Quote>): Promise<void> {
+  try {
+    await fetch("/api/quotes", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...patch }),
+    });
+  } catch {}
+}
+
+async function deleteQuoteFromDb(id: string): Promise<void> {
+  try { await fetch(`/api/quotes?id=${id}`, { method: "DELETE" }); } catch {}
+}
+
+
 const Card = ({ children, style = {} }: any) => (
   <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:"20px 22px", ...style }}>
     {children}
@@ -98,6 +156,16 @@ export default function Quotes() {
   useEffect(() => {
     if (view === "new" && textRef.current) textRef.current.focus();
   }, [view]);
+
+  // ── Load from DB in background ────────────────────────────────────────────
+  useEffect(() => {
+    fetchQuotesFromDb().then(dbQuotes => {
+      if (dbQuotes.length > 0) {
+        setQuotes(dbQuotes);
+        saveQuotes(dbQuotes);
+      }
+    });
+  }, []);
 
   // ── Real AI generation — calls /api/generate-quote ────────────────────────
   const generate = async () => {
@@ -164,6 +232,7 @@ export default function Quotes() {
     const updated = [draft, ...quotes];
     setQuotes(updated);
     saveQuotes(updated);
+    createQuoteInDb(draft); // fire-and-forget
     setSelected(draft);
     setDraft(null);
     setPrompt("");
@@ -175,6 +244,7 @@ export default function Quotes() {
     const updated = quotes.filter(q => q.id !== id);
     setQuotes(updated);
     saveQuotes(updated);
+    deleteQuoteFromDb(id); // fire-and-forget
     setSelected(null);
     setView("list");
   };
@@ -549,6 +619,7 @@ export default function Quotes() {
             <button key={s} onClick={()=>{
               const updated = quotes.map(q=>q.id===selected.id?{...q,status:s}:q);
               setQuotes(updated); saveQuotes(updated);
+              updateQuoteInDb(selected.id, { status: s }); // fire-and-forget
               setSelected({...selected,status:s});
             }} style={{ padding:"7px 14px", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", background:selected.status===s?STATUS[s].bg:C.bg, color:selected.status===s?STATUS[s].color:C.muted, border:`1px solid ${selected.status===s?STATUS[s].border:C.border}` }}>
               {STATUS[s].label}
