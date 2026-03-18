@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Zap, Bell, Plus, Settings as SettingsIcon, X } from "lucide-react";
 import {
   LayoutDashboard, ShoppingCart, Package, FileText,
@@ -144,6 +145,7 @@ function AddTabModal({ onAdd, onClose }: {
 // ── Main app ──────────────────────────────────────────────────────────────────
 export default function App() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [workspace,  setWorkspace]  = useState<WorkspaceConfig | null>(null);
   const [tab,        setTab]        = useState("dashboard");
   const [loading,    setLoading]    = useState(true);
@@ -155,6 +157,16 @@ export default function App() {
     setWorkspace(ws);
     setLoading(false);
   }, []);
+
+  // ── Sync workspaceId from session → localStorage ──────────────────────────
+  // Session is the authoritative source (set from DB on login).
+  // Writing to localStorage means all lib functions (orders, inventory, etc.)
+  // keep working without needing to be rewritten to use useSession().
+  useEffect(() => {
+    if (session?.user?.workspaceId) {
+      localStorage.setItem("workspaceDbId", session.user.workspaceId);
+    }
+  }, [session]);
 
   // ── State only for components that still need it passed in ─────────────────
   const [met] = useState({
