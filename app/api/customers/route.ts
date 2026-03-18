@@ -1,14 +1,17 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-// GET all customers (filter by workspaceId)
+// GET customers — workspaceId is required (prevents cross-tenant data leaks)
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const workspaceId = searchParams.get('workspaceId')
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 })
+    }
 
     const customers = await prisma.customer.findMany({
-      where: workspaceId ? { workspaceId } : undefined,
+      where: { workspaceId },
       orderBy: { createdAt: 'desc' },
     })
     return NextResponse.json(customers)
