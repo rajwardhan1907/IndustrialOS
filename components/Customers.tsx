@@ -3,6 +3,7 @@
 // Customer accounts module — profiles, contacts, order history, credit limits, balances.
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { C } from "@/lib/utils";
 import { Card, SectionTitle } from "./Dashboard";
 import { Users, Plus, Search, Building2, Mail, Phone, TrendingUp, AlertCircle } from "lucide-react";
@@ -288,9 +289,10 @@ function NewCustomerModal({ onSave, onClose }: { onSave: (c: Customer) => void; 
 }
 
 // ── Customer detail panel ─────────────────────────────────────────────────────
-function CustomerDetail({ cust, onClose, onStatusChange }: {
+function CustomerDetail({ cust, onClose, onStatusChange, isViewer }: {
   cust: Customer; onClose: () => void;
   onStatusChange: (id: string, s: CustStatus) => void;
+  isViewer?: boolean;
 }) {
   const usedCredit = (cust.balance / cust.creditLimit) * 100;
   return (
@@ -393,9 +395,9 @@ function CustomerDetail({ cust, onClose, onStatusChange }: {
 
         {/* Status actions */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {cust.status !== "active"   && <button onClick={() => onStatusChange(cust.id, "active")}   style={{ padding: "8px 16px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 8, color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Set Active</button>}
-          {cust.status !== "on_hold"  && <button onClick={() => onStatusChange(cust.id, "on_hold")}  style={{ padding: "8px 16px", background: C.amberBg, border: `1px solid ${C.amberBorder}`, borderRadius: 8, color: C.amber, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Put on Hold</button>}
-          {cust.status !== "inactive" && <button onClick={() => onStatusChange(cust.id, "inactive")} style={{ padding: "8px 16px", background: C.surface, border: `1px solid ${C.border}`,       borderRadius: 8, color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Deactivate</button>}
+          {!isViewer && cust.status !== "active"   && <button onClick={() => onStatusChange(cust.id, "active")}   style={{ padding: "8px 16px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 8, color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Set Active</button>}
+          {!isViewer && cust.status !== "on_hold"  && <button onClick={() => onStatusChange(cust.id, "on_hold")}  style={{ padding: "8px 16px", background: C.amberBg, border: `1px solid ${C.amberBorder}`, borderRadius: 8, color: C.amber, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Put on Hold</button>}
+          {!isViewer && cust.status !== "inactive" && <button onClick={() => onStatusChange(cust.id, "inactive")} style={{ padding: "8px 16px", background: C.surface, border: `1px solid ${C.border}`,       borderRadius: 8, color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Deactivate</button>}
           <button onClick={onClose} style={{ padding: "8px 16px", background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", marginLeft: "auto" }}>Close</button>
         </div>
       </div>
@@ -405,6 +407,8 @@ function CustomerDetail({ cust, onClose, onStatusChange }: {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 export default function Customers() {
+  const { data: session } = useSession();
+  const isViewer = session?.user?.role === "viewer";
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search,    setSearch]    = useState("");
   const [filter,    setFilter]    = useState<CustStatus | "all">("all");
@@ -475,9 +479,11 @@ export default function Customers() {
             </button>
           ))}
         </div>
+        {!isViewer && (
         <button onClick={() => setShowNew(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: C.blue, border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
           <Plus size={14} /> Add Customer
         </button>
+        )}
       </div>
 
       {/* List */}
@@ -510,7 +516,7 @@ export default function Customers() {
       </Card>
 
       {showNew  && <NewCustomerModal onSave={addCustomer} onClose={() => setShowNew(false)} />}
-      {selected && <CustomerDetail  cust={selected} onClose={() => setSelected(null)} onStatusChange={changeStatus} />}
+      {selected && <CustomerDetail  cust={selected} onClose={() => setSelected(null)} onStatusChange={changeStatus} isViewer={isViewer} />}
     </div>
   );
 }
