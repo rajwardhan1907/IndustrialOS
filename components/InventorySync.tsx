@@ -4,6 +4,7 @@
 // localStorage used as fast cache — falls back silently if DB unavailable.
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { AlertTriangle, CheckCircle, XCircle, Zap, Package, MapPin, RefreshCw, Plus, X } from "lucide-react";
 import { C } from "@/lib/utils";
 import {
@@ -174,6 +175,8 @@ const StatusBadge = ({ item }: { item: InventoryItem }) => {
 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function InventorySync() {
+  const { data: session } = useSession();
+  const isViewer = session?.user?.role === "viewer";
   const [items,     setItems]     = useState<InventoryItem[]>([]);
   const [conflicts, setConflicts] = useState<ConflictLog[]>([]);
   const [view,      setView]      = useState<"stock"|"alerts"|"conflicts"|"pricing">("stock");
@@ -253,7 +256,7 @@ export default function InventorySync() {
               {alertItems.length} item{alertItems.length !== 1 ? "s" : ""} need reordering
             </div>
           )}
-          <button onClick={() => setShowAdd(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+          <button onClick={() => setShowAdd(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", display: isViewer ? "none" : "flex" }}>
             <Plus size={14}/> Add SKU
           </button>
         </div>
