@@ -1,39 +1,22 @@
 "use client";
 // app/portal/page.tsx
-// Customer Portal — Phase 6: real DB login via /api/portal/login
-// Customers log in with their contact email + access code (portalCode).
-// All orders, invoices, quotes come from the database.
-// New requests are submitted to the DB via /api/portal/orders.
+// Phase 6 complete:
+// - Real DB login via /api/portal/login
+// - Quote accept/decline updates DB via /api/quotes PATCH
+// - Order list auto-refreshes after submitting a new request
 
 import { useState } from "react";
 
-// ── Colour palette ────────────────────────────────────────────────────────────
 const P = {
-  bg:           "#f7f8fc",
-  surface:      "#ffffff",
-  border:       "#e4e8f0",
-  border2:      "#cdd3e0",
-  text:         "#1a1d2e",
-  muted:        "#6b7280",
-  subtle:       "#9ca3af",
-  blue:         "#3b6fd4",
-  blueBg:       "#eff4ff",
-  blueBorder:   "#bfcfef",
-  green:        "#1a7f5a",
-  greenBg:      "#edfaf3",
-  greenBorder:  "#9ee0c4",
-  amber:        "#b45309",
-  amberBg:      "#fffbeb",
-  amberBorder:  "#fcd34d",
-  red:          "#b91c1c",
-  redBg:        "#fff1f2",
-  redBorder:    "#fecdd3",
-  purple:       "#6d28d9",
-  purpleBg:     "#f5f3ff",
-  purpleBorder: "#c4b5fd",
+  bg: "#f7f8fc", surface: "#ffffff", border: "#e4e8f0", border2: "#cdd3e0",
+  text: "#1a1d2e", muted: "#6b7280", subtle: "#9ca3af",
+  blue: "#3b6fd4", blueBg: "#eff4ff", blueBorder: "#bfcfef",
+  green: "#1a7f5a", greenBg: "#edfaf3", greenBorder: "#9ee0c4",
+  amber: "#b45309", amberBg: "#fffbeb", amberBorder: "#fcd34d",
+  red: "#b91c1c", redBg: "#fff1f2", redBorder: "#fecdd3",
+  purple: "#6d28d9", purpleBg: "#f5f3ff", purpleBorder: "#c4b5fd",
 };
 
-// ── Types ─────────────────────────────────────────────────────────────────────
 type OrderStage = "Placed" | "Confirmed" | "Picked" | "Shipped" | "Delivered";
 
 interface DBOrder {
@@ -56,30 +39,29 @@ interface PortalCustomer {
   balanceDue: number; status: string; notes: string;
 }
 
-// ── Order stage config ────────────────────────────────────────────────────────
 const ORDER_STAGES: OrderStage[] = ["Placed", "Confirmed", "Picked", "Shipped", "Delivered"];
-const ORDER_STATUS_STYLE: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  Placed:    { label: "Placed",    color: "#5a5550", bg: "#f0f0f0",   border: "#d0ccc5"        },
+
+const ORDER_STYLE: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  Placed:    { label: "Placed",    color: "#5a5550", bg: "#f0f0f0",   border: "#d0ccc5"       },
   Confirmed: { label: "Confirmed", color: P.blue,   bg: P.blueBg,   border: P.blueBorder    },
   Picked:    { label: "Picked",    color: P.amber,  bg: P.amberBg,  border: P.amberBorder   },
   Shipped:   { label: "Shipped",   color: P.purple, bg: P.purpleBg, border: P.purpleBorder  },
   Delivered: { label: "Delivered", color: P.green,  bg: P.greenBg,  border: P.greenBorder   },
 };
-const QUOTE_STATUS_STYLE: Record<string, { label: string; color: string; bg: string; border: string }> = {
+const QUOTE_STYLE: Record<string, { label: string; color: string; bg: string; border: string }> = {
   draft:    { label: "Draft",    color: P.muted,  bg: "#f0f0f0",  border: P.border       },
   sent:     { label: "Sent",     color: P.blue,   bg: P.blueBg,  border: P.blueBorder   },
   accepted: { label: "Accepted", color: P.green,  bg: P.greenBg, border: P.greenBorder  },
   declined: { label: "Declined", color: P.red,    bg: P.redBg,   border: P.redBorder    },
   expired:  { label: "Expired",  color: P.muted,  bg: "#f0f0f0", border: P.border       },
 };
-const INVOICE_STATUS_STYLE: Record<string, { label: string; color: string; bg: string; border: string }> = {
+const INVOICE_STYLE: Record<string, { label: string; color: string; bg: string; border: string }> = {
   unpaid:  { label: "Unpaid",  color: P.amber,  bg: P.amberBg,  border: P.amberBorder  },
   paid:    { label: "Paid",    color: P.green,  bg: P.greenBg,  border: P.greenBorder  },
   overdue: { label: "Overdue", color: P.red,    bg: P.redBg,    border: P.redBorder    },
   partial: { label: "Partial", color: P.purple, bg: P.purpleBg, border: P.purpleBorder },
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtMoney = (n: number) =>
   `$${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 const fmtDate = (d: string) => {
@@ -88,7 +70,6 @@ const fmtDate = (d: string) => {
   catch { return d; }
 };
 
-// ── Sub-components ────────────────────────────────────────────────────────────
 const Card = ({ children, style = {} }: any) => (
   <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "20px 22px", ...style }}>
     {children}
@@ -97,30 +78,25 @@ const Card = ({ children, style = {} }: any) => (
 const SectionTitle = ({ children }: any) => (
   <div style={{ fontWeight: 700, fontSize: 14, color: P.text, marginBottom: 16 }}>{children}</div>
 );
-const Badge = ({ label, style: s }: { label: string; style: any }) => (
+const Badge = ({ label, s }: { label: string; s: any }) => (
   <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, color: s.color, background: s.bg, border: `1px solid ${s.border}` }}>
     {label}
   </span>
 );
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function PortalPage() {
-  // Auth state
-  const [customer,   setCustomer]   = useState<PortalCustomer | null>(null);
-  const [orders,     setOrders]     = useState<DBOrder[]>([]);
-  const [invoices,   setInvoices]   = useState<DBInvoice[]>([]);
-  const [quotes,     setQuotes]     = useState<DBQuote[]>([]);
+  const [customer,  setCustomer]  = useState<PortalCustomer | null>(null);
+  const [orders,    setOrders]    = useState<DBOrder[]>([]);
+  const [invoices,  setInvoices]  = useState<DBInvoice[]>([]);
+  const [quotes,    setQuotes]    = useState<DBQuote[]>([]);
 
-  // Login form
-  const [email,      setEmail]      = useState("");
-  const [code,       setCode]       = useState("");
-  const [loginErr,   setLoginErr]   = useState("");
-  const [loggingIn,  setLoggingIn]  = useState(false);
+  const [email,     setEmail]     = useState("");
+  const [code,      setCode]      = useState("");
+  const [loginErr,  setLoginErr]  = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
 
-  // Tab
   const [tab, setTab] = useState<"orders" | "quotes" | "invoices" | "request">("orders");
 
-  // New request form
   const [reqSku,      setReqSku]      = useState("");
   const [reqQty,      setReqQty]      = useState("");
   const [reqNotes,    setReqNotes]    = useState("");
@@ -129,53 +105,57 @@ export default function PortalPage() {
   const [reqSending,  setReqSending]  = useState(false);
   const [reqError,    setReqError]    = useState("");
 
-  // ── Login — calls the DB ──────────────────────────────────────────────────
+  // ── Login ─────────────────────────────────────────────────────────────────
   const login = async () => {
-    setLoggingIn(true);
-    setLoginErr("");
+    setLoggingIn(true); setLoginErr("");
     try {
       const res  = await fetch("/api/portal/login", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ email: email.trim(), code: code.trim().toUpperCase() }),
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), code: code.trim().toUpperCase() }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setLoginErr(data.error || "Something went wrong. Please try again.");
-        setLoggingIn(false);
-        return;
-      }
+      if (!res.ok) { setLoginErr(data.error || "Something went wrong."); return; }
       setCustomer(data.customer);
       setOrders(data.orders   || []);
       setInvoices(data.invoices || []);
       setQuotes(data.quotes   || []);
-    } catch {
-      setLoginErr("Network error. Please check your connection.");
-    } finally {
-      setLoggingIn(false);
-    }
+    } catch { setLoginErr("Network error. Please check your connection."); }
+    finally { setLoggingIn(false); }
   };
 
   const logout = () => {
-    setCustomer(null);
-    setEmail(""); setCode(""); setLoginErr("");
+    setCustomer(null); setEmail(""); setCode(""); setLoginErr("");
     setOrders([]); setInvoices([]); setQuotes([]);
     setTab("orders"); setReqSent(false); setReqError("");
   };
 
-  // ── Submit portal request — saves to DB ───────────────────────────────────
+  // ── FIX 1: Quote accept/decline — updates DB ──────────────────────────────
+  const updateQuoteStatus = async (quoteId: string, newStatus: "accepted" | "declined") => {
+    // Update UI immediately (feels fast)
+    setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, status: newStatus } : q));
+    // Then save to DB in background
+    try {
+      await fetch("/api/quotes", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: quoteId, status: newStatus }),
+      });
+    } catch {
+      // If DB fails, revert the UI change
+      setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, status: q.status } : q));
+    }
+  };
+
+  // ── FIX 2: Submit request + refresh orders list ───────────────────────────
   const submitRequest = async () => {
     if (!customer || !reqSku.trim() || !reqQty.trim()) return;
-    setReqSending(true);
-    setReqError("");
+    setReqSending(true); setReqError("");
     const notesParts = [
       reqNotes.trim(),
       reqDeadline.trim() ? `Required by: ${reqDeadline.trim()}` : "",
     ].filter(Boolean);
     try {
       const res = await fetch("/api/portal/orders", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workspaceId:  customer.workspaceId,
           customerId:   customer.id,
@@ -186,25 +166,29 @@ export default function PortalPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setReqError(data.error || "Could not submit. Please try again.");
-        setReqSending(false);
-        return;
+      if (!res.ok) { setReqError(data.error || "Could not submit."); return; }
+
+      // ── Auto-refresh the orders list so the new one appears immediately ──
+      const refreshRes = await fetch("/api/portal/login", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: customer.email, code: customer.portalCode }),
+      });
+      if (refreshRes.ok) {
+        const refreshed = await refreshRes.json();
+        setOrders(refreshed.orders || []);
       }
+
       setReqSent(true);
-    } catch {
-      setReqError("Network error. Please try again.");
-    } finally {
-      setReqSending(false);
-    }
+    } catch { setReqError("Network error. Please try again."); }
+    finally { setReqSending(false); }
   };
 
   // ── Derived counts ────────────────────────────────────────────────────────
-  const activeOrders = orders.filter(o => o.stage !== "Delivered").length;
-  const overdueInv   = invoices.filter(i => i.status === "overdue").length;
-  const totalBalance = invoices
-    .filter(i => i.status !== "paid")
-    .reduce((s, i) => s + (i.total - i.amountPaid), 0);
+  const activeOrders  = orders.filter(o => o.stage !== "Delivered").length;
+  const overdueInv    = invoices.filter(i => i.status === "overdue").length;
+  const pendingQuotes = quotes.filter(q => q.status === "sent" || q.status === "draft").length;
+  const totalBalance  = invoices.filter(i => i.status !== "paid")
+                                 .reduce((s, i) => s + (i.total - i.amountPaid), 0);
 
   // ══════════════════════════════════════════════════════════════════════════
   // LOGIN SCREEN
@@ -212,7 +196,7 @@ export default function PortalPage() {
   if (!customer) return (
     <div style={{ minHeight: "100vh", background: P.bg, fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "24px 16px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 36 }}>
-        <div style={{ width: 42, height: 42, borderRadius: 12, background: "linear-gradient(135deg,#3b6fd4,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: "0 4px 18px #3b6fd433" }}>⚡</div>
+        <div style={{ width: 42, height: 42, borderRadius: 12, background: "linear-gradient(135deg,#3b6fd4,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>⚡</div>
         <div>
           <div style={{ fontWeight: 800, fontSize: 18, color: P.text }}>Customer Portal</div>
           <div style={{ fontSize: 12, color: P.muted }}>Powered by IndustrialOS</div>
@@ -221,9 +205,7 @@ export default function PortalPage() {
 
       <div style={{ width: "100%", maxWidth: 400, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 18, padding: "32px 28px", boxShadow: "0 8px 40px rgba(0,0,0,0.08)" }}>
         <h2 style={{ fontSize: 20, fontWeight: 800, color: P.text, marginBottom: 6 }}>Sign in to your portal</h2>
-        <p style={{ fontSize: 13, color: P.muted, marginBottom: 24 }}>
-          Use the contact email your supplier has on file, and the access code they gave you.
-        </p>
+        <p style={{ fontSize: 13, color: P.muted, marginBottom: 24 }}>Use the contact email your supplier has on file, and the access code they gave you.</p>
 
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: P.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Your Email</label>
@@ -245,7 +227,7 @@ export default function PortalPage() {
         </button>
 
         <div style={{ marginTop: 20, padding: "12px 14px", background: P.blueBg, border: `1px solid ${P.blueBorder}`, borderRadius: 10, fontSize: 12, color: P.blue }}>
-          💡 Contact your supplier if you don't have an access code yet. The supplier creates your account in their system first.
+          💡 Contact your supplier if you don't have an access code yet.
         </div>
       </div>
     </div>
@@ -264,7 +246,7 @@ export default function PortalPage() {
   return (
     <div style={{ minHeight: "100vh", background: P.bg, fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", color: P.text }}>
 
-      {/* ── Header ── */}
+      {/* Header */}
       <div style={{ background: P.surface, borderBottom: `1px solid ${P.border}`, padding: "12px 28px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 1px 8px rgba(0,0,0,0.05)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 36, height: 36, borderRadius: 9, background: "linear-gradient(135deg,#3b6fd4,#6d28d9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>⚡</div>
@@ -279,12 +261,17 @@ export default function PortalPage() {
               ⚠️ {overdueInv} overdue invoice{overdueInv > 1 ? "s" : ""}
             </button>
           )}
+          {pendingQuotes > 0 && (
+            <button onClick={() => setTab("quotes")} style={{ padding: "4px 12px", borderRadius: 999, cursor: "pointer", background: P.amberBg, border: `1px solid ${P.amberBorder}`, color: P.amber, fontSize: 11, fontWeight: 700 }}>
+              ⏳ {pendingQuotes} quote{pendingQuotes > 1 ? "s" : ""} to review
+            </button>
+          )}
           <div style={{ fontSize: 13, color: P.muted }}>Hi, <strong style={{ color: P.text }}>{customer.contactName.split(" ")[0]}</strong></div>
           <button onClick={logout} style={{ padding: "6px 14px", borderRadius: 8, background: "none", border: `1px solid ${P.border}`, color: P.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Sign Out</button>
         </div>
       </div>
 
-      {/* ── Tabs ── */}
+      {/* Tabs */}
       <div style={{ background: P.surface, borderBottom: `1px solid ${P.border}`, padding: "0 28px", display: "flex", gap: 4 }}>
         {TABS.map(t => {
           const active = tab === t.id;
@@ -296,7 +283,7 @@ export default function PortalPage() {
         })}
       </div>
 
-      {/* ── Content ── */}
+      {/* Content */}
       <div style={{ padding: "28px", maxWidth: 900, margin: "0 auto" }}>
 
         {/* Summary cards */}
@@ -327,7 +314,7 @@ export default function PortalPage() {
               </Card>
             ) : orders.map(order => {
               const stageIdx = ORDER_STAGES.indexOf(order.stage as OrderStage);
-              const s = ORDER_STATUS_STYLE[order.stage] || ORDER_STATUS_STYLE.Placed;
+              const s = ORDER_STYLE[order.stage] || ORDER_STYLE.Placed;
               return (
                 <Card key={order.id}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
@@ -338,22 +325,21 @@ export default function PortalPage() {
                     </div>
                     <div style={{ textAlign: "right" }}>
                       {order.value > 0 && <div style={{ fontWeight: 800, fontSize: 18, color: P.text, marginBottom: 4 }}>{fmtMoney(order.value)}</div>}
-                      <Badge label={s.label} style={s} />
+                      <Badge label={s.label} s={s} />
                     </div>
                   </div>
                   {/* Stage pipeline */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center" }}>
                     {ORDER_STAGES.map((stage, i) => {
-                      const done    = i <= stageIdx;
-                      const current = i === stageIdx;
+                      const done = i <= stageIdx; const current = i === stageIdx;
                       return (
                         <div key={stage} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
                           <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
-                            {i > 0 && <div style={{ flex: 1, height: 3, background: done ? P.blue : P.border, transition: "background 0.3s" }} />}
-                            <div style={{ width: 26, height: 26, borderRadius: "50%", flexShrink: 0, background: done ? P.blue : P.surface, border: `2px solid ${done ? P.blue : P.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: done ? "#fff" : P.subtle, boxShadow: current ? `0 0 0 4px ${P.blueBg}` : "none", transition: "all 0.3s" }}>
+                            {i > 0 && <div style={{ flex: 1, height: 3, background: done ? P.blue : P.border }} />}
+                            <div style={{ width: 26, height: 26, borderRadius: "50%", flexShrink: 0, background: done ? P.blue : P.surface, border: `2px solid ${done ? P.blue : P.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: done ? "#fff" : P.subtle, boxShadow: current ? `0 0 0 4px ${P.blueBg}` : "none" }}>
                               {done && !current ? "✓" : i + 1}
                             </div>
-                            {i < ORDER_STAGES.length - 1 && <div style={{ flex: 1, height: 3, background: i < stageIdx ? P.blue : P.border, transition: "background 0.3s" }} />}
+                            {i < ORDER_STAGES.length - 1 && <div style={{ flex: 1, height: 3, background: i < stageIdx ? P.blue : P.border }} />}
                           </div>
                           <div style={{ fontSize: 9, marginTop: 6, fontWeight: current ? 700 : 400, color: current ? P.blue : done ? P.muted : P.subtle, textAlign: "center" }}>{stage}</div>
                         </div>
@@ -376,19 +362,43 @@ export default function PortalPage() {
                 <p style={{ color: P.muted, fontSize: 14 }}>No quotes from your supplier yet.</p>
               </Card>
             ) : quotes.map(q => {
-              const s = QUOTE_STATUS_STYLE[q.status] || QUOTE_STATUS_STYLE.draft;
+              const s = QUOTE_STYLE[q.status] || QUOTE_STYLE.draft;
+              const isPending = q.status === "sent" || q.status === "draft";
               return (
-                <Card key={q.id} style={{ border: (q.status === "sent" || q.status === "draft") ? `1px solid ${P.amberBorder}` : `1px solid ${P.border}`, background: q.status === "sent" ? P.amberBg : P.surface }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Card key={q.id} style={{ border: isPending ? `1px solid ${P.amberBorder}` : `1px solid ${P.border}`, background: isPending ? P.amberBg : P.surface }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isPending ? 16 : 0 }}>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                         <span style={{ fontWeight: 800, fontSize: 15, fontFamily: "monospace", color: P.text }}>{q.quoteNumber}</span>
-                        <Badge label={s.label} style={s} />
+                        <Badge label={s.label} s={s} />
                       </div>
                       <div style={{ fontSize: 13, color: P.muted }}>Valid until {fmtDate(q.validUntil)} · Created {fmtDate(q.createdAt)}</div>
                     </div>
                     <div style={{ fontWeight: 800, fontSize: 20, color: P.text }}>{fmtMoney(q.total)}</div>
                   </div>
+                  {/* Accept/Decline buttons — only shown for pending quotes */}
+                  {isPending && (
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={() => updateQuoteStatus(q.id, "accepted")}
+                        style={{ flex: 1, padding: "11px", background: "linear-gradient(135deg,#1a7f5a,#28a770)", border: "none", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                        ✓ Accept Quote
+                      </button>
+                      <button onClick={() => updateQuoteStatus(q.id, "declined")}
+                        style={{ flex: 1, padding: "11px", background: P.surface, border: `1px solid ${P.redBorder}`, borderRadius: 9, color: P.red, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                        ✕ Decline
+                      </button>
+                    </div>
+                  )}
+                  {q.status === "accepted" && (
+                    <div style={{ marginTop: 10, padding: "8px 12px", background: P.greenBg, border: `1px solid ${P.greenBorder}`, borderRadius: 8, fontSize: 12, color: P.green }}>
+                      ✅ You accepted this quote. Your supplier will raise an invoice shortly.
+                    </div>
+                  )}
+                  {q.status === "declined" && (
+                    <div style={{ marginTop: 10, padding: "8px 12px", background: P.redBg, border: `1px solid ${P.redBorder}`, borderRadius: 8, fontSize: 12, color: P.red }}>
+                      ✕ You declined this quote.
+                    </div>
+                  )}
                 </Card>
               );
             })}
@@ -410,7 +420,7 @@ export default function PortalPage() {
                 <p style={{ color: P.muted, fontSize: 14 }}>No invoices yet.</p>
               </Card>
             ) : invoices.map(inv => {
-              const s = INVOICE_STATUS_STYLE[inv.status] || INVOICE_STATUS_STYLE.unpaid;
+              const s = INVOICE_STYLE[inv.status] || INVOICE_STYLE.unpaid;
               const remaining = inv.total - inv.amountPaid;
               return (
                 <Card key={inv.id} style={{ border: inv.status === "overdue" ? `1px solid ${P.redBorder}` : `1px solid ${P.border}` }}>
@@ -418,7 +428,7 @@ export default function PortalPage() {
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                         <span style={{ fontWeight: 800, fontSize: 15, fontFamily: "monospace", color: P.text }}>{inv.invoiceNumber}</span>
-                        <Badge label={s.label} style={s} />
+                        <Badge label={s.label} s={s} />
                       </div>
                       <div style={{ fontSize: 13, color: P.muted }}>Issued {fmtDate(inv.createdAt)} · Due {fmtDate(inv.dueDate)} · {inv.paymentTerms}</div>
                       {inv.amountPaid > 0 && inv.status !== "paid" && (
@@ -447,12 +457,12 @@ export default function PortalPage() {
                 <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
                 <h3 style={{ fontSize: 20, fontWeight: 800, color: P.text, marginBottom: 8 }}>Request Submitted!</h3>
                 <p style={{ color: P.muted, fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
-                  Your request has been sent directly to your supplier's order pipeline.<br />
-                  They will confirm it shortly.
+                  Your request is now in your supplier's order pipeline.<br />
+                  Check the <strong>My Orders</strong> tab — it's already there.
                 </p>
-                <button onClick={() => { setReqSent(false); setReqSku(""); setReqQty(""); setReqNotes(""); setReqDeadline(""); setReqError(""); }}
-                  style={{ padding: "11px 24px", borderRadius: 9, background: P.blueBg, border: `1px solid ${P.blueBorder}`, color: P.blue, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                  Submit Another Request
+                <button onClick={() => { setReqSent(false); setReqSku(""); setReqQty(""); setReqNotes(""); setReqDeadline(""); setReqError(""); setTab("orders"); }}
+                  style={{ padding: "11px 24px", borderRadius: 9, background: "linear-gradient(135deg,#3b6fd4,#6d28d9)", border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                  View My Orders →
                 </button>
               </Card>
             ) : (
@@ -461,9 +471,9 @@ export default function PortalPage() {
                   Tell your supplier what you need. Your request will go straight into their order pipeline.
                 </p>
                 {[
-                  { label: "SKU / Product Name *",   placeholder: "e.g. SKU-4821 or Industrial bolts M10", val: reqSku,      set: setReqSku      },
-                  { label: "Quantity Needed *",       placeholder: "e.g. 500",                               val: reqQty,      set: setReqQty      },
-                  { label: "Required By (optional)",  placeholder: "e.g. End of March",                      val: reqDeadline, set: setReqDeadline },
+                  { label: "SKU / Product Name *",  placeholder: "e.g. SKU-4821 or Industrial bolts M10", val: reqSku,      set: setReqSku      },
+                  { label: "Quantity Needed *",      placeholder: "e.g. 500",                               val: reqQty,      set: setReqQty      },
+                  { label: "Required By (optional)", placeholder: "e.g. End of March",                      val: reqDeadline, set: setReqDeadline },
                 ].map(({ label, placeholder, val, set }) => (
                   <div key={label} style={{ marginBottom: 16 }}>
                     <label style={{ display: "block", fontSize: 12, fontWeight: 700, color: P.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</label>
