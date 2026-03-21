@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { Prisma } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 // POST — Register a new company + first admin user in one atomic transaction
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
 
     // ── Create Workspace + User in one transaction ────────────────────────
     // If either fails, both are rolled back — no orphaned records
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const workspace = await tx.workspace.create({
         data: {
           name:     companyName.trim(),
