@@ -112,7 +112,18 @@ export default function OnboardingPage() {
     // Save to localStorage (keeps app working as before)
     saveWorkspace(config);
 
-    // Also save to real database
+    // ── If user came from /register they already have a workspace in DB.
+    // Don't create a second one — just go to the dashboard.
+    const existingWsId = typeof window !== "undefined"
+      ? localStorage.getItem("workspaceDbId")
+      : null;
+
+    if (existingWsId) {
+      router.push("/");
+      return;
+    }
+
+    // Demo user / old flow — create workspace in DB now
     try {
       const wsRes = await fetch("/api/workspaces", {
         method: "POST",
@@ -125,7 +136,7 @@ export default function OnboardingPage() {
       if (!wsRes.ok) {
         const errData = await wsRes.json().catch(() => ({}));
         setSaveError("DB error: " + (errData.error ?? wsRes.statusText));
-        return; // stop here — don't go to dashboard
+        return;
       }
       const wsData = await wsRes.json();
       if (wsData.id) {
