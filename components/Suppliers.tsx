@@ -550,7 +550,7 @@ export default function Suppliers() {
                               Next <ChevronRight size={11}/>
                             </button>
                           )}
-                          {canCan && (
+                          {canCan && !isViewer && (
                             <button onClick={()=>cancelPO(po.id)} style={{ padding:"5px 10px", borderRadius:7, background:C.redBg, border:`1px solid ${C.redBorder}`, color:C.red, fontSize:11, fontWeight:700, cursor:"pointer" }}>
                               Cancel
                             </button>
