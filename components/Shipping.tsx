@@ -358,7 +358,7 @@ export default function Shipping() {
           <p style={{ color:C.muted, fontSize:14, marginBottom:24 }}>
             {filter === "all" ? "Create your first shipment to get started." : `No shipments with status "${filter}".`}
           </p>
-          {filter === "all" && (
+          {filter === "all" && !isViewer && (
             <button onClick={()=>setShowNew(true)} style={{ padding:"11px 24px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
               Create First Shipment
             </button>
