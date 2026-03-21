@@ -1,4 +1,3 @@
-
 "use client";
 // components/Invoicing.tsx
 // Invoicing & Payments module.
@@ -486,12 +485,14 @@ export default function Invoicing() {
           <div style={{ fontSize: 48, marginBottom: 16 }}>🧾</div>
           <h3 style={{ fontSize: 18, fontWeight: 800, color: C.text, marginBottom: 8 }}>No invoices yet</h3>
           <p style={{ color: C.muted, fontSize: 14, marginBottom: 24 }}>Create your first invoice to start tracking payments.</p>
-          <button
-            onClick={() => { resetForm(); setView("create"); }}
-            style={{ padding: "11px 24px", borderRadius: 10, background: `linear-gradient(135deg,${C.blue},${C.purple})`, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
-          >
-            Create First Invoice
-          </button>
+          {!isViewer && (
+            <button
+              onClick={() => { resetForm(); setView("create"); }}
+              style={{ padding: "11px 24px", borderRadius: 10, background: `linear-gradient(135deg,${C.blue},${C.purple})`, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            >
+              Create First Invoice
+            </button>
+          )}
         </Card>
       ) : (
         <Card style={{ padding: 0, overflow: "hidden" }}>
