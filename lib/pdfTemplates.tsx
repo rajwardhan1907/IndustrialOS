@@ -208,7 +208,7 @@ export function InvoicePDF({ data }: { data: any }) {
         {/* Header */}
         <View style={S.header}>
           <View>
-            <Text style={S.logo}>⚡ IndustrialOS</Text>
+            <Text style={S.logo}>IndustrialOS</Text>
             <Text style={S.logoSub}>Enterprise B2B Platform</Text>
           </View>
           <View>
@@ -293,7 +293,7 @@ export function InvoicePDF({ data }: { data: any }) {
 
         {/* Footer */}
         <View style={S.footer} fixed>
-          <Text style={S.footerText}>IndustrialOS — Enterprise B2B Platform</Text>
+          <Text style={S.footerText}>IndustrialOS - Enterprise B2B Platform</Text>
           <Text style={S.footerText}>{data.invoiceNumber} · Generated {fmtDate(new Date().toISOString())}</Text>
         </View>
 
