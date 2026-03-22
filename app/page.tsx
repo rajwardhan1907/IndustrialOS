@@ -23,11 +23,12 @@ import Analytics     from "@/components/Analytics";
 import Settings      from "@/components/Settings";
 import Suppliers     from "@/components/Suppliers";
 import Shipping      from "@/components/Shipping";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import LoadingSpinner, { DashboardSkeleton } from "@/components/LoadingSpinner";
 
 import { C } from "@/lib/utils";
 import { loadWorkspace, saveWorkspace, WorkspaceConfig, ModuleId, CustomTab } from "@/lib/workspace";
 
-// ── Module tab definitions ────────────────────────────────────────────────────
 const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
   dashboard: { label: "Dashboard",     icon: LayoutDashboard },
   orders:    { label: "Orders",        icon: ShoppingCart    },
@@ -43,7 +44,6 @@ const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
   health:    { label: "System Health", icon: Heart           },
 };
 
-// ── Coming soon placeholder ───────────────────────────────────────────────────
 function ComingSoon({ label }: { label: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "80px 24px", textAlign: "center" }}>
@@ -56,7 +56,6 @@ function ComingSoon({ label }: { label: string }) {
   );
 }
 
-// ── Custom tab content ────────────────────────────────────────────────────────
 function CustomTabContent({ tab }: { tab: CustomTab }) {
   if (tab.type === "link" && tab.url) {
     return (
@@ -74,7 +73,6 @@ function CustomTabContent({ tab }: { tab: CustomTab }) {
   return <ComingSoon label={tab.label} />;
 }
 
-// ── Add Tab modal ─────────────────────────────────────────────────────────────
 function AddTabModal({ onAdd, onClose }: {
   onAdd: (label: string, emoji: string, type: CustomTab["type"], url?: string) => void;
   onClose: () => void;
@@ -98,7 +96,6 @@ function AddTabModal({ onAdd, onClose }: {
           <h2 style={{ fontSize: 17, fontWeight: 800, color: C.text }}>Add Custom Tab</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><X size={18} /></button>
         </div>
-
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Icon + Tab Name</label>
           <div style={{ display: "grid", gridTemplateColumns: "48px 1fr", gap: 8 }}>
@@ -108,7 +105,6 @@ function AddTabModal({ onAdd, onClose }: {
               style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none" }} />
           </div>
         </div>
-
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>Tab Type</label>
           <div style={{ display: "flex", gap: 6 }}>
@@ -119,7 +115,6 @@ function AddTabModal({ onAdd, onClose }: {
             ))}
           </div>
         </div>
-
         {type === "link" && (
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>URL</label>
@@ -127,7 +122,6 @@ function AddTabModal({ onAdd, onClose }: {
               style={{ width: "100%", padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
           </div>
         )}
-
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20 }}>
           <button onClick={onClose} style={{ padding: "9px 18px", background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
           <button
@@ -142,7 +136,6 @@ function AddTabModal({ onAdd, onClose }: {
   );
 }
 
-// ── Main app ──────────────────────────────────────────────────────────────────
 export default function App() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -150,23 +143,6 @@ export default function App() {
   const [tab,        setTab]        = useState("dashboard");
   const [loading,    setLoading]    = useState(true);
   const [showAddTab, setShowAddTab] = useState(false);
-
-  useEffect(() => {
-    const ws = loadWorkspace();
-    if (!ws || !ws.onboardingDone) { router.push("/onboarding"); return; }
-    setWorkspace(ws);
-    setLoading(false);
-  }, []);
-
-  // ── Sync workspaceId from session → localStorage ──────────────────────────
-  // Session is the authoritative source (set from DB on login).
-  // Writing to localStorage means all lib functions (orders, inventory, etc.)
-  // keep working without needing to be rewritten to use useSession().
-  useEffect(() => {
-    if (session?.user?.workspaceId) {
-      localStorage.setItem("workspaceDbId", session.user.workspaceId);
-    }
-  }, [session]);
 
   // ── Dashboard real data ────────────────────────────────────────────────────
   const [met, setMet] = useState({
@@ -177,28 +153,41 @@ export default function App() {
   const [alerts, setAlerts] = useState<any[]>([]);
 
   useEffect(() => {
+    const ws = loadWorkspace();
+    if (!ws || !ws.onboardingDone) { router.push("/onboarding"); return; }
+    setWorkspace(ws);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (session?.user?.workspaceId) {
+      localStorage.setItem("workspaceDbId", session.user.workspaceId);
+    }
+  }, [session]);
+
+  useEffect(() => {
     const wsId = session?.user?.workspaceId
-      || (typeof window !== 'undefined' ? localStorage.getItem('workspaceDbId') : null)
-    if (!wsId) return
+      || (typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null);
+    if (!wsId) return;
 
     const fetchDashboard = async () => {
       try {
-        const res  = await fetch(`/api/dashboard?workspaceId=${wsId}`)
-        if (!res.ok) return
-        const data = await res.json()
-        setMet(data.met)
-        setChart(data.chart)
-        setAlerts(data.alerts)
+        const res  = await fetch(`/api/dashboard?workspaceId=${wsId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setMet(data.met);
+        setChart(data.chart);
+        setAlerts(data.alerts);
       } catch {}
-    }
+    };
 
-    fetchDashboard()
-    const interval = setInterval(fetchDashboard, 30000) // refresh every 30s
-    return () => clearInterval(interval)
-  }, [session])
+    fetchDashboard();
+    const interval = setInterval(fetchDashboard, 30000);
+    return () => clearInterval(interval);
+  }, [session]);
 
-  const [pipe,  setPipe] = useState<any>(null);
-  const [crm,   setCrm]  = useState({
+  const [pipe, setPipe] = useState<any>(null);
+  const [crm,  setCrm]  = useState({
     salesforce: "disconnected",
     hubspot:    "disconnected",
     zoho:       "disconnected",
@@ -212,13 +201,9 @@ export default function App() {
     { name: "File Storage",   status: "unknown", lat: 0, up: 0 },
   ]);
 
-  // ── Add custom tab ─────────────────────────────────────────────────────────
   const addCustomTab = (label: string, icon: string, type: CustomTab["type"], url?: string) => {
     if (!workspace) return;
-    const newTab: CustomTab = {
-      id:    Math.random().toString(36).slice(2, 9),
-      label, icon, type, url,
-    };
+    const newTab: CustomTab = { id: Math.random().toString(36).slice(2, 9), label, icon, type, url };
     const updated = { ...workspace, customTabs: [...workspace.customTabs, newTab] };
     saveWorkspace(updated);
     setWorkspace(updated);
@@ -227,55 +212,104 @@ export default function App() {
 
   if (loading || !workspace) {
     return (
-      <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 32, marginBottom: 12 }}>⚡</div>
-          <div style={{ color: C.muted, fontSize: 14 }}>Loading your workspace…</div>
+      <div style={{ minHeight: "100vh", background: C.bg }}>
+        <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "10px 24px", height: 56 }} />
+        <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 24px", height: 44 }} />
+        <div style={{ padding: "24px", maxWidth: 1200, margin: "0 auto" }}>
+          <DashboardSkeleton />
         </div>
       </div>
     );
   }
 
-  // ── Build tab list ─────────────────────────────────────────────────────────
   const moduleTabs = workspace.modules.map(id => ({
-    id,
-    label:  MODULE_TABS[id]?.label || id,
-    icon:   MODULE_TABS[id]?.icon  || null,
-    emoji:  undefined as string | undefined,
-    custom: false,
+    id, label: MODULE_TABS[id]?.label || id, icon: MODULE_TABS[id]?.icon || null,
+    emoji: undefined as string | undefined, custom: false,
   }));
 
   const customTabList = workspace.customTabs.map(ct => ({
-    id:     ct.id,
-    label:  ct.label,
-    icon:   null as any,
-    emoji:  ct.icon,
-    custom: true,
+    id: ct.id, label: ct.label, icon: null as any,
+    emoji: ct.icon, custom: true,
   }));
 
   const allTabs = [...moduleTabs, ...customTabList];
 
-  // ── Render active tab content ──────────────────────────────────────────────
   const renderContent = () => {
     if (tab === "settings") {
-      return <Settings workspace={workspace} onUpdate={ws => { saveWorkspace(ws); setWorkspace(ws); }} />;
+      return (
+        <ErrorBoundary label="Settings failed to load">
+          <Settings workspace={workspace} onUpdate={ws => { saveWorkspace(ws); setWorkspace(ws); }} />
+        </ErrorBoundary>
+      );
     }
     switch (tab) {
-      case "dashboard": return <Dashboard    met={met}   chart={chart} alerts={alerts} />;
-      case "pipeline":  return <Pipeline     pipe={pipe} setPipe={setPipe} />;
-      case "orders":    return <OrderKanban />;
-      case "inventory": return <InventorySync />;
-      case "crm":       return <CRMPanel     crm={crm}   setCrm={setCrm} />;
-      case "health":    return <SystemHealth health={health} met={met} alerts={alerts} />;
-      case "quotes":    return <Quotes />;
-      case "invoicing": return <Invoicing />;
-      case "customers": return <Customers />;
-      case "analytics": return <Analytics />;
-      case "suppliers": return <Suppliers />;
-      case "shipping":  return <Shipping />;
+      case "dashboard": return (
+        <ErrorBoundary label="Dashboard failed to load">
+          <Dashboard met={met} chart={chart} alerts={alerts} />
+        </ErrorBoundary>
+      );
+      case "pipeline":  return (
+        <ErrorBoundary label="Pipeline failed to load">
+          <Pipeline pipe={pipe} setPipe={setPipe} />
+        </ErrorBoundary>
+      );
+      case "orders":    return (
+        <ErrorBoundary label="Orders failed to load">
+          <OrderKanban />
+        </ErrorBoundary>
+      );
+      case "inventory": return (
+        <ErrorBoundary label="Inventory failed to load">
+          <InventorySync />
+        </ErrorBoundary>
+      );
+      case "crm":       return (
+        <ErrorBoundary label="CRM failed to load">
+          <CRMPanel crm={crm} setCrm={setCrm} />
+        </ErrorBoundary>
+      );
+      case "health":    return (
+        <ErrorBoundary label="System Health failed to load">
+          <SystemHealth health={health} met={met} alerts={alerts} />
+        </ErrorBoundary>
+      );
+      case "quotes":    return (
+        <ErrorBoundary label="Quotes failed to load">
+          <Quotes />
+        </ErrorBoundary>
+      );
+      case "invoicing": return (
+        <ErrorBoundary label="Invoicing failed to load">
+          <Invoicing />
+        </ErrorBoundary>
+      );
+      case "customers": return (
+        <ErrorBoundary label="Customers failed to load">
+          <Customers />
+        </ErrorBoundary>
+      );
+      case "analytics": return (
+        <ErrorBoundary label="Analytics failed to load">
+          <Analytics />
+        </ErrorBoundary>
+      );
+      case "suppliers": return (
+        <ErrorBoundary label="Suppliers failed to load">
+          <Suppliers />
+        </ErrorBoundary>
+      );
+      case "shipping":  return (
+        <ErrorBoundary label="Shipping failed to load">
+          <Shipping />
+        </ErrorBoundary>
+      );
     }
     const ct = workspace.customTabs.find(c => c.id === tab);
-    if (ct) return <CustomTabContent tab={ct} />;
+    if (ct) return (
+      <ErrorBoundary label={`${ct.label} failed to load`}>
+        <CustomTabContent tab={ct} />
+      </ErrorBoundary>
+    );
     return <ComingSoon label={tab} />;
   };
 
@@ -293,7 +327,6 @@ export default function App() {
             <div style={{ fontSize: 11, color: C.subtle }}>IndustrialOS · {workspace.modules.length + workspace.customTabs.length} modules active</div>
           </div>
         </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button
             onClick={() => window.open("/portal", "_blank")}
@@ -324,14 +357,11 @@ export default function App() {
               color: active ? C.blue : C.muted, background: "none", cursor: "pointer",
               whiteSpace: "nowrap", transition: "color .15s", marginBottom: -1, flexShrink: 0,
             }}>
-              {t.emoji
-                ? <span style={{ fontSize: 13 }}>{t.emoji}</span>
-                : Icon ? <Icon size={13} /> : null}
+              {t.emoji ? <span style={{ fontSize: 13 }}>{t.emoji}</span> : Icon ? <Icon size={13} /> : null}
               {t.label}
             </button>
           );
         })}
-
         <button onClick={() => setShowAddTab(true)} style={{
           display: "flex", alignItems: "center", gap: 4,
           padding: "12px 14px", fontSize: 12, fontWeight: 600,
