@@ -233,29 +233,11 @@ export default function Quotes() {
     setPrompt(""); setDraft(null); setThinking(false); setAiError("");
   };
 
-  const downloadPDF = async (inv: any) => {
-    try {
-      const res = await fetch("/api/pdf", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ type: "invoice", data: inv }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        alert("PDF error: " + (err.detail || err.error || "unknown"));
-        return;
-      }
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = `${inv.invoiceNumber}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) {
-      alert("PDF error: " + e.message);
-    }
+  const downloadPDF = async (q: Quote) => {
+    const { generateQuotePDF } = await import('@/lib/generatePDF')
+    generateQuotePDF(q)
   };
+
   // ── LIST VIEW ──────────────────────────────────────────────────────────────
   if (view === "list") return (
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
