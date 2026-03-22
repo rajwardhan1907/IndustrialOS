@@ -1,9 +1,5 @@
-// app/api/pdf/route.ts
-// Generates a PDF for an invoice or quote and returns it as a downloadable file.
-// Uses @react-pdf/renderer on the server side.
-
 import { NextRequest, NextResponse } from 'next/server'
-import { renderToBuffer } from '@react-pdf/renderer'
+import ReactPDF from '@react-pdf/renderer'
 import { InvoicePDF, QuotePDF } from '@/lib/pdfTemplates'
 import React from 'react'
 
@@ -28,9 +24,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'type must be invoice or quote' }, { status: 400 })
     }
 
-    const buffer = await renderToBuffer(element)
-    const uint8 = new Uint8Array(buffer)
-    
+    const buffer = await ReactPDF.renderToBuffer(element)
+    const uint8  = new Uint8Array(buffer)
+
     const filename = type === 'invoice'
       ? `${data.invoiceNumber || 'invoice'}.pdf`
       : `${data.quoteNumber   || 'quote'}.pdf`
@@ -43,7 +39,10 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (err: any) {
-    console.error('PDF generation error:', err)
-    return NextResponse.json({ error: 'Failed to generate PDF' }, { status: 500 })
+    console.error('PDF generation error:', err?.message || err)
+    return NextResponse.json(
+      { error: 'Failed to generate PDF', detail: err?.message || 'unknown' },
+      { status: 500 }
+    )
   }
 }
