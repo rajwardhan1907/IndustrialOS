@@ -7,6 +7,8 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { InvoicePDF, QuotePDF } from '@/lib/pdfTemplates'
 import React from 'react'
 
+export const runtime = 'nodejs'
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
