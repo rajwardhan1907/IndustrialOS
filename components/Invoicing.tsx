@@ -329,6 +329,25 @@ export default function Invoicing() {
   };
 
   // ── Save new invoice ──────────────────────────────────────────────────────
+  const downloadPDF = async (inv: Invoice) => {
+  try {
+    const res = await fetch('/api/pdf', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ type: 'invoice', data: inv }),
+    })
+    if (!res.ok) { alert('Failed to generate PDF'); return }
+    const blob = await res.blob()
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href     = url
+    a.download = `${inv.invoiceNumber}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    alert('Failed to generate PDF')
+  }
+}
   const saveInvoice = () => {
     if (!formCustomer.trim())                    { setFormError("Customer name is required."); return; }
     if (formItems.some(it => !it.desc.trim()))   { setFormError("All line items need a description."); return; }
