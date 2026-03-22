@@ -168,12 +168,35 @@ export default function App() {
     }
   }, [session]);
 
-  // ── State only for components that still need it passed in ─────────────────
-  const [met] = useState({
+  // ── Dashboard real data ────────────────────────────────────────────────────
+  const [met, setMet] = useState({
     opm: 0, skus: 0, sync: 0, activeOrders: 0,
     rev: 0, latency: 0, queue: 0, conflicts: 0,
   });
-  const [chart] = useState<any[]>([]);
+  const [chart,  setChart]  = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const wsId = session?.user?.workspaceId
+      || (typeof window !== 'undefined' ? localStorage.getItem('workspaceDbId') : null)
+    if (!wsId) return
+
+    const fetchDashboard = async () => {
+      try {
+        const res  = await fetch(`/api/dashboard?workspaceId=${wsId}`)
+        if (!res.ok) return
+        const data = await res.json()
+        setMet(data.met)
+        setChart(data.chart)
+        setAlerts(data.alerts)
+      } catch {}
+    }
+
+    fetchDashboard()
+    const interval = setInterval(fetchDashboard, 30000) // refresh every 30s
+    return () => clearInterval(interval)
+  }, [session])
+
   const [pipe,  setPipe] = useState<any>(null);
   const [crm,   setCrm]  = useState({
     salesforce: "disconnected",
@@ -188,7 +211,6 @@ export default function App() {
     { name: "Search Index",   status: "unknown", lat: 0, up: 0 },
     { name: "File Storage",   status: "unknown", lat: 0, up: 0 },
   ]);
-  const alerts: any[] = [];
 
   // ── Add custom tab ─────────────────────────────────────────────────────────
   const addCustomTab = (label: string, icon: string, type: CustomTab["type"], url?: string) => {
