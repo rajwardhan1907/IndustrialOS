@@ -27,6 +27,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import LoadingSpinner, { DashboardSkeleton } from "@/components/LoadingSpinner";
 
 import { C } from "@/lib/utils";
+import { useIsMobile } from "@/lib/useIsMobile";
 import { loadWorkspace, saveWorkspace, WorkspaceConfig, ModuleId, CustomTab } from "@/lib/workspace";
 
 const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
@@ -139,6 +140,7 @@ function AddTabModal({ onAdd, onClose }: {
 export default function App() {
   const router = useRouter();
   const { data: session } = useSession();
+  const isMobile = useIsMobile();
   const [workspace,  setWorkspace]  = useState<WorkspaceConfig | null>(null);
   const [tab,        setTab]        = useState("dashboard");
   const [loading,    setLoading]    = useState(true);
@@ -215,7 +217,7 @@ export default function App() {
       <div style={{ minHeight: "100vh", background: C.bg }}>
         <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "10px 24px", height: 56 }} />
         <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 24px", height: 44 }} />
-        <div style={{ padding: "24px", maxWidth: 1200, margin: "0 auto" }}>
+        <div className="main-content" style={{ padding: "24px", maxWidth: 1200, margin: "0 auto" }}>
           <DashboardSkeleton />
         </div>
       </div>
@@ -317,7 +319,7 @@ export default function App() {
     <div style={{ fontFamily: "'DM Sans','Segoe UI',system-ui,sans-serif", minHeight: "100vh", background: C.bg, color: C.text }}>
 
       {/* ── HEADER ── */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "10px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" }}>
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: isMobile ? "10px 14px" : "10px 24px", display: "flex", alignItems: "center", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 50, boxShadow: "0 1px 6px rgba(0,0,0,0.04)", flexWrap: "wrap", gap: 8 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 36, height: 36, background: "linear-gradient(135deg,#5b8de8,#9c6fdd)", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(91,141,232,0.3)" }}>
             <Zap size={16} color="#fff" />
@@ -328,11 +330,13 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {!isMobile && (
           <button
             onClick={() => window.open("/portal", "_blank")}
             style={{ padding: "7px 14px", background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 8, color: C.blue, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             Customer Portal ↗
           </button>
+          )}
           <button style={{ width: 34, height: 34, background: "none", border: `1px solid ${C.border}`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
             <Bell size={15} color={C.muted} />
           </button>
@@ -345,7 +349,7 @@ export default function App() {
       </div>
 
       {/* ── TABS ── */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 24px", display: "flex", overflowX: "auto", scrollbarWidth: "none" }}>
+      <div className="tab-nav" style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: isMobile ? "0 8px" : "0 24px", display: "flex", overflowX: "auto" }}>
         {allTabs.map(t => {
           const active = tab === t.id;
           const Icon   = t.icon;
