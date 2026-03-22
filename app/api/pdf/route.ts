@@ -27,12 +27,13 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = await renderToBuffer(element)
-
+    const uint8 = new Uint8Array(buffer)
+    
     const filename = type === 'invoice'
       ? `${data.invoiceNumber || 'invoice'}.pdf`
       : `${data.quoteNumber   || 'quote'}.pdf`
 
-    return new NextResponse(buffer, {
+    return new NextResponse(uint8, {
       status: 200,
       headers: {
         'Content-Type':        'application/pdf',
