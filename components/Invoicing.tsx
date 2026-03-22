@@ -311,6 +311,27 @@ export default function Invoicing() {
     generateInvoicePDF(inv)
   };
 
+  const [emailTo,      setEmailTo]      = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailMsg,     setEmailMsg]     = useState("");
+  const [showEmail,    setShowEmail]    = useState(false);
+
+  const sendEmail = async (inv: Invoice) => {
+    if (!emailTo.trim()) { setEmailMsg("Enter an email address."); return; }
+    setEmailSending(true); setEmailMsg("");
+    try {
+      const res  = await fetch("/api/email", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ type: "invoice", to: emailTo.trim(), data: inv }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEmailMsg(data.error || "Failed to send."); }
+      else         { setEmailMsg("Email sent successfully!"); setEmailTo(""); setShowEmail(false); }
+    } catch { setEmailMsg("Network error. Please try again."); }
+    finally { setEmailSending(false); }
+  };
+
   const saveInvoice = () => {
     if (!formCustomer.trim())                    { setFormError("Customer name is required."); return; }
     if (formItems.some(it => !it.desc.trim()))   { setFormError("All line items need a description."); return; }
@@ -603,9 +624,12 @@ export default function Invoicing() {
               Issued {fmtDate(selected.issueDate)} · Customer: <strong style={{ color: C.text }}>{selected.customer}</strong>
             </p>
           </div>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button onClick={() => downloadPDF(selected)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: C.blueBg, border: `1px solid ${C.blueBorder}`, color: C.blue, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
               &#8595; PDF
+            </button>
+            <button onClick={() => setShowEmail(v => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: C.purpleBg, border: `1px solid ${C.purpleBorder}`, color: C.purple, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              &#9993; Email
             </button>
             {!isViewer && (
               <button onClick={() => deleteInvoice(selected.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: C.redBg, border: `1px solid ${C.redBorder}`, color: C.red, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
@@ -614,6 +638,22 @@ export default function Invoicing() {
             )}
           </div>
         </div>
+
+        {showEmail && (
+          <div style={{ padding: "14px 16px", background: C.purpleBg, border: `1px solid ${C.purpleBorder}`, borderRadius: 10, display: "flex", gap: 10, alignItems: "center" }}>
+            <input
+              value={emailTo}
+              onChange={e => { setEmailTo(e.target.value); setEmailMsg(""); }}
+              placeholder="customer@email.com"
+              type="email"
+              style={{ flex: 1, padding: "8px 12px", background: C.surface, border: `1px solid ${C.purpleBorder}`, borderRadius: 8, fontSize: 13, color: C.text, outline: "none" }}
+            />
+            <button onClick={() => sendEmail(selected)} disabled={emailSending} style={{ padding: "8px 18px", borderRadius: 8, background: C.purple, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: emailSending ? "not-allowed" : "pointer", opacity: emailSending ? 0.7 : 1 }}>
+              {emailSending ? "Sending..." : "Send"}
+            </button>
+            {emailMsg && <span style={{ fontSize: 12, color: emailMsg.includes("success") ? C.green : C.red, fontWeight: 600 }}>{emailMsg}</span>}
+          </div>
+        )}
 
         {selected.status === "overdue" && (
           <div style={{ padding: "12px 16px", background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 10, fontSize: 13, color: C.red, display: "flex", alignItems: "center", gap: 10 }}>
