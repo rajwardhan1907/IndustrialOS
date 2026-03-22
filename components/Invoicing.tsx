@@ -689,6 +689,9 @@ export default function Invoicing() {
           <button onClick={() => deleteInvoice(selected.id)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 8, background: C.redBg, border: `1px solid ${C.redBorder}`, color: C.red, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             <Trash2 size={13} /> Delete
           </button>
+          <button onClick={() => downloadPDF(selected)} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", borderRadius:8, background:C.blueBg, border:`1px solid ${C.blueBorder}`, color:C.blue, fontSize:12, fontWeight:600, cursor:"pointer" }}>
+            ↓ PDF
+          </button>
           )}
         </div>
 
