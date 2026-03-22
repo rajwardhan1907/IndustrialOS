@@ -306,28 +306,9 @@ export default function Invoicing() {
     setFormItems([{ id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 }]);
   };
 
-  const downloadPDF = async (inv: any) => {
-    try {
-      const res = await fetch("/api/pdf", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ type: "invoice", data: inv }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        alert("PDF error: " + (err.detail || err.error || "unknown"));
-        return;
-      }
-      const blob = await res.blob();
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement("a");
-      a.href     = url;
-      a.download = `${inv.invoiceNumber}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e: any) {
-      alert("PDF error: " + e.message);
-    }
+  const downloadPDF = async (inv: Invoice) => {
+    const { generateInvoicePDF } = await import('@/lib/generatePDF')
+    generateInvoicePDF(inv)
   };
 
   const saveInvoice = () => {
