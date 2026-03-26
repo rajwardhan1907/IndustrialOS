@@ -1,9 +1,10 @@
 "use client";
 
+import NotificationBell from "@/components/NotificationBell";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Zap, Bell, Plus, Settings as SettingsIcon, X } from "lucide-react";
+import { Zap, Plus, Settings as SettingsIcon, X } from "lucide-react";
 import {
   LayoutDashboard, ShoppingCart, Package, FileText,
   Receipt, Truck, Users, Factory, BarChart2,
@@ -337,9 +338,10 @@ export default function App() {
             Customer Portal ↗
           </button>
           )}
-          <button style={{ width: 34, height: 34, background: "none", border: `1px solid ${C.border}`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-            <Bell size={15} color={C.muted} />
-          </button>
+          <NotificationBell
+            onNavigate={(tab) => setTab(tab)}
+            workspaceId={session?.user?.workspaceId}
+          />
           <button
             onClick={() => setTab("settings")}
             style={{ width: 34, height: 34, background: tab === "settings" ? C.blueBg : "none", border: `1px solid ${tab === "settings" ? C.blueBorder : C.border}`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
