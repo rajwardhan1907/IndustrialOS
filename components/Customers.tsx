@@ -2,6 +2,7 @@
 // components/Customers.tsx
 // Customer accounts module — profiles, contacts, order history, credit limits, balances.
 
+import { getHealthScore, HealthGrade } from "@/lib/customerHealth";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { C } from "@/lib/utils";
@@ -315,18 +316,48 @@ function CustomerDetail({ cust, onClose, onStatusChange, isViewer }: {
         </div>
 
         {/* Stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 10, marginBottom: 20 }}>
-          {[
-            { label: "Total Spend",    val: fmtMoney(cust.totalSpend), bg: C.greenBg,  color: C.green, border: C.greenBorder  },
-            { label: "Balance Due",    val: fmtMoney(cust.balance),    bg: cust.balance > 0 ? C.amberBg : C.greenBg,  color: cust.balance > 0 ? C.amber : C.green, border: cust.balance > 0 ? C.amberBorder : C.greenBorder },
-            { label: "Credit Limit",   val: fmtMoney(cust.creditLimit),bg: C.blueBg,   color: C.blue,  border: C.blueBorder   },
-          ].map(({ label, val, bg, color, border }) => (
-            <div key={label} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: "12px 14px" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
-              <div style={{ fontSize: 16, fontWeight: 800, color }}>{val}</div>
-            </div>
-          ))}
-        </div>
+        {(() => {
+          const h = getHealthScore({ status: cust.status, balance: cust.balance, creditLimit: cust.creditLimit, totalSpend: cust.totalSpend, orders: cust.orders });
+          return (
+            <>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 14 }}>
+                {[
+                  { label: "Total Spend",  val: fmtMoney(cust.totalSpend), color: "#2e7d5e", bg: "#edf6f1", border: "#b8dece" },
+                  { label: "Balance Due",  val: fmtMoney(cust.balance),    color: cust.balance > 0 ? C.amber : "#2e7d5e", bg: cust.balance > 0 ? C.amberBg : "#edf6f1", border: cust.balance > 0 ? C.amberBorder : "#b8dece" },
+                  { label: "Credit Limit", val: fmtMoney(cust.creditLimit),color: C.blue,    bg: C.blueBg,  border: C.blueBorder  },
+                  { label: "Health Score", val: `${h.grade} — ${h.label}`, color: h.color,   bg: h.bg,      border: h.border       },
+                ].map(({ label, val, color, bg, border }) => (
+                  <div key={label} style={{ background: bg, border: `1px solid ${border}`, borderRadius: 10, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, color, textTransform: "uppercase" as const, letterSpacing: "0.05em", marginBottom: 4 }}>{label}</div>
+                    <div style={{ fontSize: label === "Health Score" ? 14 : 16, fontWeight: 800, color }}>{val}</div>
+                    {label === "Health Score" && (
+                      <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>{h.reasons[0]}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {/* Health score bar */}
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted, marginBottom: 4 }}>
+                  <span>Health score</span>
+                  <span style={{ fontWeight: 700, color: h.color }}>{h.score} / 100</span>
+                </div>
+                <div style={{ height: 6, background: C.bg, borderRadius: 999, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${h.score}%`, borderRadius: 999, background: h.color, transition: "width 0.4s" }} />
+                </div>
+                {h.reasons.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 4, marginTop: 6 }}>
+                    {h.reasons.map((r, i) => (
+                      <span key={i} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 6, background: h.bg, color: h.color, border: `1px solid ${h.border}`, fontWeight: 600 }}>
+                        {r}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          );
+        })()}
 
         {/* Credit bar */}
         {cust.creditLimit > 0 && (
@@ -414,6 +445,7 @@ export default function Customers() {
   const [filter,    setFilter]    = useState<CustStatus | "all">("all");
   const [showNew,   setShowNew]   = useState(false);
   const [selected,  setSelected]  = useState<Customer | null>(null);
+  const [healthFilter, setHealthFilter] = useState<HealthGrade | "all">("all");
 
   // Load localStorage immediately, then refresh from DB in background
   useEffect(() => {
@@ -441,7 +473,9 @@ export default function Customers() {
   const visible = customers.filter(c => {
     const matchFilter = filter === "all" || c.status === filter;
     const matchSearch = !search || c.company.toLowerCase().includes(search.toLowerCase()) || c.contact.name.toLowerCase().includes(search.toLowerCase());
-    return matchFilter && matchSearch;
+    const h = getHealthScore({ status: c.status, balance: c.balance, creditLimit: c.creditLimit, totalSpend: c.totalSpend, orders: c.orders });
+    const matchHealth = healthFilter === "all" || h.grade === healthFilter;
+    return matchFilter && matchSearch && matchHealth;
   });
 
   const totalSpend   = customers.reduce((s, c) => s + c.totalSpend, 0);
@@ -479,6 +513,31 @@ export default function Customers() {
             </button>
           ))}
         </div>
+        {/* Health filter */}
+        <div style={{ display: "flex", gap: 6 }}>
+          {(["all", "A", "B", "C", "D"] as const).map(g => {
+            const styles: Record<string, { color: string; bg: string }> = {
+              all: { color: C.muted,  bg: C.surface },
+              A:   { color: "#2e7d5e", bg: "#edf6f1" },
+              B:   { color: C.blue,   bg: C.blueBg   },
+              C:   { color: C.amber,  bg: C.amberBg  },
+              D:   { color: C.red,    bg: C.redBg    },
+            };
+            const s = styles[g];
+            const active = healthFilter === g;
+            return (
+              <button key={g} onClick={() => setHealthFilter(g)} style={{
+                padding: "7px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600,
+                cursor: "pointer", border: "none",
+                background: active ? s.bg : C.surface,
+                color:      active ? s.color : C.muted,
+                outline: active ? `1.5px solid ${s.color}` : "none",
+              }}>
+                {g === "all" ? "All Health" : `Grade ${g}`}
+              </button>
+            );
+          })}
+        </div>
         {!isViewer && (
         <button onClick={() => setShowNew(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: C.blue, border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
           <Plus size={14} /> Add Customer
@@ -509,7 +568,18 @@ export default function Customers() {
                 <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{fmtMoney(c.totalSpend)}</div>
                 <div style={{ fontSize: 11, color: c.balance > 0 ? C.amber : C.muted }}>{c.balance > 0 ? `${fmtMoney(c.balance)} due` : "No balance"}</div>
               </div>
-              <Badge status={c.status} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {(() => {
+                  const h = getHealthScore({ status: c.status, balance: c.balance, creditLimit: c.creditLimit, totalSpend: c.totalSpend, orders: c.orders });
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 999, background: h.bg, border: `1px solid ${h.border}` }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: h.color }}>{h.grade}</span>
+                      <span style={{ fontSize: 10, color: h.color, fontWeight: 600 }}>{h.label}</span>
+                    </div>
+                  );
+                })()}
+                <Badge status={c.status} />
+              </div>
             </div>
           </div>
         ))}
