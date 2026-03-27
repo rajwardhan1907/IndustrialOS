@@ -1,10 +1,11 @@
 // lib/suppliers.ts
 // Phase 4: Now saves to real DB via /api/suppliers and /api/purchase-orders
+// Phase 16: Added "pending_approval" to POStatus for approval workflows.
 // localStorage kept as fast cache — falls back silently if DB unavailable.
 
 export type SupplierStatus   = "active" | "inactive" | "pending";
 export type SupplierCategory = "raw_materials" | "components" | "packaging" | "equipment" | "services" | "logistics" | "other";
-export type POStatus         = "draft" | "sent" | "confirmed" | "received" | "cancelled";
+export type POStatus         = "pending_approval" | "draft" | "sent" | "confirmed" | "received" | "cancelled";
 export type PaymentTerms     = "Net 15" | "Net 30" | "Net 60" | "Prepaid" | "Cash on Delivery";
 
 export interface Supplier {
@@ -33,19 +34,21 @@ export interface POItem {
 }
 
 export interface PurchaseOrder {
-  id:           string;
-  poNumber:     string;
-  supplierId:   string;
-  supplierName: string;
-  items:        POItem[];
-  subtotal:     number;
-  tax:          number;
-  total:        number;
-  status:       POStatus;
-  paymentTerms: PaymentTerms;
-  expectedDate: string;
-  notes:        string;
-  createdAt:    string;
+  id:             string;
+  poNumber:       string;
+  supplierId:     string;
+  supplierName:   string;
+  items:          POItem[];
+  subtotal:       number;
+  tax:            number;
+  total:          number;
+  status:         POStatus;
+  paymentTerms:   PaymentTerms;
+  expectedDate:   string;
+  notes:          string;
+  createdAt:      string;
+  // Phase 16 — rejection reason set when admin rejects a PO
+  rejectionNote?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -72,6 +75,9 @@ export const CATEGORY_EMOJI: Record<SupplierCategory, string> = {
   logistics:     "🚛",
   other:         "🏭",
 };
+
+// ── Stages that can be advanced (pending_approval and cancelled are NOT in this list) ─
+export const PO_ADVANCE_STAGES: POStatus[] = ["draft", "sent", "confirmed", "received"];
 
 // ── Get workspaceId ───────────────────────────────────────────────────────────
 function getWorkspaceId(): string {
