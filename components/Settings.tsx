@@ -1,13 +1,13 @@
 "use client";
 // components/Settings.tsx
-// Workspace settings — company info, module toggles, custom tab creator, danger zone.
+// Phase 16: Added PO Approval Threshold setting under a new "Approvals" section.
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { C } from "@/lib/utils";
 import { SectionTitle } from "./Dashboard";
 import { WorkspaceConfig, ModuleId, CustomTab, saveWorkspace, clearWorkspace } from "@/lib/workspace";
-import { Settings as SettingsIcon, Plus, Trash2, ExternalLink } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const ALL_MODULES: { id: ModuleId; label: string; icon: string; desc: string }[] = [
@@ -24,11 +24,11 @@ const ALL_MODULES: { id: ModuleId; label: string; icon: string; desc: string }[]
   { id: "health",    icon: "🩺", label: "System Health",        desc: "Monitor all services and uptime"              },
 ];
 
-const TAB_TYPES: { id: CustomTab["type"]; label: string; desc: string; icon: string }[] = [
-  { id: "list",   label: "List",   icon: "📝", desc: "A simple list or checklist" },
-  { id: "kanban", label: "Kanban", icon: "📌", desc: "Card-based board view"       },
-  { id: "notes",  label: "Notes",  icon: "📓", desc: "Free-form notes page"        },
-  { id: "link",   label: "Link",   icon: "🔗", desc: "Embed or link external URL"  },
+const TAB_TYPES: { id: CustomTab["type"]; label: string; icon: string }[] = [
+  { id: "list",   label: "List",   icon: "📝" },
+  { id: "kanban", label: "Kanban", icon: "📌" },
+  { id: "notes",  label: "Notes",  icon: "📓" },
+  { id: "link",   label: "Link",   icon: "🔗" },
 ];
 
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -44,16 +44,16 @@ export default function Settings({ workspace, onUpdate }: {
 }) {
   const router = useRouter();
   const { data: session } = useSession();
-  const isAdmin = !session?.user?.role || session.user.role === "admin"; // default to true so demo users still see it
+  const isAdmin = !session?.user?.role || session.user.role === "admin";
 
-  // ── Company info state ─────────────────────────────────────────────────────
+  // ── Company info ───────────────────────────────────────────────────────────
   const [companyName, setCompanyName] = useState(workspace.companyName);
   const [saved,       setSaved]       = useState(false);
 
   // ── Module toggles ─────────────────────────────────────────────────────────
   const [modules, setModules] = useState<ModuleId[]>(workspace.modules);
   const toggleModule = (id: ModuleId) => {
-    if (id === "dashboard") return; // always on
+    if (id === "dashboard") return;
     setModules(ms => ms.includes(id) ? ms.filter(m => m !== id) : [...ms, id]);
   };
 
@@ -63,6 +63,11 @@ export default function Settings({ workspace, onUpdate }: {
   const [newEmoji,   setNewEmoji]   = useState("📌");
   const [newType,    setNewType]    = useState<CustomTab["type"]>("list");
   const [newUrl,     setNewUrl]     = useState("");
+
+  // ── Phase 16 — PO Approval Threshold ──────────────────────────────────────
+  const [approvalThreshold, setApprovalThreshold] = useState(
+    String(workspace.poApprovalThreshold ?? 0)
+  );
 
   const addTab = () => {
     if (!newLabel.trim()) return;
@@ -79,13 +84,14 @@ export default function Settings({ workspace, onUpdate }: {
 
   const removeTab = (id: string) => setCustomTabs(prev => prev.filter(t => t.id !== id));
 
-  // ── Save ───────────────────────────────────────────────────────────────────
   const saveAll = () => {
+    const threshold = parseFloat(approvalThreshold);
     const updated: WorkspaceConfig = {
       ...workspace,
-      companyName: companyName.trim() || workspace.companyName,
+      companyName:         companyName.trim() || workspace.companyName,
       modules,
       customTabs,
+      poApprovalThreshold: isNaN(threshold) || threshold < 0 ? 0 : threshold,
     };
     saveWorkspace(updated);
     onUpdate(updated);
@@ -93,7 +99,6 @@ export default function Settings({ workspace, onUpdate }: {
     setTimeout(() => setSaved(false), 2500);
   };
 
-  // ── Reset workspace ────────────────────────────────────────────────────────
   const resetWorkspace = () => {
     if (!confirm("This will clear all workspace settings and send you back to onboarding. Are you sure?")) return;
     clearWorkspace();
@@ -110,7 +115,7 @@ export default function Settings({ workspace, onUpdate }: {
   return (
     <div style={{ maxWidth: 720, display: "flex", flexDirection: "column", gap: 0 }}>
 
-      {/* Company info */}
+      {/* ── Company info ── */}
       <Section title="Company Info">
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Company Name</label>
@@ -131,7 +136,7 @@ export default function Settings({ workspace, onUpdate }: {
         </div>
       </Section>
 
-      {/* Modules */}
+      {/* ── Modules ── */}
       <Section title="Active Modules">
         <p style={{ fontSize: 13, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
           Toggle modules on or off. Dashboard is always visible.
@@ -169,13 +174,42 @@ export default function Settings({ workspace, onUpdate }: {
         </div>
       </Section>
 
-      {/* Custom tabs */}
+      {/* ── Phase 16: PO Approval Threshold ── */}
+      <Section title="Purchase Approval Workflows">
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          Set a dollar threshold for purchase orders. Any PO above this amount will require admin approval before it can be sent to the supplier. Set to <strong>0</strong> to disable approvals entirely.
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" as const }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 0, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, overflow: "hidden" }}>
+            <span style={{ padding: "10px 12px", fontSize: 13, color: C.muted, borderRight: `1px solid ${C.border}`, fontWeight: 600 }}>$</span>
+            <input
+              type="number"
+              min="0"
+              step="100"
+              value={approvalThreshold}
+              onChange={e => setApprovalThreshold(e.target.value)}
+              placeholder="e.g. 5000"
+              style={{ padding: "10px 12px", background: "transparent", border: "none", color: C.text, fontSize: 13, outline: "none", width: 140 }}
+            />
+          </div>
+          <div style={{ fontSize: 12, color: C.muted }}>
+            {parseFloat(approvalThreshold) > 0
+              ? `POs over $${parseFloat(approvalThreshold).toLocaleString()} will need admin approval.`
+              : "Approval workflow is disabled — all POs go straight to draft."}
+          </div>
+        </div>
+        {parseFloat(approvalThreshold) > 0 && (
+          <div style={{ marginTop: 12, padding: "10px 14px", background: C.amberBg, border: `1px solid ${C.amberBorder}`, borderRadius: 9, fontSize: 12, color: C.amber }}>
+            💡 When a PO exceeds the threshold, it will show as <strong>Pending Approval</strong>. Admins will see Approve / Reject buttons. Rejected POs are cancelled with an optional note.
+          </div>
+        )}
+      </Section>
+
+      {/* ── Custom tabs ── */}
       <Section title="Custom Tabs">
         <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
-          Add your own tabs to the navigation bar. Useful for custom workflows, embedded tools, or quick links.
+          Add your own tabs to the navigation bar.
         </p>
-
-        {/* Existing custom tabs */}
         {customTabs.length > 0 && (
           <div style={{ marginBottom: 16 }}>
             {customTabs.map(t => (
@@ -194,8 +228,6 @@ export default function Settings({ workspace, onUpdate }: {
             ))}
           </div>
         )}
-
-        {/* Add new tab form */}
         <div style={{ background: C.bg, border: `1px dashed ${C.border2}`, borderRadius: 10, padding: "16px 16px 12px" }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.05em" }}>Add New Tab</div>
           <div style={{ display: "grid", gridTemplateColumns: "48px 1fr", gap: 10, marginBottom: 10 }}>
@@ -203,7 +235,7 @@ export default function Settings({ workspace, onUpdate }: {
               style={{ padding: "9px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 18, textAlign: "center", outline: "none" }} />
             {inp(newLabel, setNewLabel, "Tab label, e.g. 'Returns Log'")}
           </div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" as const }}>
             {TAB_TYPES.map(t => (
               <button key={t.id} onClick={() => setNewType(t.id)} style={{
                 padding: "6px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none",
@@ -229,7 +261,7 @@ export default function Settings({ workspace, onUpdate }: {
         </div>
       </Section>
 
-      {/* Save */}
+      {/* ── Save ── */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
         <button onClick={saveAll} style={{
           padding: "11px 28px", background: saved ? C.green : C.blue, border: "none",
@@ -239,29 +271,29 @@ export default function Settings({ workspace, onUpdate }: {
         </button>
       </div>
 
-      {/* Danger zone — admin only */}
+      {/* ── Admin only sections ── */}
       {isAdmin && (
-      <>
-      {/* ── Users & Roles — admin only ── */}
-      <UsersSection workspaceId={typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") || "" : ""} currentUserId={session?.user?.email || ""} />
-
-      {/* Danger zone */}
-      <div style={{ background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 14, padding: "18px 22px" }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: C.red, marginBottom: 6 }}>Danger Zone</div>
-        <p style={{ fontSize: 13, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
-          This will clear all workspace settings and send you back to the onboarding wizard. All local data will be lost.
-        </p>
-        <button onClick={resetWorkspace} style={{ padding: "9px 20px", background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 8, color: C.red, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-          Reset Workspace
-        </button>
-      </div>
-      </>
+        <>
+          <UsersSection
+            workspaceId={typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") || "" : ""}
+            currentUserId={session?.user?.email || ""}
+          />
+          <div style={{ background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 14, padding: "18px 22px" }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: C.red, marginBottom: 6 }}>Danger Zone</div>
+            <p style={{ fontSize: 13, color: C.muted, marginBottom: 14, lineHeight: 1.5 }}>
+              This will clear all workspace settings and send you back to the onboarding wizard.
+            </p>
+            <button onClick={resetWorkspace} style={{ padding: "9px 20px", background: C.redBg, border: `1px solid ${C.redBorder}`, borderRadius: 8, color: C.red, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+              Reset Workspace
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-// ── Users & Roles sub-component ───────────────────────────────────────────────
+// ── Users & Roles sub-component (unchanged from Phase 7) ─────────────────────
 const ROLES = ["admin", "operator", "viewer"] as const;
 type Role = typeof ROLES[number];
 
@@ -272,15 +304,15 @@ const ROLE_CFG: Record<Role, { label: string; color: string; bg: string; border:
 };
 
 function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; currentUserId: string }) {
-  const [users,       setUsers]       = useState<any[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [showInvite,  setShowInvite]  = useState(false);
-  const [invName,     setInvName]     = useState("");
-  const [invEmail,    setInvEmail]    = useState("");
-  const [invRole,     setInvRole]     = useState<Role>("operator");
-  const [invError,    setInvError]    = useState("");
-  const [invLoading,  setInvLoading]  = useState(false);
-  const [invSuccess,  setInvSuccess]  = useState("");
+  const [users,      setUsers]      = useState<any[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [showInvite, setShowInvite] = useState(false);
+  const [invName,    setInvName]    = useState("");
+  const [invEmail,   setInvEmail]   = useState("");
+  const [invRole,    setInvRole]    = useState<Role>("operator");
+  const [invError,   setInvError]   = useState("");
+  const [invLoading, setInvLoading] = useState(false);
+  const [invSuccess, setInvSuccess] = useState("");
 
   useEffect(() => {
     if (!workspaceId) { setLoading(false); return; }
@@ -307,9 +339,9 @@ function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; cur
 
   const inviteUser = async () => {
     setInvError(""); setInvSuccess("");
-    if (!invName.trim()) { setInvError("Name is required."); return; }
+    if (!invName.trim())  { setInvError("Name is required."); return; }
     if (!invEmail.trim()) { setInvError("Email is required."); return; }
-    if (!workspaceId) { setInvError("No workspace found."); return; }
+    if (!workspaceId)     { setInvError("No workspace found."); return; }
     setInvLoading(true);
     const res = await fetch("/api/users", {
       method: "POST",
@@ -320,17 +352,17 @@ function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; cur
     setInvLoading(false);
     if (!res.ok) { setInvError(data.error || "Failed to invite user."); return; }
     setUsers(prev => [...prev, data]);
-    setInvSuccess(`${data.name} added! Their default password is changeme123 — tell them to update it.`);
+    setInvSuccess(`${data.name} added! Default password is changeme123.`);
     setInvName(""); setInvEmail(""); setInvRole("operator");
   };
 
-  const inp = (val: string, set: (v: string) => void, ph: string, type = "text") => (
+  const inpStyle = (val: string, set: (v: string) => void, ph: string, type = "text") => (
     <input type={type} value={val} onChange={e => set(e.target.value)} placeholder={ph}
       style={{ width: "100%", padding: "9px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" as const }} />
   );
 
   return (
-    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 22px" }}>
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 22px", marginBottom: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <div>
           <SectionTitle>Users & Roles</SectionTitle>
@@ -342,24 +374,23 @@ function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; cur
         </button>
       </div>
 
-      {/* Invite form */}
       {showInvite && (
         <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "16px", marginBottom: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px", marginBottom: 10 }}>
             <div>
               <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Full Name *</label>
-              {inp(invName, setInvName, "e.g. Sarah Chen")}
+              {inpStyle(invName, setInvName, "e.g. Sarah Chen")}
             </div>
             <div>
               <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Work Email *</label>
-              {inp(invEmail, setInvEmail, "sarah@company.com", "email")}
+              {inpStyle(invEmail, setInvEmail, "sarah@company.com", "email")}
             </div>
           </div>
           <div style={{ marginBottom: 12 }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 6, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Role</label>
             <div style={{ display: "flex", gap: 8 }}>
               {ROLES.map(r => {
-                const cfg = ROLE_CFG[r];
+                const cfg    = ROLE_CFG[r];
                 const active = invRole === r;
                 return (
                   <button key={r} onClick={() => setInvRole(r)}
@@ -386,11 +417,10 @@ function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; cur
         </div>
       )}
 
-      {/* User list */}
       {loading ? (
         <div style={{ textAlign: "center", padding: "20px 0", color: C.muted, fontSize: 13 }}>Loading users…</div>
       ) : users.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "20px 0", color: C.muted, fontSize: 13 }}>No users found. Invite someone above.</div>
+        <div style={{ textAlign: "center", padding: "20px 0", color: C.muted, fontSize: 13 }}>No users found.</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {users.map((u, i) => {
@@ -399,23 +429,19 @@ function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; cur
             const isYou = u.email === currentUserId;
             return (
               <div key={u.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: i % 2 === 0 ? C.bg : "transparent", borderRadius: 8 }}>
-                {/* Avatar */}
                 <div style={{ width: 34, height: 34, borderRadius: 10, background: cfg.bg, border: `1px solid ${cfg.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: cfg.color, flexShrink: 0 }}>
                   {u.name?.[0]?.toUpperCase() || "?"}
                 </div>
-                {/* Info */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
                     {u.name} {isYou && <span style={{ fontSize: 10, color: C.muted, fontWeight: 400 }}>(you)</span>}
                   </div>
                   <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</div>
                 </div>
-                {/* Role selector */}
                 <select value={role} onChange={e => changeRole(u.id, e.target.value as Role)} disabled={isYou}
                   style={{ padding: "5px 8px", background: cfg.bg, border: `1px solid ${cfg.border}`, borderRadius: 7, color: cfg.color, fontSize: 11, fontWeight: 700, cursor: isYou ? "not-allowed" : "pointer", outline: "none" }}>
                   {ROLES.map(r => <option key={r} value={r}>{ROLE_CFG[r].label}</option>)}
                 </select>
-                {/* Remove */}
                 {!isYou && (
                   <button onClick={() => removeUser(u.id)}
                     style={{ width: 28, height: 28, borderRadius: 7, background: C.redBg, border: `1px solid ${C.redBorder}`, color: C.red, fontSize: 14, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
