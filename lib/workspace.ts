@@ -55,17 +55,23 @@ export interface WorkspaceConfig {
 
   // Suggested plan based on team size
   suggestedPlan: "starter" | "growth" | "business" | "scale" | "enterprise";
+
+  // Phase 16 — Purchase approval threshold in dollars.
+  // 0 means disabled (no approval required).
+  // Any positive number means POs above that amount need admin approval.
+  poApprovalThreshold: number;
 }
 
 // ── Default empty workspace ──────────────────────────────────────────────────
 export const DEFAULT_WORKSPACE: WorkspaceConfig = {
-  companyName:    "",
-  industry:       "other",
-  teamSize:       "1-5",
-  modules:        ["dashboard"],
-  customTabs:     [],
-  onboardingDone: false,
-  suggestedPlan:  "starter",
+  companyName:         "",
+  industry:            "other",
+  teamSize:            "1-5",
+  modules:             ["dashboard"],
+  customTabs:          [],
+  onboardingDone:      false,
+  suggestedPlan:       "starter",
+  poApprovalThreshold: 0,
 };
 
 // ── Pricing tiers ────────────────────────────────────────────────────────────
@@ -119,7 +125,12 @@ export function loadWorkspace(): WorkspaceConfig | null {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as WorkspaceConfig;
+    const parsed = JSON.parse(raw) as WorkspaceConfig;
+    // Back-fill the new field for existing workspaces that predate Phase 16
+    if (parsed.poApprovalThreshold === undefined) {
+      parsed.poApprovalThreshold = 0;
+    }
+    return parsed;
   } catch {
     return null;
   }
