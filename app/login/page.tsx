@@ -124,13 +124,17 @@ export default function LoginPage() {
 
           {/* Demo accounts */}
           <div style={{ marginTop: 28, paddingTop: 24, borderTop: "1px solid #2a2d3e" }}>
-            <p style={{ fontSize: 12, color: "#4a4f65", textAlign: "center", marginBottom: 12 }}>
+            <p style={{ fontSize: 12, color: "#4a4f65", textAlign: "center", marginBottom: 4 }}>
               DEMO ACCOUNTS — click to fill
             </p>
+            {/* FIX: all demo accounts use the password "password" */}
+            <p style={{ fontSize: 11, color: "#4a4f65", textAlign: "center", marginBottom: 12 }}>
+              Password for all demo accounts: <strong style={{ color: "#9da3b4" }}>password</strong>
+            </p>
             {[
-              { label: "Admin",    email: "admin@demo.com",    pass: "admin123",    color: "#5b8de8" },
-              { label: "Operator", email: "operator@demo.com", pass: "operator123", color: "#9c6fdd" },
-              { label: "Viewer",   email: "viewer@demo.com",   pass: "viewer123",   color: "#34d399" },
+              { label: "Admin",    email: "admin@demo.com",    pass: "password", color: "#5b8de8" },
+              { label: "Operator", email: "operator@demo.com", pass: "password", color: "#9c6fdd" },
+              { label: "Viewer",   email: "viewer@demo.com",   pass: "password", color: "#34d399" },
             ].map(d => (
               <button key={d.label} onClick={() => fill(d.email, d.pass)} style={{
                 width: "100%", marginBottom: 8,
