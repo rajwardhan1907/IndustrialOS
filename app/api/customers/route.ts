@@ -14,7 +14,28 @@ export async function GET(req: Request) {
       where: { workspaceId },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(customers)
+
+    // FIX: calculate totalSpend for each customer from the orders table
+    // The Customer model has no totalSpend column — we derive it at query time
+    const allOrders = await prisma.order.findMany({
+      where: { workspaceId },
+      select: { customer: true, value: true },
+    })
+
+    // Build a map: customerName (lowercase) → total spend
+    const spendMap: Record<string, number> = {}
+    for (const order of allOrders) {
+      const key = order.customer.toLowerCase().trim()
+      spendMap[key] = (spendMap[key] || 0) + (order.value || 0)
+    }
+
+    // Attach totalSpend to each customer response
+    const customersWithSpend = customers.map(c => ({
+      ...c,
+      totalSpend: spendMap[c.name.toLowerCase().trim()] || 0,
+    }))
+
+    return NextResponse.json(customersWithSpend)
   } catch (err: any) {
     console.error('Customers GET error:', err)
     return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
