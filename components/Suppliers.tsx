@@ -667,7 +667,7 @@ function renderPOCard(
   const isPending = po.status === "pending_approval";
 
   return (
-    <div key={po.id} style={{ background: isPending ? "#fef5e7" : C.surface, border:`1px solid ${isPending ? "#f5d9a0" : C.border}`, borderRadius:12, padding:"14px 16px" }}>>
+    <div key={po.id} style={{ background: isPending ? "#fef5e7" : C.surface, border:`1px solid ${isPending ? "#f5d9a0" : C.border}`, borderRadius:12, padding:"14px 16px" }}>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
         <div>
           <div style={{ fontWeight:700, color:C.blue, fontFamily:"monospace", fontSize:13 }}>{po.poNumber}</div>
