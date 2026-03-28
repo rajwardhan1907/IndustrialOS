@@ -84,6 +84,8 @@ model Customer {
   industry    String    @default("")
   creditLimit Float     @default(0)
   balanceDue  Float     @default(0)
+  // Fix Bug 3: totalSpend tracks lifetime spend for health score calculation
+  totalSpend  Float     @default(0)
   status      String    @default("active")
   portalCode  String    @default("")
   notes       String    @default("")
@@ -166,6 +168,8 @@ model PurchaseOrder {
   paymentTerms String    @default("Net 30")
   expectedDate String
   notes        String    @default("")
+  // Fix Bug 2: stores the admin's reason when a PO is rejected
+  rejectionNote String   @default("")
   workspaceId  String
   workspace    Workspace @relation(fields: [workspaceId], references: [id])
   createdAt    DateTime  @default(now())
