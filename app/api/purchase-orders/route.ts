@@ -30,18 +30,20 @@ export async function POST(req: Request) {
     }
     const po = await prisma.purchaseOrder.create({
       data: {
-        poNumber:     body.poNumber     ?? '',
-        supplierId:   body.supplierId   ?? '',
-        supplierName: body.supplierName ?? '',
-        items:        body.items        ?? [],
-        subtotal:     body.subtotal     ?? 0,
-        tax:          body.tax          ?? 0,
-        total:        body.total        ?? 0,
-        status:       body.status       ?? 'draft',
-        paymentTerms: body.paymentTerms ?? 'Net 30',
-        expectedDate: body.expectedDate ?? '',
-        notes:        body.notes        ?? '',
-        workspaceId:  body.workspaceId,
+        poNumber:      body.poNumber      ?? '',
+        supplierId:    body.supplierId    ?? '',
+        supplierName:  body.supplierName  ?? '',
+        items:         body.items         ?? [],
+        subtotal:      body.subtotal      ?? 0,
+        tax:           body.tax           ?? 0,
+        total:         body.total         ?? 0,
+        status:        body.status        ?? 'draft',
+        paymentTerms:  body.paymentTerms  ?? 'Net 30',
+        expectedDate:  body.expectedDate  ?? '',
+        notes:         body.notes         ?? '',
+        // Fix Bug 2: save rejectionNote if provided
+        rejectionNote: body.rejectionNote ?? '',
+        workspaceId:   body.workspaceId,
       },
     })
     return NextResponse.json(po)
@@ -51,7 +53,7 @@ export async function POST(req: Request) {
   }
 }
 
-// UPDATE a purchase order (advance status, edit fields)
+// UPDATE a purchase order (advance status, approve, reject, edit fields)
 export async function PATCH(req: Request) {
   try {
     const body = await req.json()
@@ -61,17 +63,19 @@ export async function PATCH(req: Request) {
     const po = await prisma.purchaseOrder.update({
       where: { id: body.id },
       data: {
-        ...(body.status       !== undefined && { status:       body.status       }),
-        ...(body.poNumber     !== undefined && { poNumber:     body.poNumber     }),
-        ...(body.supplierId   !== undefined && { supplierId:   body.supplierId   }),
-        ...(body.supplierName !== undefined && { supplierName: body.supplierName }),
-        ...(body.items        !== undefined && { items:        body.items        }),
-        ...(body.subtotal     !== undefined && { subtotal:     body.subtotal     }),
-        ...(body.tax          !== undefined && { tax:          body.tax          }),
-        ...(body.total        !== undefined && { total:        body.total        }),
-        ...(body.paymentTerms !== undefined && { paymentTerms: body.paymentTerms }),
-        ...(body.expectedDate !== undefined && { expectedDate: body.expectedDate }),
-        ...(body.notes        !== undefined && { notes:        body.notes        }),
+        ...(body.status        !== undefined && { status:        body.status        }),
+        ...(body.poNumber      !== undefined && { poNumber:      body.poNumber      }),
+        ...(body.supplierId    !== undefined && { supplierId:    body.supplierId    }),
+        ...(body.supplierName  !== undefined && { supplierName:  body.supplierName  }),
+        ...(body.items         !== undefined && { items:         body.items         }),
+        ...(body.subtotal      !== undefined && { subtotal:      body.subtotal      }),
+        ...(body.tax           !== undefined && { tax:           body.tax           }),
+        ...(body.total         !== undefined && { total:         body.total         }),
+        ...(body.paymentTerms  !== undefined && { paymentTerms:  body.paymentTerms  }),
+        ...(body.expectedDate  !== undefined && { expectedDate:  body.expectedDate  }),
+        ...(body.notes         !== undefined && { notes:         body.notes         }),
+        // Fix Bug 2: persist rejection note when admin rejects a PO
+        ...(body.rejectionNote !== undefined && { rejectionNote: body.rejectionNote }),
       },
     })
     return NextResponse.json(po)
