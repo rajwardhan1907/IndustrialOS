@@ -1,13 +1,14 @@
 "use client";
 // components/Settings.tsx
-// Phase 16: Added PO Approval Threshold setting under a new "Approvals" section.
+// Phase 16: Added PO Approval Threshold setting.
+// Phase 9:  Added Customer Self-Signup Link section.
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { C } from "@/lib/utils";
 import { SectionTitle } from "./Dashboard";
 import { WorkspaceConfig, ModuleId, CustomTab, saveWorkspace, clearWorkspace } from "@/lib/workspace";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Copy, CheckCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const ALL_MODULES: { id: ModuleId; label: string; icon: string; desc: string }[] = [
@@ -68,6 +69,21 @@ export default function Settings({ workspace, onUpdate }: {
   const [approvalThreshold, setApprovalThreshold] = useState(
     String(workspace.poApprovalThreshold ?? 0)
   );
+
+  // ── Phase 9 — Signup link copy state ──────────────────────────────────────
+  const [copied, setCopied] = useState(false);
+  const workspaceDbId = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") || "" : "";
+  const signupUrl = workspaceDbId
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/portal/signup?workspace=${workspaceDbId}`
+    : "";
+
+  const copySignupLink = () => {
+    if (!signupUrl) return;
+    navigator.clipboard.writeText(signupUrl).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
 
   const addTab = () => {
     if (!newLabel.trim()) return;
@@ -134,6 +150,50 @@ export default function Settings({ workspace, onUpdate }: {
             </div>
           ))}
         </div>
+      </Section>
+
+      {/* ── Phase 9: Customer Self-Signup Link ── */}
+      <Section title="Customer Self-Signup">
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          Share this link with your customers so they can create their own portal account. They fill in their details and instantly get a portal access code — no manual setup needed.
+        </p>
+        {workspaceDbId ? (
+          <>
+            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
+              <div style={{
+                flex: 1, padding: "10px 14px",
+                background: C.bg, border: `1px solid ${C.border}`,
+                borderRadius: 9, fontSize: 12, color: C.blue,
+                fontFamily: "monospace", overflow: "hidden",
+                textOverflow: "ellipsis", whiteSpace: "nowrap" as const,
+              }}>
+                {signupUrl}
+              </div>
+              <button
+                onClick={copySignupLink}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  padding: "10px 16px", borderRadius: 9, cursor: "pointer",
+                  background: copied ? C.greenBg : C.blueBg,
+                  border: `1px solid ${copied ? C.greenBorder : C.blueBorder}`,
+                  color: copied ? C.green : C.blue,
+                  fontSize: 12, fontWeight: 700, flexShrink: 0,
+                  transition: "all 0.2s",
+                }}
+              >
+                {copied ? <CheckCircle size={13} /> : <Copy size={13} />}
+                {copied ? "Copied!" : "Copy Link"}
+              </button>
+            </div>
+            <div style={{ padding: "10px 14px", background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 9, fontSize: 12, color: C.blue, lineHeight: 1.6 }}>
+              💡 <strong>How it works:</strong> Customer visits the link → fills in their company name, contact, and email → gets a unique portal code instantly → they use it to log in at <strong>/portal</strong>.
+            </div>
+          </>
+        ) : (
+          <div style={{ padding: "12px 14px", background: C.amberBg, border: `1px solid ${C.amberBorder}`, borderRadius: 9, fontSize: 13, color: C.amber }}>
+            ⚠️ Your workspace ID isn't loaded yet. Try refreshing the page, or make sure you're logged in with a real account (not the demo).
+          </div>
+        )}
       </Section>
 
       {/* ── Modules ── */}
@@ -293,7 +353,7 @@ export default function Settings({ workspace, onUpdate }: {
   );
 }
 
-// ── Users & Roles sub-component (unchanged from Phase 7) ─────────────────────
+// ── Users & Roles sub-component ───────────────────────────────────────────────
 const ROLES = ["admin", "operator", "viewer"] as const;
 type Role = typeof ROLES[number];
 
