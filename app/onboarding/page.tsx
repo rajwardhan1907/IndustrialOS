@@ -107,6 +107,7 @@ export default function OnboardingPage() {
       customTabs:     [],
       onboardingDone: true,
       suggestedPlan:  plan,
+      poApprovalThreshold: 0,
     };
 
     // Save to localStorage (keeps app working as before)
