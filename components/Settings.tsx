@@ -23,6 +23,7 @@ const ALL_MODULES: { id: ModuleId; label: string; icon: string; desc: string }[]
   { id: "crm",       icon: "🔌", label: "CRM Integrations",     desc: "Salesforce, HubSpot, Zoho sync"               },
   { id: "pipeline",  icon: "⚡", label: "SKU Pipeline",         desc: "Bulk import up to 1M SKUs"                    },
   { id: "health",    icon: "🩺", label: "System Health",        desc: "Monitor all services and uptime"              },
+  { id: "returns",   icon: "↩️", label: "Returns & RMA",       desc: "Manage customer returns and refunds"          },
 ];
 
 const TAB_TYPES: { id: CustomTab["type"]; label: string; icon: string }[] = [
