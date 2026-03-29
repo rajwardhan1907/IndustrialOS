@@ -9,10 +9,13 @@ datasource db {
 
 // ── Workspace ─────────────────────────────────────────────────────────────────
 model Workspace {
-  id        String   @id @default(cuid())
-  name      String
-  industry  String
-  createdAt DateTime @default(now())
+  id                  String   @id @default(cuid())
+  name                String
+  industry            String
+  // Phase 16: PO approval threshold. 0 = approval disabled. Any value > 0 means
+  // POs above that amount require admin approval before being sent to supplier.
+  poApprovalThreshold Float    @default(0)
+  createdAt           DateTime @default(now())
 
   users          User[]
   orders         Order[]
@@ -84,8 +87,6 @@ model Customer {
   industry    String    @default("")
   creditLimit Float     @default(0)
   balanceDue  Float     @default(0)
-  // Fix Bug 3: totalSpend tracks lifetime spend for health score calculation
-  totalSpend  Float     @default(0)
   status      String    @default("active")
   portalCode  String    @default("")
   notes       String    @default("")
@@ -156,23 +157,26 @@ model Supplier {
 
 // ── Purchase Order ────────────────────────────────────────────────────────────
 model PurchaseOrder {
-  id           String    @id @default(cuid())
-  poNumber     String
-  supplierId   String
-  supplierName String
-  items        Json
-  subtotal     Float     @default(0)
-  tax          Float     @default(0)
-  total        Float     @default(0)
-  status       String    @default("draft")
-  paymentTerms String    @default("Net 30")
-  expectedDate String
-  notes        String    @default("")
-  // Fix Bug 2: stores the admin's reason when a PO is rejected
-  rejectionNote String   @default("")
-  workspaceId  String
-  workspace    Workspace @relation(fields: [workspaceId], references: [id])
-  createdAt    DateTime  @default(now())
+  id             String    @id @default(cuid())
+  poNumber       String
+  supplierId     String
+  supplierName   String
+  items          Json
+  subtotal       Float     @default(0)
+  tax            Float     @default(0)
+  total          Float     @default(0)
+  status         String    @default("draft")
+  paymentTerms   String    @default("Net 30")
+  expectedDate   String
+  notes          String    @default("")
+  // Phase 16: approval workflow fields
+  // approvalStatus: not_required | pending | approved | rejected
+  approvalStatus String    @default("not_required")
+  approvedBy     String    @default("")
+  approvedAt     String    @default("")
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt      DateTime  @default(now())
 }
 
 // ── Shipment ──────────────────────────────────────────────────────────────────
