@@ -1,102 +1,202 @@
-import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-
-// GET purchase orders — workspaceId is required (prevents cross-tenant data leaks)
-export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url)
-    const workspaceId = searchParams.get('workspaceId')
-    if (!workspaceId) {
-      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 })
-    }
-
-    const pos = await prisma.purchaseOrder.findMany({
-      where: { workspaceId },
-      orderBy: { createdAt: 'desc' },
-    })
-    return NextResponse.json(pos)
-  } catch (err: any) {
-    console.error('PurchaseOrders GET error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
-  }
+generator client {
+  provider = "prisma-client-js"
 }
 
-// CREATE a new purchase order
-export async function POST(req: Request) {
-  try {
-    const body = await req.json()
-    if (!body.workspaceId) {
-      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 })
-    }
-    const po = await prisma.purchaseOrder.create({
-      data: {
-        poNumber:      body.poNumber      ?? '',
-        supplierId:    body.supplierId    ?? '',
-        supplierName:  body.supplierName  ?? '',
-        items:         body.items         ?? [],
-        subtotal:      body.subtotal      ?? 0,
-        tax:           body.tax           ?? 0,
-        total:         body.total         ?? 0,
-        status:        body.status        ?? 'draft',
-        paymentTerms:  body.paymentTerms  ?? 'Net 30',
-        expectedDate:  body.expectedDate  ?? '',
-        notes:         body.notes         ?? '',
-        // Fix Bug 2: save rejectionNote if provided
-        rejectionNote: body.rejectionNote ?? '',
-        workspaceId:   body.workspaceId,
-      },
-    })
-    return NextResponse.json(po)
-  } catch (err: any) {
-    console.error('PurchaseOrders POST error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
-  }
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-// UPDATE a purchase order (advance status, approve, reject, edit fields)
-export async function PATCH(req: Request) {
-  try {
-    const body = await req.json()
-    if (!body.id) {
-      return NextResponse.json({ error: 'id is required' }, { status: 400 })
-    }
-    const po = await prisma.purchaseOrder.update({
-      where: { id: body.id },
-      data: {
-        ...(body.status        !== undefined && { status:        body.status        }),
-        ...(body.poNumber      !== undefined && { poNumber:      body.poNumber      }),
-        ...(body.supplierId    !== undefined && { supplierId:    body.supplierId    }),
-        ...(body.supplierName  !== undefined && { supplierName:  body.supplierName  }),
-        ...(body.items         !== undefined && { items:         body.items         }),
-        ...(body.subtotal      !== undefined && { subtotal:      body.subtotal      }),
-        ...(body.tax           !== undefined && { tax:           body.tax           }),
-        ...(body.total         !== undefined && { total:         body.total         }),
-        ...(body.paymentTerms  !== undefined && { paymentTerms:  body.paymentTerms  }),
-        ...(body.expectedDate  !== undefined && { expectedDate:  body.expectedDate  }),
-        ...(body.notes         !== undefined && { notes:         body.notes         }),
-        // Fix Bug 2: persist rejection note when admin rejects a PO
-        ...(body.rejectionNote !== undefined && { rejectionNote: body.rejectionNote }),
-      },
-    })
-    return NextResponse.json(po)
-  } catch (err: any) {
-    console.error('PurchaseOrders PATCH error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
-  }
+// ── Workspace ─────────────────────────────────────────────────────────────────
+model Workspace {
+  id                  String   @id @default(cuid())
+  name                String
+  industry            String
+  // Phase 16: PO approval threshold. 0 = approval disabled. Any value > 0 means
+  // POs above that amount require admin approval before being sent to supplier.
+  poApprovalThreshold Float    @default(0)
+  createdAt           DateTime @default(now())
+
+  users          User[]
+  orders         Order[]
+  invoices       Invoice[]
+  customers      Customer[]
+  quotes         Quote[]
+  inventory      InventoryItem[]
+  suppliers      Supplier[]
+  purchaseOrders PurchaseOrder[]
+  shipments      Shipment[]
 }
 
-// DELETE a purchase order
-export async function DELETE(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url)
-    const id = searchParams.get('id')
-    if (!id) {
-      return NextResponse.json({ error: 'id is required' }, { status: 400 })
-    }
-    await prisma.purchaseOrder.delete({ where: { id } })
-    return NextResponse.json({ success: true })
-  } catch (err: any) {
-    console.error('PurchaseOrders DELETE error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
-  }
+// ── User ──────────────────────────────────────────────────────────────────────
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  password    String
+  name        String
+  role        String    @default("operator")
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt   DateTime  @default(now())
+}
+
+// ── Order ─────────────────────────────────────────────────────────────────────
+model Order {
+  id          String    @id @default(cuid())
+  customer    String
+  sku         String
+  items       Int       @default(1)
+  value       Float     @default(0)
+  stage       String    @default("Placed")
+  priority    String    @default("MED")
+  source      String    @default("manual")
+  notes       String    @default("")
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt   DateTime  @default(now())
+}
+
+// ── Invoice ───────────────────────────────────────────────────────────────────
+model Invoice {
+  id            String    @id @default(cuid())
+  invoiceNumber String
+  customer      String
+  items         Json
+  subtotal      Float     @default(0)
+  tax           Float     @default(0)
+  total         Float     @default(0)
+  amountPaid    Float     @default(0)
+  paymentTerms  String    @default("Net 30")
+  issueDate     String
+  dueDate       String
+  status        String    @default("unpaid")
+  notes         String    @default("")
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt     DateTime  @default(now())
+}
+
+// ── Customer ──────────────────────────────────────────────────────────────────
+model Customer {
+  id          String    @id @default(cuid())
+  name        String
+  contactName String
+  email       String
+  phone       String    @default("")
+  country     String    @default("")
+  industry    String    @default("")
+  creditLimit Float     @default(0)
+  balanceDue  Float     @default(0)
+  status      String    @default("active")
+  portalCode  String    @default("")
+  notes       String    @default("")
+  orders      Json      @default("[]")
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt   DateTime  @default(now())
+}
+
+// ── Quote ─────────────────────────────────────────────────────────────────────
+model Quote {
+  id           String    @id @default(cuid())
+  quoteNumber  String
+  customer     String
+  items        Json
+  subtotal     Float     @default(0)
+  discountAmt  Float     @default(0)
+  tax          Float     @default(0)
+  total        Float     @default(0)
+  validUntil   String
+  paymentTerms String    @default("Net 30")
+  notes        String    @default("")
+  status       String    @default("draft")
+  prompt       String    @default("")
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt    DateTime  @default(now())
+}
+
+// ── Inventory Item ────────────────────────────────────────────────────────────
+model InventoryItem {
+  id           String    @id @default(cuid())
+  sku          String
+  name         String
+  category     String
+  stockLevel   Int       @default(0)
+  reorderPoint Int       @default(0)
+  reorderQty   Int       @default(0)
+  unitCost     Float     @default(0)
+  warehouse    String    @default("")
+  zone         String    @default("A")
+  binLocation  String    @default("")
+  lastSynced   String
+  supplier     String    @default("")
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt    DateTime  @default(now())
+}
+
+// ── Supplier ──────────────────────────────────────────────────────────────────
+model Supplier {
+  id           String    @id @default(cuid())
+  name         String
+  contactName  String
+  email        String
+  phone        String    @default("")
+  country      String    @default("")
+  category     String    @default("other")
+  status       String    @default("active")
+  paymentTerms String    @default("Net 30")
+  leadTimeDays Int       @default(14)
+  rating       Int       @default(3)
+  notes        String    @default("")
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt    DateTime  @default(now())
+}
+
+// ── Purchase Order ────────────────────────────────────────────────────────────
+model PurchaseOrder {
+  id             String    @id @default(cuid())
+  poNumber       String
+  supplierId     String
+  supplierName   String
+  items          Json
+  subtotal       Float     @default(0)
+  tax            Float     @default(0)
+  total          Float     @default(0)
+  status         String    @default("draft")
+  paymentTerms   String    @default("Net 30")
+  expectedDate   String
+  notes          String    @default("")
+  // Phase 16: approval workflow fields
+  // approvalStatus: not_required | pending | approved | rejected
+  approvalStatus String    @default("not_required")
+  approvedBy     String    @default("")
+  approvedAt     String    @default("")
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt      DateTime  @default(now())
+}
+
+// ── Shipment ──────────────────────────────────────────────────────────────────
+model Shipment {
+  id             String    @id @default(cuid())
+  shipmentNumber String
+  orderId        String    @default("")
+  customer       String
+  carrier        String    @default("Other")
+  trackingNumber String    @default("")
+  status         String    @default("pending")
+  origin         String    @default("")
+  destination    String    @default("")
+  weight         String    @default("")
+  dimensions     String    @default("")
+  estimatedDate  String    @default("")
+  deliveredDate  String    @default("")
+  events         Json      @default("[]")
+  notes          String    @default("")
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt      DateTime  @default(now())
 }
