@@ -12,10 +12,8 @@ model Workspace {
   id                  String   @id @default(cuid())
   name                String
   industry            String
-  // Phase 16: PO approval threshold. 0 = approval disabled. Any value > 0 means
-  // POs above that amount require admin approval before being sent to supplier.
-  poApprovalThreshold Float    @default(0)
   createdAt           DateTime @default(now())
+  poApprovalThreshold Float    @default(0)
 
   users          User[]
   orders         Order[]
@@ -26,6 +24,7 @@ model Workspace {
   suppliers      Supplier[]
   purchaseOrders PurchaseOrder[]
   shipments      Shipment[]
+  returns        Return[]
 }
 
 // ── User ──────────────────────────────────────────────────────────────────────
@@ -87,6 +86,7 @@ model Customer {
   industry    String    @default("")
   creditLimit Float     @default(0)
   balanceDue  Float     @default(0)
+  totalSpend  Float     @default(0)
   status      String    @default("active")
   portalCode  String    @default("")
   notes       String    @default("")
@@ -169,8 +169,7 @@ model PurchaseOrder {
   paymentTerms   String    @default("Net 30")
   expectedDate   String
   notes          String    @default("")
-  // Phase 16: approval workflow fields
-  // approvalStatus: not_required | pending | approved | rejected
+  rejectionNote  String    @default("")
   approvalStatus String    @default("not_required")
   approvedBy     String    @default("")
   approvedAt     String    @default("")
@@ -199,4 +198,26 @@ model Shipment {
   workspaceId    String
   workspace      Workspace @relation(fields: [workspaceId], references: [id])
   createdAt      DateTime  @default(now())
+}
+
+// ── Return / RMA ──────────────────────────────────────────────────────────────
+// Phase 18 — Returns & RMA
+// Status flow: requested → approved → received → refunded | rejected
+model Return {
+  id           String    @id @default(cuid())
+  rmaNumber    String
+  orderId      String    @default("")
+  customer     String
+  sku          String
+  qty          Int       @default(1)
+  reason       String    @default("other")
+  description  String    @default("")
+  status       String    @default("requested")
+  refundAmount Float     @default(0)
+  refundMethod String    @default("original")
+  notes        String    @default("")
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
