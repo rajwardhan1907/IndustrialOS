@@ -178,11 +178,13 @@ async function updateCustomerInDb(id: string, c: Partial<Customer>): Promise<voi
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id,
-        ...(c.status      !== undefined && { status:      c.status }),
-        ...(c.balance     !== undefined && { balanceDue:  c.balance }),
-        ...(c.creditLimit !== undefined && { creditLimit: c.creditLimit }),
-        ...(c.notes       !== undefined && { notes:       c.notes }),
-        ...(c.orders      !== undefined && { orders:      c.orders }),
+        ...(c.status         !== undefined && { status:         c.status }),
+        ...(c.balance        !== undefined && { balanceDue:     c.balance }),
+        ...(c.creditLimit    !== undefined && { creditLimit:    c.creditLimit }),
+        ...(c.notes          !== undefined && { notes:          c.notes }),
+        ...(c.orders         !== undefined && { orders:         c.orders }),
+        ...(c.accessCode     !== undefined && { portalCode:     c.accessCode }),   // fix: was never sent
+        ...(c.whatsappPaused !== undefined && { whatsappPaused: c.whatsappPaused }),// fix: was never sent
       }),
     });
   } catch {}
@@ -431,7 +433,7 @@ function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, isVie
 
         {/* Status actions */}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {!isViewer && cust.status !== "active"   && <button onClick={() => onStatusChange(cust.id, "active")}   style={{ padding: "8px 16px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 8, color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Set Active</button>}
+          {!isViewer && cust.status !== "active"   && <button onClick={() => onStatusChange(cust.id, "active")}   style={{ padding: "8px 16px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 8, color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{cust.status === "pending" ? "✅ Approve & Send Code" : "Set Active"}</button>}
           {!isViewer && cust.status !== "on_hold"  && <button onClick={() => onStatusChange(cust.id, "on_hold")}  style={{ padding: "8px 16px", background: C.amberBg, border: `1px solid ${C.amberBorder}`, borderRadius: 8, color: C.amber, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Put on Hold</button>}
           {!isViewer && cust.status !== "inactive" && <button onClick={() => onStatusChange(cust.id, "inactive")} style={{ padding: "8px 16px", background: C.surface, border: `1px solid ${C.border}`,       borderRadius: 8, color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Deactivate</button>}
           {/* Phase 11 — WhatsApp pause toggle */}
@@ -483,6 +485,32 @@ export default function Customers() {
     createCustomerInDb(c); // fire-and-forget
   };
   const changeStatus = (id: string, status: CustStatus) => {
+    const cust = customers.find(c => c.id === id);
+
+    // ── Approving a pending customer → generate code + send welcome email ──
+    if (status === "active" && cust?.status === "pending") {
+      const code = cust.company.trim().slice(0, 4).toUpperCase().replace(/[^A-Z0-9]/g, "X") + new Date().getFullYear();
+      const updatedCust = { ...cust, status, accessCode: code };
+      save(customers.map(c => c.id === id ? updatedCust : c));
+      updateCustomerInDb(id, { status, accessCode: code });
+      setSelected(prev => prev?.id === id ? updatedCust : prev);
+
+      // Send welcome email with the access code (fire-and-forget)
+      if (cust.contact.email) {
+        fetch("/api/email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type: "portal_welcome",
+            to:   cust.contact.email,
+            data: { contactName: cust.contact.name, companyName: cust.company, portalCode: code },
+          }),
+        }).catch(() => {});
+      }
+      return;
+    }
+
+    // ── All other status changes ──────────────────────────────────────────
     save(customers.map(c => c.id === id ? { ...c, status } : c));
     updateCustomerInDb(id, { status });
     setSelected(prev => prev?.id === id ? { ...prev, status } : prev);
@@ -532,7 +560,7 @@ export default function Customers() {
             style={{ width: "100%", padding: "8px 10px 8px 30px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
         </div>
         <div style={{ display: "flex", gap: 6 }}>
-          {(["all","active","on_hold","inactive"] as const).map(f => (
+          {(["all","pending","active","on_hold","inactive"] as const).map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{ padding: "7px 12px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer", border: "none", background: filter === f ? C.blue : C.surface, color: filter === f ? "#fff" : C.muted }}>
               {f === "all" ? "All" : STATUS_CFG[f].label}
             </button>

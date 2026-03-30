@@ -23,8 +23,11 @@ export async function POST(req: NextRequest) {
     } else if (type === 'quote') {
       subject = `Quotation ${data.quoteNumber} from IndustrialOS`
       html    = quoteEmailHTML(data)
+    } else if (type === 'portal_welcome') {
+      subject = `Your portal access is ready — ${data.companyName}`
+      html    = portalWelcomeEmailHTML(data)
     } else {
-      return NextResponse.json({ error: 'type must be invoice or quote' }, { status: 400 })
+      return NextResponse.json({ error: 'type must be invoice, quote, or portal_welcome' }, { status: 400 })
     }
 
     const result = await resend.emails.send({
@@ -124,6 +127,42 @@ function invoiceEmailHTML(inv: any): string {
       <div style="padding:20px 32px;border-top:1px solid #e8e3da;text-align:center;">
         <div style="font-size:12px;color:#a89e8e;">IndustrialOS - Enterprise B2B Platform</div>
         <div style="font-size:11px;color:#c5bdb0;margin-top:4px;">${inv.invoiceNumber} - Generated ${fmtDate(new Date().toISOString())}</div>
+      </div>
+    </div>
+  </body>
+  </html>
+  `
+}
+
+// ── Portal welcome email HTML ─────────────────────────────────────────────────
+function portalWelcomeEmailHTML(d: { contactName: string; companyName: string; portalCode: string }): string {
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+  <body style="margin:0;padding:0;background:#f5f3ef;font-family:'Segoe UI',Arial,sans-serif;">
+    <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+      <div style="background:linear-gradient(135deg,#3b6fd4,#6d28d9);padding:28px 32px;">
+        <div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:-0.5px;">IndustrialOS</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:2px;">Customer Portal</div>
+      </div>
+      <div style="padding:32px;">
+        <div style="font-size:24px;margin-bottom:12px;">🎉</div>
+        <div style="font-size:20px;font-weight:800;color:#1a1d2e;margin-bottom:8px;">You're approved, ${d.contactName}!</div>
+        <div style="font-size:14px;color:#6b7280;line-height:1.7;margin-bottom:28px;">
+          Your account for <strong>${d.companyName}</strong> has been approved. Use the access code below to sign in to your supplier portal.
+        </div>
+        <div style="background:#f5f3ff;border:2px dashed #c4b5fd;border-radius:12px;padding:20px;text-align:center;margin-bottom:28px;">
+          <div style="font-size:11px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:8px;">Your Access Code</div>
+          <div style="font-size:32px;font-weight:900;color:#6d28d9;letter-spacing:0.15em;">${d.portalCode}</div>
+        </div>
+        <div style="background:#eff4ff;border-radius:10px;padding:16px;font-size:13px;color:#3b6fd4;line-height:1.7;margin-bottom:24px;">
+          <strong>How to sign in:</strong><br/>
+          1. Go to your portal link<br/>
+          2. Enter your email address<br/>
+          3. Enter the access code above
+        </div>
+        <div style="font-size:12px;color:#9ca3af;text-align:center;">Keep this code safe — it's your key to the portal.</div>
       </div>
     </div>
   </body>
