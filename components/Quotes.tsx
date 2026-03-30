@@ -1,7 +1,8 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { fmt, C } from "@/lib/utils";
+import { PricingRule, applyPricingRules, getRulesSummary } from "@/lib/pricingRules";
 import {
   Plus, Sparkles, ChevronLeft, FileText,
   Clock, CheckCircle, XCircle, Send, Trash2,
@@ -143,6 +144,8 @@ export default function Quotes() {
   const [aiError,   setAiError]  = useState("");
   const [draft,     setDraft]    = useState<Quote | null>(null);
   const [selected,  setSelected] = useState<Quote | null>(null);
+  const [priceRules, setPriceRules] = useState<PricingRule[]>([]);  // Phase 12
+  const [rulesBanner, setRulesBanner] = useState("");               // Phase 12
   const textRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -156,6 +159,14 @@ export default function Quotes() {
         saveQuotes(dbQuotes);
       }
     });
+    // Phase 12: load pricing rules
+    const wid = getQuoteWorkspaceId();
+    if (wid) {
+      fetch(`/api/pricing-rules?workspaceId=${wid}`)
+        .then(r => r.json())
+        .then(data => { if (Array.isArray(data)) setPriceRules(data); })
+        .catch(() => {});
+    }
   }, []);
 
   const generate = async () => {
@@ -175,7 +186,7 @@ export default function Quotes() {
         return;
       }
       const q = data.quote;
-      const items: LineItem[] = (q.items || []).map((it: any, i: number) => ({
+      let items: LineItem[] = (q.items || []).map((it: any, i: number) => ({
         id:        it.id || `item-${i}`,
         sku:       it.sku       || "SKU-TBD",
         desc:      it.desc      || "Product",
@@ -184,6 +195,22 @@ export default function Quotes() {
         discount:  Number(it.discount)  || 0,
         total:     Number(it.total)     || 0,
       }));
+
+      // Phase 12: auto-apply pricing rules
+      if (priceRules.length > 0) {
+        const customer = q.customer || "";
+        items = applyPricingRules(priceRules, customer, items);
+        const summary = getRulesSummary(priceRules, customer, items);
+        setRulesBanner(summary);
+        // Recalculate totals after rules
+        const subtotal    = items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+        const discountAmt = items.reduce((s, i) => s + (i.qty * i.unitPrice * i.discount / 100), 0);
+        q.subtotal    = subtotal;
+        q.discountAmt = discountAmt;
+        q.tax         = parseFloat(((subtotal - discountAmt) * 0.08).toFixed(2));
+        q.total       = parseFloat((subtotal - discountAmt + q.tax).toFixed(2));
+      }
+
       const newQuote: Quote = {
         id:           makeId(),
         quoteNumber:  makeQNum(),
@@ -230,7 +257,7 @@ export default function Quotes() {
   };
 
   const resetNew = () => {
-    setPrompt(""); setDraft(null); setThinking(false); setAiError("");
+    setPrompt(""); setDraft(null); setThinking(false); setAiError(""); setRulesBanner("");
   };
 
   const downloadPDF = async (q: Quote) => {
@@ -405,6 +432,14 @@ export default function Quotes() {
             <CheckCircle size={18} color={C.green}/>
             <span style={{ fontWeight:700, fontSize:15, color:C.green }}>Quote generated! Review and save.</span>
           </div>
+
+          {/* Phase 12: Pricing rules banner */}
+          {rulesBanner && (
+            <div style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 14px", background:C.greenBg, border:`1px solid ${C.greenBorder}`, borderRadius:10 }}>
+              <span style={{ fontSize:15, flexShrink:0 }}>🏷️</span>
+              <span style={{ fontSize:12, color:C.green, fontWeight:600 }}>{rulesBanner}</span>
+            </div>
+          )}
 
           <Card>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>

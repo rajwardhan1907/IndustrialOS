@@ -10,6 +10,7 @@ import { C } from "@/lib/utils";
 import { SectionTitle } from "./Dashboard";
 import { WorkspaceConfig, ModuleId, CustomTab, saveWorkspace, clearWorkspace } from "@/lib/workspace";
 import { CURRENCIES } from "@/lib/currencies";
+import { PricingRule } from "@/lib/pricingRules";
 import { Plus, Trash2, Copy, CheckCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -433,6 +434,9 @@ export default function Settings({ workspace, onUpdate }: {
         </div>
       </Section>
 
+      {/* ── Phase 12: Pricing Rules ── */}
+      <PricingRulesSection />
+
       {/* ── Save ── */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
         <button onClick={saveAll} style={{
@@ -460,6 +464,165 @@ export default function Settings({ workspace, onUpdate }: {
             </button>
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// ── Phase 12: Pricing Rules sub-component ─────────────────────────────────────
+function PricingRulesSection() {
+  const [rules,    setRules]    = useState<PricingRule[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [showForm, setShowForm] = useState(false);
+
+  // form state
+  const [fName,     setFName]     = useState("");
+  const [fType,     setFType]     = useState<"volume" | "customer">("volume");
+  const [fMinQty,   setFMinQty]   = useState("100");
+  const [fCustName, setFCustName] = useState("");
+  const [fDiscount, setFDiscount] = useState("5");
+  const [saving,    setSaving]    = useState(false);
+
+  const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") || "" : "";
+
+  useEffect(() => {
+    if (!wid) { setLoading(false); return; }
+    fetch(`/api/pricing-rules?workspaceId=${wid}`)
+      .then(r => r.json())
+      .then(data => { setRules(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [wid]);
+
+  const addRule = async () => {
+    if (!fName.trim() || !wid) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/pricing-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:         fName.trim(),
+          type:         fType,
+          minQty:       fType === "volume"   ? parseInt(fMinQty) || 0 : 0,
+          customerName: fType === "customer" ? fCustName.trim()       : "",
+          discountPct:  parseFloat(fDiscount) || 0,
+          workspaceId:  wid,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRules(prev => [...prev, data]);
+        setFName(""); setFMinQty("100"); setFCustName(""); setFDiscount("5");
+        setShowForm(false);
+      }
+    } finally { setSaving(false); }
+  };
+
+  const toggleActive = async (rule: PricingRule) => {
+    const updated = { ...rule, active: !rule.active };
+    setRules(prev => prev.map(r => r.id === rule.id ? updated : r));
+    fetch("/api/pricing-rules", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: rule.id, active: !rule.active }),
+    }).catch(() => {});
+  };
+
+  const deleteRule = async (id: string) => {
+    setRules(prev => prev.filter(r => r.id !== id));
+    fetch(`/api/pricing-rules?id=${id}`, { method: "DELETE" }).catch(() => {});
+  };
+
+  const sel = (val: string, set: (v: any) => void, opts: { value: string; label: string }[]) => (
+    <select value={val} onChange={e => set(e.target.value)}
+      style={{ padding: "8px 10px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, fontSize: 13, outline: "none" }}>
+      {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 22px", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: C.text }}>💰 Pricing Rules</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Auto-apply discounts to quotes and invoices based on quantity or customer.</div>
+        </div>
+        <button onClick={() => setShowForm(f => !f)}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 8, color: C.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          <Plus size={13} /> Add Rule
+        </button>
+      </div>
+
+      {/* Add rule form */}
+      {showForm && (
+        <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10, marginBottom: 10 }}>
+            <input value={fName} onChange={e => setFName(e.target.value)} placeholder="Rule name (e.g. Bulk 200+ deal)"
+              style={{ padding: "8px 10px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, fontSize: 13, outline: "none" }} />
+            {sel(fType, setFType, [{ value: "volume", label: "Volume rule" }, { value: "customer", label: "Customer rule" }])}
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            {fType === "volume" ? (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Min Qty to trigger</div>
+                <input type="number" value={fMinQty} onChange={e => setFMinQty(e.target.value)} min="1"
+                  style={{ width: "100%", padding: "8px 10px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Customer Name (exact)</div>
+                <input value={fCustName} onChange={e => setFCustName(e.target.value)} placeholder="e.g. Acme Corp"
+                  style={{ width: "100%", padding: "8px 10px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>Discount %</div>
+              <input type="number" value={fDiscount} onChange={e => setFDiscount(e.target.value)} min="0" max="100"
+                style={{ width: "100%", padding: "8px 10px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button onClick={() => setShowForm(false)}
+              style={{ padding: "7px 16px", background: "none", border: `1px solid ${C.border}`, borderRadius: 7, color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+            <button onClick={addRule} disabled={saving || !fName.trim()}
+              style={{ padding: "7px 18px", background: fName.trim() ? C.blue : C.border, border: "none", borderRadius: 7, color: fName.trim() ? "#fff" : C.muted, fontSize: 12, fontWeight: 700, cursor: fName.trim() ? "pointer" : "not-allowed" }}>
+              {saving ? "Saving…" : "Save Rule"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rules list */}
+      {loading ? (
+        <div style={{ fontSize: 13, color: C.muted, padding: "10px 0" }}>Loading…</div>
+      ) : rules.length === 0 ? (
+        <div style={{ fontSize: 13, color: C.subtle, padding: "12px 0", textAlign: "center" }}>
+          No rules yet — add one above. Discounts apply automatically to new quotes and invoices.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {rules.map(rule => (
+            <div key={rule.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: rule.active ? C.bg : C.surface, border: `1px solid ${rule.active ? C.greenBorder : C.border}`, borderRadius: 9, opacity: rule.active ? 1 : 0.6 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{rule.name}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
+                  {rule.type === "volume"
+                    ? `🔢 Volume — ${rule.discountPct}% off when qty ≥ ${rule.minQty}`
+                    : `👤 Customer "${rule.customerName}" — ${rule.discountPct}% off all items`
+                  }
+                </div>
+              </div>
+              <button onClick={() => toggleActive(rule)}
+                style={{ padding: "5px 12px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", border: "none", background: rule.active ? C.greenBg : C.surface, color: rule.active ? C.green : C.muted }}>
+                {rule.active ? "ON" : "OFF"}
+              </button>
+              <button onClick={() => deleteRule(rule.id)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, padding: 4 }}>
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

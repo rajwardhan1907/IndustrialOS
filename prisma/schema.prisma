@@ -28,6 +28,7 @@ model Workspace {
   purchaseOrders PurchaseOrder[]
   shipments      Shipment[]
   returns        Return[]
+  pricingRules   PricingRule[]   // Phase 12
 }
 
 // ── User ──────────────────────────────────────────────────────────────────────
@@ -203,6 +204,24 @@ model Shipment {
   workspaceId    String
   workspace      Workspace @relation(fields: [workspaceId], references: [id])
   createdAt      DateTime  @default(now())
+}
+
+// ── Pricing Rule ─────────────────────────────────────────────────────────────
+// Phase 12 — Pricing Rules Engine
+// Two rule types:
+//   "volume"   — discount kicks in when line-item qty >= minQty
+//   "customer" — discount always applies for a named customer
+model PricingRule {
+  id           String    @id @default(cuid())
+  name         String                          // human label, e.g. "Bulk 200+ deal"
+  type         String                          // "volume" | "customer"
+  minQty       Int       @default(0)           // volume rules: minimum qty to trigger
+  customerName String    @default("")          // customer rules: exact customer name
+  discountPct  Float     @default(0)           // discount percentage e.g. 10 = 10%
+  active       Boolean   @default(true)
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt    DateTime  @default(now())
 }
 
 // ── Return / RMA ──────────────────────────────────────────────────────────────

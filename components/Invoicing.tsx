@@ -1,7 +1,9 @@
 "use client";
 // Phase 15: Multi-currency support — invoices now store and display currency.
+// Phase 12: Pricing Rules Engine — auto-apply discount rules on save.
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { PricingRule, applyPricingRules, getRulesSummary } from "@/lib/pricingRules";
 import {
   Plus, ChevronLeft, CheckCircle, Clock, AlertCircle,
   XCircle, Trash2, User, Calendar, Hash, DollarSign,
@@ -275,6 +277,14 @@ export default function Invoicing() {
         saveInvoices(dbInvs);
       }
     });
+    // Phase 12: load pricing rules
+    const wid = getWorkspaceId();
+    if (wid) {
+      fetch(`/api/pricing-rules?workspaceId=${wid}`)
+        .then(r => r.json())
+        .then(data => { if (Array.isArray(data)) setPriceRules(data); })
+        .catch(() => {});
+    }
   }, []);
 
   const [formCustomer, setFormCustomer] = useState("");
@@ -285,7 +295,10 @@ export default function Invoicing() {
   const [formItems,    setFormItems]    = useState<InvoiceItem[]>([
     { id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 },
   ]);
-  const [formError, setFormError] = useState("");
+  const [formError,    setFormError]    = useState("");
+  // Phase 12: Pricing rules
+  const [priceRules,   setPriceRules]   = useState<PricingRule[]>([]);
+  const [rulesBanner,  setRulesBanner]  = useState("");
 
   const updateItem = (id: string, field: "desc" | "qty" | "unitPrice", val: string) => {
     setFormItems(prev => prev.map(it => {
@@ -312,6 +325,7 @@ export default function Invoicing() {
   const resetForm = () => {
     setFormCustomer(""); setFormTerms("Net 30"); setFormNotes(""); setFormError("");
     setFormItems([{ id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 }]);
+    setRulesBanner("");
   };
 
   const downloadPDF = async (inv: Invoice) => {
@@ -348,14 +362,34 @@ export default function Invoicing() {
     const today   = new Date().toISOString().split("T")[0];
     const dueDate = calcDueDate(today, formTerms);
 
+    // Phase 12: auto-apply pricing rules
+    let finalItems = formItems;
+    let finalSubtotal = formSubtotal;
+    let finalTax      = formTax;
+    let finalTotal    = formTotal;
+    if (priceRules.length > 0) {
+      const ruleItems = formItems.map(it => ({
+        id: it.id, sku: "", desc: it.desc,
+        qty: it.qty, unitPrice: it.unitPrice,
+        discount: 0, total: it.total,
+      }));
+      const applied = applyPricingRules(priceRules, formCustomer.trim(), ruleItems);
+      const banner  = getRulesSummary(priceRules, formCustomer.trim(), applied);
+      setRulesBanner(banner);
+      finalItems    = applied.map(it => ({ id: it.id, desc: it.desc, qty: it.qty, unitPrice: it.unitPrice, total: it.total }));
+      finalSubtotal = parseFloat(finalItems.reduce((s, it) => s + it.total, 0).toFixed(2));
+      finalTax      = parseFloat((finalSubtotal * 0.08).toFixed(2));
+      finalTotal    = parseFloat((finalSubtotal + finalTax).toFixed(2));
+    }
+
     const newInv: Invoice = {
       id:            makeId(),
       invoiceNumber: makeInvNum(),
       customer:      formCustomer.trim(),
-      items:         formItems,
-      subtotal:      formSubtotal,
-      tax:           formTax,
-      total:         formTotal,
+      items:         finalItems,
+      subtotal:      finalSubtotal,
+      tax:           finalTax,
+      total:         finalTotal,
       amountPaid:    0,
       paymentTerms:  formTerms,
       issueDate:     today,
@@ -670,6 +704,14 @@ export default function Invoicing() {
               {emailSending ? "Sending..." : "Send"}
             </button>
             {emailMsg && <span style={{ fontSize: 12, color: emailMsg.includes("success") ? C.green : C.red, fontWeight: 600 }}>{emailMsg}</span>}
+          </div>
+        )}
+
+        {/* Phase 12: Pricing rules banner */}
+        {rulesBanner && (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 14px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 10 }}>
+            <span style={{ fontSize: 15, flexShrink: 0 }}>🏷️</span>
+            <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>{rulesBanner}</span>
           </div>
         )}
 
