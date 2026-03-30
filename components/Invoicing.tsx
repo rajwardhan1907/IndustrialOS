@@ -1,13 +1,15 @@
 "use client";
 // Phase 15: Multi-currency support — invoices now store and display currency.
 // Phase 12: Pricing Rules Engine — auto-apply discount rules on save.
+// Phase 17: CSV export.
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { PricingRule, applyPricingRules, getRulesSummary } from "@/lib/pricingRules";
+import { downloadCSV } from "@/lib/exportCSV";
 import {
   Plus, ChevronLeft, CheckCircle, Clock, AlertCircle,
   XCircle, Trash2, User, Calendar, Hash, DollarSign,
-  FileText, Receipt, CreditCard, RefreshCw,
+  FileText, Receipt, CreditCard, RefreshCw, Download,
 } from "lucide-react";
 import { C, fmt } from "@/lib/utils";
 import { fmtCurrency, CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
@@ -471,14 +473,36 @@ export default function Invoicing() {
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Invoicing &amp; Payments</h1>
           <p style={{ color: C.muted, fontSize: 13 }}>Track payments, manage overdue invoices, record receipts.</p>
         </div>
-        {!isViewer && (
+        <div style={{ display: "flex", gap: 8 }}>
+          {/* Phase 17: CSV Export */}
           <button
-            onClick={() => { resetForm(); setView("create"); }}
-            style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 10, background: `linear-gradient(135deg, ${C.blue}, ${C.purple})`, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            onClick={() => downloadCSV(`invoices_${new Date().toISOString().split("T")[0]}`, invoices.map(inv => ({
+              "Invoice #":    inv.invoiceNumber,
+              Customer:       inv.customer,
+              Status:         inv.status,
+              Subtotal:       inv.subtotal,
+              Tax:            inv.tax,
+              Total:          inv.total,
+              "Amount Paid":  inv.amountPaid,
+              Currency:       inv.currency,
+              "Payment Terms":inv.paymentTerms,
+              "Issue Date":   inv.issueDate,
+              "Due Date":     inv.dueDate,
+              Notes:          inv.notes,
+            })))}
+            style={{ display: "flex", alignItems: "center", gap: 7, padding: "10px 16px", borderRadius: 10, background: C.surface, border: `1px solid ${C.border}`, color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
           >
-            <Plus size={15} /> New Invoice
+            <Download size={14} /> Export CSV
           </button>
-        )}
+          {!isViewer && (
+            <button
+              onClick={() => { resetForm(); setView("create"); }}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px", borderRadius: 10, background: `linear-gradient(135deg, ${C.blue}, ${C.purple})`, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}
+            >
+              <Plus size={15} /> New Invoice
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>

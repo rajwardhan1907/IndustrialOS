@@ -1,6 +1,7 @@
 "use client";
 // components/Suppliers.tsx
 // Phase 16: Purchase Approval Workflows added.
+// Phase 17: CSV export added.
 // POs above the workspace threshold need admin approval before advancing.
 // Admins see Approve / Reject buttons. Non-admins see a "pending approval" banner.
 
@@ -10,8 +11,9 @@ import {
   Plus, ChevronLeft, X, Star, Package,
   Phone, Mail, Globe, Clock, ChevronRight,
   CheckCircle, Send, FileText, XCircle, Truck,
-  ShieldCheck, ShieldX, AlertTriangle,
+  ShieldCheck, ShieldX, AlertTriangle, Download,
 } from "lucide-react";
+import { downloadCSV } from "@/lib/exportCSV";
 import { C } from "@/lib/utils";
 import {
   Supplier, PurchaseOrder, POItem, SupplierStatus, SupplierCategory,
@@ -406,16 +408,36 @@ export default function Suppliers() {
           <h1 style={{ fontSize:22, fontWeight:800, color:C.text, marginBottom:4 }}>Suppliers & Procurement</h1>
           <p style={{ color:C.muted, fontSize:13 }}>Manage suppliers, track purchase orders and deliveries.</p>
         </div>
-        {!isViewer && (
         <div style={{ display:"flex", gap:10 }}>
-          <button onClick={()=>setShowNewPO(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 16px", borderRadius:10, background:C.blueBg, border:`1px solid ${C.blueBorder}`, color:C.blue, fontSize:13, fontWeight:700, cursor:"pointer" }}>
-            <FileText size={14}/> New PO
+          {/* Phase 17: CSV Export */}
+          <button
+            onClick={() => downloadCSV(`suppliers_${new Date().toISOString().split("T")[0]}`, suppliers.map(s => ({
+              Name:          s.name,
+              Category:      s.category,
+              Status:        s.status,
+              Rating:        s.rating,
+              "Contact Name": s.contactName,
+              Email:          s.email,
+              Phone:          s.phone,
+              Country:        s.country,
+              "Payment Terms":s.paymentTerms,
+              "Lead Time":    s.leadTimeDays + " days",
+            })))}
+            style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 14px", borderRadius:10, background:C.surface, border:`1px solid ${C.border}`, color:C.muted, fontSize:13, fontWeight:600, cursor:"pointer" }}
+          >
+            <Download size={13}/> Export CSV
           </button>
-          <button onClick={()=>setShowNewSup(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 18px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-            <Plus size={14}/> Add Supplier
-          </button>
+          {!isViewer && (
+          <>
+            <button onClick={()=>setShowNewPO(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 16px", borderRadius:10, background:C.blueBg, border:`1px solid ${C.blueBorder}`, color:C.blue, fontSize:13, fontWeight:700, cursor:"pointer" }}>
+              <FileText size={14}/> New PO
+            </button>
+            <button onClick={()=>setShowNewSup(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"9px 18px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+              <Plus size={14}/> Add Supplier
+            </button>
+          </>
+          )}
         </div>
-        )}
       </div>
 
       {/* ── Summary cards ── */}

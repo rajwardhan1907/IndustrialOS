@@ -1,13 +1,15 @@
 "use client";
+// Phase 17: CSV export added.
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { fmt, C } from "@/lib/utils";
 import { PricingRule, applyPricingRules, getRulesSummary } from "@/lib/pricingRules";
+import { downloadCSV } from "@/lib/exportCSV";
 import {
   Plus, Sparkles, ChevronLeft, FileText,
   Clock, CheckCircle, XCircle, Send, Trash2,
   Edit3, Package, User, Calendar, Hash,
-  AlertCircle, Loader,
+  AlertCircle, Loader, Download,
 } from "lucide-react";
 
 interface LineItem {
@@ -294,11 +296,33 @@ export default function Quotes() {
           <h1 style={{ fontSize:22, fontWeight:800, color:C.text, marginBottom:4 }}>Quotes &amp; RFQ</h1>
           <p style={{ color:C.muted, fontSize:13 }}>Generate professional quotes in seconds using plain English.</p>
         </div>
-        {!isViewer && (
-          <button onClick={() => { resetNew(); setView("new"); }} style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", borderRadius:10, background:`linear-gradient(135deg,${C.blue},#7c5cbf)`, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:`0 4px 16px ${C.blue}44` }}>
-            <Sparkles size={14}/> New AI Quote
+        <div style={{ display:"flex", gap:8 }}>
+          {/* Phase 17: CSV Export */}
+          <button
+            onClick={() => downloadCSV(`quotes_${new Date().toISOString().split("T")[0]}`, quotes.map(q => ({
+              "Quote #":      q.quoteNumber,
+              Customer:       q.customer,
+              Status:         q.status,
+              Items:          q.items.length,
+              Subtotal:       q.subtotal,
+              "Discount ($)": q.discountAmt,
+              "Tax":          q.tax,
+              Total:          q.total,
+              "Valid Until":  q.validUntil,
+              "Payment Terms":q.paymentTerms,
+              Notes:          q.notes,
+              "Created At":   q.createdAt,
+            })))}
+            style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 16px", borderRadius:10, background:C.surface, border:`1px solid ${C.border}`, color:C.muted, fontSize:13, fontWeight:600, cursor:"pointer" }}
+          >
+            <Download size={14}/> Export CSV
           </button>
-        )}
+          {!isViewer && (
+            <button onClick={() => { resetNew(); setView("new"); }} style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 20px", borderRadius:10, background:`linear-gradient(135deg,${C.blue},#7c5cbf)`, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer", boxShadow:`0 4px 16px ${C.blue}44` }}>
+              <Sparkles size={14}/> New AI Quote
+            </button>
+          )}
+        </div>
       </div>
 
       {quotes.length > 0 && (

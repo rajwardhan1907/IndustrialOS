@@ -1,13 +1,15 @@
 "use client";
 // components/Customers.tsx
 // Customer accounts module — profiles, contacts, order history, credit limits, balances.
+// Phase 17: CSV export added.
 
 import { getHealthScore, HealthGrade } from "@/lib/customerHealth";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { C } from "@/lib/utils";
 import { Card, SectionTitle } from "./Dashboard";
-import { Users, Plus, Search, Building2, Mail, Phone, TrendingUp, AlertCircle } from "lucide-react";
+import { Users, Plus, Search, Building2, Mail, Phone, TrendingUp, AlertCircle, Download } from "lucide-react";
+import { downloadCSV } from "@/lib/exportCSV";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type CustStatus = "active" | "on_hold" | "inactive" | "pending";
@@ -591,6 +593,24 @@ export default function Customers() {
             );
           })}
         </div>
+        {/* Phase 17: CSV Export */}
+        <button
+          onClick={() => downloadCSV(`customers_${new Date().toISOString().split("T")[0]}`, customers.map(c => ({
+            Company:       c.company,
+            Status:        c.status,
+            Industry:      c.industry,
+            Email:         c.contact.email,
+            Phone:         c.contact.phone,
+            Address:          c.address,
+            "Credit Limit":   c.creditLimit,
+            Balance:          c.balance,
+            "Access Code":    c.accessCode ?? "",
+            "Customer Since": c.since,
+          })))}
+          style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+        >
+          <Download size={13} /> Export CSV
+        </button>
         {!isViewer && (
         <button onClick={() => setShowNew(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: C.blue, border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
           <Plus size={14} /> Add Customer
