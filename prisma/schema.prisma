@@ -14,6 +14,7 @@ model Workspace {
   industry            String
   createdAt           DateTime @default(now())
   poApprovalThreshold Float    @default(0)
+  currency            String   @default("USD")  // Phase 15
 
   users          User[]
   orders         Order[]
@@ -70,6 +71,7 @@ model Invoice {
   dueDate       String
   status        String    @default("unpaid")
   notes         String    @default("")
+  currency      String    @default("USD")  // Phase 15
   workspaceId   String
   workspace     Workspace @relation(fields: [workspaceId], references: [id])
   createdAt     DateTime  @default(now())

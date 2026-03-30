@@ -2,12 +2,14 @@
 // components/Settings.tsx
 // Phase 16: Added PO Approval Threshold setting.
 // Phase 9:  Added Customer Self-Signup Link section.
+// Phase 15: Added workspace currency selector.
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { C } from "@/lib/utils";
 import { SectionTitle } from "./Dashboard";
 import { WorkspaceConfig, ModuleId, CustomTab, saveWorkspace, clearWorkspace } from "@/lib/workspace";
+import { CURRENCIES } from "@/lib/currencies";
 import { Plus, Trash2, Copy, CheckCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -71,6 +73,9 @@ export default function Settings({ workspace, onUpdate }: {
     String(workspace.poApprovalThreshold ?? 0)
   );
 
+  // ── Phase 15 — Currency ────────────────────────────────────────────────────
+  const [currency, setCurrency] = useState(workspace.currency ?? "USD");
+
   // ── Phase 9 — Signup link copy state ──────────────────────────────────────
   const [copied, setCopied] = useState(false);
   const workspaceDbId = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") || "" : "";
@@ -103,17 +108,29 @@ export default function Settings({ workspace, onUpdate }: {
 
   const saveAll = () => {
     const threshold = parseFloat(approvalThreshold);
+    const cleanThreshold = isNaN(threshold) || threshold < 0 ? 0 : threshold;
     const updated: WorkspaceConfig = {
       ...workspace,
       companyName:         companyName.trim() || workspace.companyName,
       modules,
       customTabs,
-      poApprovalThreshold: isNaN(threshold) || threshold < 0 ? 0 : threshold,
+      poApprovalThreshold: cleanThreshold,
+      currency,           // Phase 15
     };
     saveWorkspace(updated);
     onUpdate(updated);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+
+    // Phase 15: Sync currency + threshold to DB (fire-and-forget)
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+    if (wid) {
+      fetch("/api/workspaces", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: wid, currency, poApprovalThreshold: cleanThreshold }),
+      }).catch(() => {/* non-blocking */});
+    }
   };
 
   const resetWorkspace = () => {
@@ -232,6 +249,27 @@ export default function Settings({ workspace, onUpdate }: {
               </div>
             );
           })}
+        </div>
+      </Section>
+
+      {/* ── Phase 15: Currency ── */}
+      <Section title="Default Currency">
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          Set your workspace currency. All new invoices and quotes will use this currency. Existing records are not changed.
+        </p>
+        <select
+          value={currency}
+          onChange={e => setCurrency(e.target.value)}
+          style={{ padding: "10px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none", minWidth: 260, cursor: "pointer" }}
+        >
+          {CURRENCIES.map(c => (
+            <option key={c.code} value={c.code}>
+              {c.symbol}  {c.name} ({c.code})
+            </option>
+          ))}
+        </select>
+        <div style={{ marginTop: 10, fontSize: 12, color: C.muted }}>
+          Currently set to <strong>{currency}</strong>. This is used as the default on invoices, quotes, and customer profiles.
         </div>
       </Section>
 

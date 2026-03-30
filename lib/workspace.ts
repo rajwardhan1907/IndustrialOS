@@ -1,5 +1,6 @@
 // lib/workspace.ts
 // Phase 18: Added "returns" to ModuleId.
+// Phase 15: Added currency field to WorkspaceConfig.
 
 export type Industry =
   | "manufacturer"
@@ -46,6 +47,7 @@ export interface WorkspaceConfig {
   onboardingDone:      boolean;
   suggestedPlan:       "starter" | "growth" | "business" | "scale" | "enterprise";
   poApprovalThreshold: number;
+  currency:            string;  // Phase 15 — ISO 4217 code e.g. "USD"
 }
 
 export const DEFAULT_WORKSPACE: WorkspaceConfig = {
@@ -57,6 +59,7 @@ export const DEFAULT_WORKSPACE: WorkspaceConfig = {
   onboardingDone:      false,
   suggestedPlan:       "starter",
   poApprovalThreshold: 0,
+  currency:            "USD",  // Phase 15
 };
 
 export const PLANS = {
@@ -108,6 +111,7 @@ export function loadWorkspace(): WorkspaceConfig | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WorkspaceConfig;
     if (parsed.poApprovalThreshold === undefined) parsed.poApprovalThreshold = 0;
+    if (parsed.currency            === undefined) parsed.currency            = "USD";
     return parsed;
   } catch {
     return null;

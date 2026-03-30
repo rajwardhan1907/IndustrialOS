@@ -42,6 +42,7 @@ export async function POST(req: Request) {
         dueDate:       body.dueDate       ?? '',
         status:        body.status        ?? 'unpaid',
         notes:         body.notes         ?? '',
+        currency:      body.currency      ?? 'USD',  // Phase 15
         workspaceId:   body.workspaceId,
       },
     })
