@@ -10,7 +10,7 @@ import { Card, SectionTitle } from "./Dashboard";
 import { Users, Plus, Search, Building2, Mail, Phone, TrendingUp, AlertCircle } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type CustStatus = "active" | "on_hold" | "inactive";
+type CustStatus = "active" | "on_hold" | "inactive" | "pending";
 
 interface CustomerContact {
   name:  string;
@@ -114,7 +114,7 @@ function dbToCustomer(d: any): Customer {
     id:          d.id,
     company:     d.name,
     industry:    d.industry     || "",
-    status:      (d.status as CustStatus) || "active",
+    status:      (["active","on_hold","inactive","pending"].includes(d.status) ? d.status : "active") as CustStatus,
     creditLimit: d.creditLimit  || 0,
     balance:     d.balanceDue   || 0,
     totalSpend:  0,                // not in DB schema — defaults to 0
@@ -193,13 +193,14 @@ const fmtMoney = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionD
 const fmtDate  = (s: string) => new Date(s).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 
 const STATUS_CFG: Record<CustStatus, { label: string; bg: string; color: string; border: string }> = {
-  active:   { label: "Active",   bg: C.greenBg, color: C.green, border: C.greenBorder },
-  on_hold:  { label: "On Hold",  bg: C.amberBg, color: C.amber, border: C.amberBorder },
-  inactive: { label: "Inactive", bg: C.surface, color: C.subtle, border: C.border     },
+  active:   { label: "Active",    bg: C.greenBg,  color: C.green,  border: C.greenBorder  },
+  on_hold:  { label: "On Hold",   bg: C.amberBg,  color: C.amber,  border: C.amberBorder  },
+  inactive: { label: "Inactive",  bg: C.surface,  color: C.subtle, border: C.border       },
+  pending:  { label: "⏳ Pending", bg: C.purpleBg, color: C.purple, border: C.purpleBorder },
 };
 
 function Badge({ status }: { status: CustStatus }) {
-  const s = STATUS_CFG[status];
+  const s = STATUS_CFG[status] ?? { label: status, bg: C.surface, color: C.subtle, border: C.border };
   return (
     <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
       {s.label}

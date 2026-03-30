@@ -16,7 +16,7 @@ export interface HealthScore {
 
 // Each customer has these fields relevant to scoring
 interface ScoringInput {
-  status:      "active" | "on_hold" | "inactive";
+  status:      "active" | "on_hold" | "inactive" | "pending";
   balance:     number;  // outstanding balance due
   creditLimit: number;
   totalSpend:  number;
