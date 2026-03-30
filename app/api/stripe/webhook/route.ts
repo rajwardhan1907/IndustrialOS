@@ -3,7 +3,7 @@
 // Listens for checkout.session.completed and auto-updates invoice status.
 
 import { NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { prisma } from "@/lib/prisma";
 
 // Disable body parsing — Stripe needs the raw body to verify the signature
@@ -22,7 +22,7 @@ export async function POST(req: Request) {
     // Verify the webhook signature
     let event;
     try {
-      event = stripe.webhooks.constructEvent(
+      event = getStripe().webhooks.constructEvent(
         body,
         signature,
         process.env.STRIPE_WEBHOOK_SECRET || ""
