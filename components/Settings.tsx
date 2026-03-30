@@ -89,7 +89,7 @@ export default function Settings({ workspace, onUpdate }: {
   const [copied, setCopied] = useState(false);
   const workspaceDbId = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") || "" : "";
   const signupUrl = workspaceDbId
-    ? `${typeof window !== "undefined" ? window.location.origin : ""}/portal/signup?workspace=${workspaceDbId}`
+    ? `${typeof window !== "undefined" ? window.location.origin : ""}/portal/signup?w=${workspaceDbId}`
     : "";
 
   const copySignupLink = () => {
