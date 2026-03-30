@@ -21,7 +21,7 @@ export async function POST(req: Request) {
   return NextResponse.json(workspace)
 }
 
-// Phase 16: UPDATE workspace settings (e.g. poApprovalThreshold from Settings page)
+// Phase 16 + 15: UPDATE workspace settings
 export async function PATCH(req: Request) {
   try {
     const body = await req.json()
@@ -33,6 +33,7 @@ export async function PATCH(req: Request) {
       data: {
         ...(body.name                !== undefined && { name:                body.name                }),
         ...(body.poApprovalThreshold !== undefined && { poApprovalThreshold: body.poApprovalThreshold }),
+        ...(body.currency            !== undefined && { currency:            body.currency            }),  // Phase 15
       },
     })
     return NextResponse.json(workspace)

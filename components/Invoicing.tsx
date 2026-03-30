@@ -1,4 +1,5 @@
 "use client";
+// Phase 15: Multi-currency support — invoices now store and display currency.
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import {
@@ -7,6 +8,8 @@ import {
   FileText, Receipt, CreditCard, RefreshCw,
 } from "lucide-react";
 import { C, fmt } from "@/lib/utils";
+import { fmtCurrency, CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
+import { loadWorkspace } from "@/lib/workspace";
 
 interface InvoiceItem {
   id:        string;
@@ -33,6 +36,7 @@ interface Invoice {
   dueDate:       string;
   status:        InvoiceStatus;
   notes:         string;
+  currency:      string;  // Phase 15
   createdAt:     string;
 }
 
@@ -53,7 +57,8 @@ const TERMS_DAYS: Record<PaymentTerms, number> = {
 const makeId      = () => Math.random().toString(36).slice(2, 9);
 const makeInvNum  = () => `INV-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
 const fmtDate     = (d: string) => new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
-const fmtMoney    = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Phase 15: currency-aware money formatter — uses invoice currency if provided, else workspace default
+const fmtMoney = (n: number, currencyCode?: string) => fmtCurrency(n, currencyCode ?? DEFAULT_CURRENCY);
 
 function calcDueDate(issueDate: string, terms: PaymentTerms): string {
   const d = new Date(issueDate);
@@ -274,6 +279,8 @@ export default function Invoicing() {
   const [formCustomer, setFormCustomer] = useState("");
   const [formTerms,    setFormTerms]    = useState<PaymentTerms>("Net 30");
   const [formNotes,    setFormNotes]    = useState("");
+  // Phase 15 — currency defaults to workspace setting
+  const [formCurrency, setFormCurrency] = useState<string>(() => loadWorkspace()?.currency ?? DEFAULT_CURRENCY);
   const [formItems,    setFormItems]    = useState<InvoiceItem[]>([
     { id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 },
   ]);
@@ -354,6 +361,7 @@ export default function Invoicing() {
       dueDate,
       status:        "unpaid",
       notes:         formNotes.trim(),
+      currency:      formCurrency,  // Phase 15
       createdAt:     new Date().toISOString(),
     };
 
@@ -380,7 +388,7 @@ export default function Invoicing() {
     const amount = parseFloat(payAmount);
     if (isNaN(amount) || amount <= 0) { setPayError("Enter a valid amount."); return; }
     const remaining = selected.total - selected.amountPaid;
-    if (amount > remaining) { setPayError(`Max payment is ${fmtMoney(remaining)}.`); return; }
+    if (amount > remaining) { setPayError(`Max payment is ${fmtMoney(remaining, selected?.currency)}.`); return; }
 
     const newPaid = selected.amountPaid + amount;
     const updated = invoices.map(inv => {
@@ -498,9 +506,9 @@ export default function Invoicing() {
                 >
                   <td style={{ padding: "13px 16px", fontWeight: 700, color: C.blue, fontFamily: "monospace" }}>{inv.invoiceNumber}</td>
                   <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}>{inv.customer}</td>
-                  <td style={{ padding: "13px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(inv.total)}</td>
+                  <td style={{ padding: "13px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(inv.total, inv.currency)}</td>
                   <td style={{ padding: "13px 16px", color: inv.amountPaid > 0 ? C.green : C.subtle }}>
-                    {inv.amountPaid > 0 ? fmtMoney(inv.amountPaid) : "—"}
+                    {inv.amountPaid > 0 ? fmtMoney(inv.amountPaid, inv.currency) : "—"}
                   </td>
                   <td style={{ padding: "13px 16px", color: inv.status === "overdue" ? C.red : C.muted }}>{fmtDate(inv.dueDate)}</td>
                   <td style={{ padding: "13px 16px" }}><Badge status={inv.status} /></td>
@@ -539,6 +547,15 @@ export default function Invoicing() {
             </select>
           </div>
         </div>
+        {/* Phase 15 — Currency selector */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Currency</label>
+          <select value={formCurrency} onChange={e => setFormCurrency(e.target.value)} style={{ width: "100%", padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none", fontFamily: "inherit" }}>
+            {CURRENCIES.map(c => (
+              <option key={c.code} value={c.code}>{c.symbol}  {c.name} ({c.code})</option>
+            ))}
+          </select>
+        </div>
         <div>
           <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Notes (optional)</label>
           <textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="e.g. Payment instructions, PO number, special terms…" rows={2}
@@ -567,7 +584,7 @@ export default function Invoicing() {
                 style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", textAlign: "center" }} />
               <input type="number" min="0" step="0.01" value={item.unitPrice || ""} onChange={e => updateItem(item.id, "unitPrice", e.target.value)} placeholder="0.00"
                 style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none" }} />
-              <div style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, fontWeight: 700, color: C.text }}>{fmtMoney(item.total)}</div>
+              <div style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, fontWeight: 700, color: C.text }}>{fmtMoney(item.total, selected?.currency)}</div>
               <button onClick={() => removeItem(item.id)} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <XCircle size={16} />
               </button>
@@ -696,17 +713,17 @@ export default function Invoicing() {
                 <tr key={item.id} style={{ borderTop: `1px solid ${C.border}` }}>
                   <td style={{ padding: "11px 16px", color: C.text }}>{item.desc}</td>
                   <td style={{ padding: "11px 16px", color: C.muted }}>{item.qty.toLocaleString()}</td>
-                  <td style={{ padding: "11px 16px", color: C.muted }}>{fmtMoney(item.unitPrice)}</td>
-                  <td style={{ padding: "11px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(item.total)}</td>
+                  <td style={{ padding: "11px 16px", color: C.muted }}>{fmtMoney(item.unitPrice, selected?.currency)}</td>
+                  <td style={{ padding: "11px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(item.total, selected?.currency)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div style={{ padding: "14px 18px", borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
             {[
-              ["Subtotal", fmtMoney(selected.subtotal), false],
-              ["Tax (8%)", fmtMoney(selected.tax),      false],
-              ["Total",    fmtMoney(selected.total),    true ],
+              ["Subtotal", fmtMoney(selected.subtotal, selected.currency), false],
+              ["Tax (8%)", fmtMoney(selected.tax, selected.currency),      false],
+              ["Total",    fmtMoney(selected.total, selected.currency),    true ],
             ].map(([label, val, bold]) => (
               <div key={label as string} style={{ display: "flex", gap: 40 }}>
                 <span style={{ fontSize: 13, color: C.muted, minWidth: 80 }}>{label}</span>
@@ -720,8 +737,8 @@ export default function Invoicing() {
           <Card>
             <SectionTitle>Payment Progress</SectionTitle>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 8 }}>
-              <span style={{ color: C.muted }}>Paid: <strong style={{ color: C.green }}>{fmtMoney(selected.amountPaid)}</strong></span>
-              <span style={{ color: C.muted }}>Remaining: <strong style={{ color: C.red }}>{fmtMoney(remaining)}</strong></span>
+              <span style={{ color: C.muted }}>Paid: <strong style={{ color: C.green }}>{fmtMoney(selected.amountPaid, selected.currency)}</strong></span>
+              <span style={{ color: C.muted }}>Remaining: <strong style={{ color: C.red }}>{fmtMoney(remaining, selected?.currency)}</strong></span>
               <span style={{ color: C.muted }}>{paidPct}% paid</span>
             </div>
             <div style={{ height: 10, background: C.bg, borderRadius: 999, overflow: "hidden", border: `1px solid ${C.border}`, marginBottom: 18 }}>
@@ -730,7 +747,7 @@ export default function Invoicing() {
             <div style={{ display: "flex", gap: 10, alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Record Payment ($)</label>
-                <input type="number" min="0" step="0.01" value={payAmount} onChange={e => { setPayAmount(e.target.value); setPayError(""); }} placeholder={`Up to ${fmtMoney(remaining)}`}
+                <input type="number" min="0" step="0.01" value={payAmount} onChange={e => { setPayAmount(e.target.value); setPayError(""); }} placeholder={`Up to ${fmtMoney(remaining, selected?.currency)}`}
                   style={{ width: "100%", padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" }} />
               </div>
               <button onClick={recordPayment} style={{ padding: "10px 18px", borderRadius: 9, background: C.blueBg, border: `1px solid ${C.blueBorder}`, color: C.blue, fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -749,7 +766,7 @@ export default function Invoicing() {
         {selected.status === "paid" && (
           <div style={{ padding: "14px 18px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 12, fontSize: 14, color: C.green, display: "flex", alignItems: "center", gap: 10 }}>
             <CheckCircle size={18} />
-            <div><strong>Fully paid</strong> — {fmtMoney(selected.total)} received.</div>
+            <div><strong>Fully paid</strong> — {fmtMoney(selected.total, selected.currency)} received.</div>
           </div>
         )}
 

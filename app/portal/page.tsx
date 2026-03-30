@@ -27,7 +27,7 @@ interface DBOrder {
 interface DBInvoice {
   id: string; invoiceNumber: string; customer: string; total: number;
   amountPaid: number; dueDate: string; status: string; createdAt: string;
-  paymentTerms: string;
+  paymentTerms: string; currency: string;  // Phase 15
 }
 interface DBQuote {
   id: string; quoteNumber: string; customer: string; total: number;
@@ -62,8 +62,16 @@ const INVOICE_STYLE: Record<string, { label: string; color: string; bg: string; 
   partial: { label: "Partial", color: P.purple, bg: P.purpleBg, border: P.purpleBorder },
 };
 
-const fmtMoney = (n: number) =>
-  `$${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+// Phase 15: currency-aware formatter. Falls back to $ if no currency provided.
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD:"$", EUR:"€", GBP:"£", INR:"₹", CAD:"CA$", AUD:"A$",
+  AED:"د.إ", SGD:"S$", JPY:"¥", CNY:"¥", CHF:"Fr", BRL:"R$",
+  MXN:"MX$", ZAR:"R", SAR:"﷼",
+};
+const fmtMoney = (n: number, currency?: string) => {
+  const symbol = currency ? (CURRENCY_SYMBOLS[currency] ?? currency + " ") : "$";
+  return `${symbol}${(n || 0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+};
 const fmtDate = (d: string) => {
   if (!d) return "—";
   try { return new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }); }
@@ -486,10 +494,10 @@ export default function PortalPage() {
                       </div>
                       <div style={{ fontSize: 13, color: P.muted }}>Issued {fmtDate(inv.createdAt)} · Due {fmtDate(inv.dueDate)} · {inv.paymentTerms}</div>
                       {inv.amountPaid > 0 && inv.status !== "paid" && (
-                        <div style={{ fontSize: 12, color: P.green, marginTop: 3 }}>✓ {fmtMoney(inv.amountPaid)} paid · {fmtMoney(remaining)} remaining</div>
+                        <div style={{ fontSize: 12, color: P.green, marginTop: 3 }}>✓ {fmtMoney(inv.amountPaid, inv.currency)} paid · {fmtMoney(remaining, inv.currency)} remaining</div>
                       )}
                     </div>
-                    <div style={{ fontWeight: 800, fontSize: 20, color: P.text }}>{fmtMoney(inv.total)}</div>
+                    <div style={{ fontWeight: 800, fontSize: 20, color: P.text }}>{fmtMoney(inv.total, inv.currency)}</div>
                   </div>
                   {inv.status === "overdue" && (
                     <div style={{ marginTop: 12, padding: "8px 12px", background: P.redBg, border: `1px solid ${P.redBorder}`, borderRadius: 8, fontSize: 12, color: P.red }}>
@@ -510,7 +518,7 @@ export default function PortalPage() {
                           cursor: payingInvoice === inv.id ? "not-allowed" : "pointer",
                         }}
                       >
-                        {payingInvoice === inv.id ? "Redirecting to Stripe…" : `💳 Pay Now — ${fmtMoney(remaining)}`}
+                        {payingInvoice === inv.id ? "Redirecting to Stripe…" : `💳 Pay Now — ${fmtMoney(remaining, inv.currency)}`}
                       </button>
                       <span style={{ fontSize: 11, color: P.muted }}>Secure payment via Stripe</span>
                     </div>
