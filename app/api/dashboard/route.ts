@@ -80,7 +80,7 @@ export async function GET(req: Request) {
     }).reverse()
 
     // Alerts
-    const alerts = []
+    const alerts: { id: number; sev: string; msg: string; time: string }[] = []
     if (queue > 10) {
       alerts.push({ id: 1, sev: 'warn', msg: `${queue} orders waiting in queue`, time: 'now' })
     }

@@ -112,6 +112,7 @@ async function fetchInvoicesFromDb(): Promise<Invoice[]> {
       dueDate:       d.dueDate,
       status:        deriveStatus(d) as InvoiceStatus,
       notes:         d.notes,
+      currency:      d.currency ?? "USD",  // Phase 15
       createdAt:     typeof d.createdAt === "string" ? d.createdAt : new Date(d.createdAt).toISOString(),
     }));
   } catch { return []; }
@@ -157,7 +158,7 @@ function seedDemoInvoices(): Invoice[] {
       ],
       subtotal: 24300, tax: 1944, total: 26244, amountPaid: 0,
       paymentTerms: "Net 30", issueDate: past(10), dueDate: future(20),
-      status: "unpaid", notes: "Please pay by due date.", createdAt: past(10),
+      status: "unpaid", notes: "Please pay by due date.", currency: "USD", createdAt: past(10),
     },
     {
       id: "demo2", invoiceNumber: "INV-2026-0201",
@@ -167,7 +168,7 @@ function seedDemoInvoices(): Invoice[] {
       ],
       subtotal: 44800, tax: 3584, total: 48384, amountPaid: 48384,
       paymentTerms: "Net 30", issueDate: past(25), dueDate: past(5),
-      status: "paid", notes: "", createdAt: past(25),
+      status: "paid", notes: "", currency: "USD", createdAt: past(25),
     },
     {
       id: "demo3", invoiceNumber: "INV-2026-0188",
@@ -178,7 +179,7 @@ function seedDemoInvoices(): Invoice[] {
       ],
       subtotal: 23950, tax: 1916, total: 25866, amountPaid: 0,
       paymentTerms: "Net 30", issueDate: past(45), dueDate: past(15),
-      status: "overdue", notes: "Second reminder sent.", createdAt: past(45),
+      status: "overdue", notes: "Second reminder sent.", currency: "USD", createdAt: past(45),
     },
     {
       id: "demo4", invoiceNumber: "INV-2026-0298",
@@ -188,7 +189,7 @@ function seedDemoInvoices(): Invoice[] {
       ],
       subtotal: 12600, tax: 1008, total: 13608, amountPaid: 7000,
       paymentTerms: "Net 60", issueDate: past(14), dueDate: future(46),
-      status: "partial", notes: "Partial payment of $7,000 received.", createdAt: past(14),
+      status: "partial", notes: "Partial payment of $7,000 received.", currency: "USD", createdAt: past(14),
     },
   ];
   return demos;

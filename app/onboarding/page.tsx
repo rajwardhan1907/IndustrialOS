@@ -108,6 +108,7 @@ export default function OnboardingPage() {
       onboardingDone: true,
       suggestedPlan:  plan,
       poApprovalThreshold: 0,
+      currency:            "USD",  // Phase 15
     };
 
     // Save to localStorage (keeps app working as before)

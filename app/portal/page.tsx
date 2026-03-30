@@ -5,7 +5,7 @@
 // - Quote accept/decline updates DB via /api/quotes PATCH
 // - Order list auto-refreshes after submitting a new request
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const P = {
   bg: "#f7f8fc", surface: "#ffffff", border: "#e4e8f0", border2: "#cdd3e0",
