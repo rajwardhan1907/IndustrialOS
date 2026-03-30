@@ -105,6 +105,47 @@ export default function PortalPage() {
   const [reqSending,  setReqSending]  = useState(false);
   const [reqError,    setReqError]    = useState("");
 
+  // Phase 14 — Stripe Pay Now
+  const [payingInvoice, setPayingInvoice] = useState<string | null>(null);
+  const [paymentMsg,    setPaymentMsg]    = useState<{ type: "success" | "cancelled"; invoice: string } | null>(null);
+
+  // Check URL params for payment result on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    const inv     = params.get("invoice");
+    if (payment === "success" && inv) {
+      setPaymentMsg({ type: "success", invoice: inv });
+      setTab("invoices");
+      // Clean URL
+      window.history.replaceState({}, "", "/portal");
+    } else if (payment === "cancelled" && inv) {
+      setPaymentMsg({ type: "cancelled", invoice: inv });
+      setTab("invoices");
+      window.history.replaceState({}, "", "/portal");
+    }
+  }, []);
+
+  const handlePayNow = async (invoiceId: string) => {
+    setPayingInvoice(invoiceId);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Payment failed");
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
+      alert(err.message || "Could not start payment. Please try again.");
+      setPayingInvoice(null);
+    }
+  };
+
   // ── Login ─────────────────────────────────────────────────────────────────
   const login = async () => {
     setLoggingIn(true); setLoginErr("");
@@ -409,6 +450,19 @@ export default function PortalPage() {
         {tab === "invoices" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <SectionTitle>Invoices ({invoices.length})</SectionTitle>
+            {/* Phase 14 — Payment result banner */}
+            {paymentMsg && paymentMsg.type === "success" && (
+              <div style={{ padding: "14px 16px", background: P.greenBg, border: `1px solid ${P.greenBorder}`, borderRadius: 10, fontSize: 13, color: P.green, marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>✅ Payment received for <strong>{paymentMsg.invoice}</strong>. Thank you!</span>
+                <button onClick={() => setPaymentMsg(null)} style={{ background: "none", border: "none", color: P.green, cursor: "pointer", fontSize: 16, fontWeight: 700 }}>×</button>
+              </div>
+            )}
+            {paymentMsg && paymentMsg.type === "cancelled" && (
+              <div style={{ padding: "14px 16px", background: P.amberBg, border: `1px solid ${P.amberBorder}`, borderRadius: 10, fontSize: 13, color: P.amber, marginBottom: 4, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Payment for <strong>{paymentMsg.invoice}</strong> was cancelled. You can try again anytime.</span>
+                <button onClick={() => setPaymentMsg(null)} style={{ background: "none", border: "none", color: P.amber, cursor: "pointer", fontSize: 16, fontWeight: 700 }}>×</button>
+              </div>
+            )}
             {totalBalance > 0 && (
               <div style={{ padding: "12px 16px", background: P.amberBg, border: `1px solid ${P.amberBorder}`, borderRadius: 10, fontSize: 13, color: P.amber, marginBottom: 4 }}>
                 💳 You have <strong>{fmtMoney(totalBalance)}</strong> outstanding.
@@ -440,6 +494,25 @@ export default function PortalPage() {
                   {inv.status === "overdue" && (
                     <div style={{ marginTop: 12, padding: "8px 12px", background: P.redBg, border: `1px solid ${P.redBorder}`, borderRadius: 8, fontSize: 12, color: P.red }}>
                       ⚠️ This invoice is overdue. Please contact your supplier to arrange payment.
+                    </div>
+                  )}
+                  {/* Phase 14 — Pay Now button for unpaid/overdue/partial invoices */}
+                  {inv.status !== "paid" && remaining > 0 && (
+                    <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 12 }}>
+                      <button
+                        onClick={() => handlePayNow(inv.id)}
+                        disabled={payingInvoice === inv.id}
+                        style={{
+                          padding: "10px 22px", borderRadius: 9,
+                          background: payingInvoice === inv.id ? P.border : "linear-gradient(135deg, #3b6fd4, #6d28d9)",
+                          border: "none", color: payingInvoice === inv.id ? P.muted : "#fff",
+                          fontSize: 13, fontWeight: 700,
+                          cursor: payingInvoice === inv.id ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {payingInvoice === inv.id ? "Redirecting to Stripe…" : `💳 Pay Now — ${fmtMoney(remaining)}`}
+                      </button>
+                      <span style={{ fontSize: 11, color: P.muted }}>Secure payment via Stripe</span>
                     </div>
                   )}
                 </Card>
