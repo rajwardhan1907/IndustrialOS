@@ -24,20 +24,21 @@ interface CustomerOrder {
 }
 
 interface Customer {
-  id:           string;
-  company:      string;
-  industry:     string;
-  status:       CustStatus;
-  creditLimit:  number;
-  balance:      number;       // outstanding balance
-  totalSpend:   number;       // lifetime spend
-  contact:      CustomerContact;
-  address:      string;
-  accessCode:   string;       // for the customer portal
-  orders:       CustomerOrder[];
-  since:        string;       // ISO date
-  paymentTerms: string;
-  notes:        string;
+  id:              string;
+  company:         string;
+  industry:        string;
+  status:          CustStatus;
+  creditLimit:     number;
+  balance:         number;       // outstanding balance
+  totalSpend:      number;       // lifetime spend
+  contact:         CustomerContact;
+  address:         string;
+  accessCode:      string;       // for the customer portal
+  orders:          CustomerOrder[];
+  since:           string;       // ISO date
+  paymentTerms:    string;
+  notes:           string;
+  whatsappPaused:  boolean;      // Phase 11
 }
 
 // ── Seed data ─────────────────────────────────────────────────────────────────
@@ -52,7 +53,7 @@ const SEED: Customer[] = [
       { number: "INV-2026-0312", date: "Mar 5, 2026",  value: 26244, status: "Overdue" },
       { number: "INV-2026-0201", date: "Feb 20, 2026", value: 16416, status: "Paid"    },
     ],
-    since: "2023-06-01", paymentTerms: "Net 15", notes: "Key account. Prefers email comms. Always orders in bulk.",
+    since: "2023-06-01", whatsappPaused: false, paymentTerms: "Net 15", notes: "Key account. Prefers email comms. Always orders in bulk.",
   },
   {
     id: "c2", company: "TechWave Ltd", industry: "Technology", status: "active",
@@ -63,7 +64,7 @@ const SEED: Customer[] = [
     orders: [
       { number: "INV-2026-0298", date: "Mar 1, 2026",  value: 48384, status: "Partial" },
     ],
-    since: "2022-11-15", paymentTerms: "Net 30", notes: "Large quarterly orders. Net 30 — occasionally pays in 45 days.",
+    since: "2022-11-15", whatsappPaused: false, paymentTerms: "Net 30", notes: "Large quarterly orders. Net 30 — occasionally pays in 45 days.",
   },
   {
     id: "c3", company: "Midland Steel", industry: "Distribution", status: "active",
@@ -74,7 +75,7 @@ const SEED: Customer[] = [
     orders: [
       { number: "INV-2026-0188", date: "Mar 10, 2026", value: 24408, status: "Sent"  },
     ],
-    since: "2024-01-10", paymentTerms: "Net 30", notes: "New customer. Good payment record so far.",
+    since: "2024-01-10", whatsappPaused: false, paymentTerms: "Net 30", notes: "New customer. Good payment record so far.",
   },
   {
     id: "c4", company: "Apex Industrial",  industry: "Construction", status: "on_hold",
@@ -83,7 +84,7 @@ const SEED: Customer[] = [
     address: "300 Commerce St, Dallas, TX 75201",
     accessCode: "APEX2024",
     orders: [],
-    since: "2023-09-20", paymentTerms: "Prepaid", notes: "Account on hold — overdue balance. Contact before taking new orders.",
+    since: "2023-09-20", whatsappPaused: false, paymentTerms: "Prepaid", notes: "Account on hold — overdue balance. Contact before taking new orders.",
   },
 ];
 
@@ -127,8 +128,9 @@ function dbToCustomer(d: any): Customer {
     accessCode:   d.portalCode   || "",
     orders:       Array.isArray(d.orders) ? d.orders : (typeof d.orders === "string" ? JSON.parse(d.orders || "[]") : []),
     since:        typeof d.createdAt === "string" ? d.createdAt.split("T")[0] : new Date(d.createdAt).toISOString().split("T")[0],
-    paymentTerms: "Net 30",       // not in DB schema
-    notes:        d.notes        || "",
+    paymentTerms:   "Net 30",             // not in DB schema
+    notes:          d.notes        || "",
+    whatsappPaused: d.whatsappPaused ?? false,  // Phase 11
   };
 }
 
@@ -228,6 +230,7 @@ function NewCustomerModal({ onSave, onClose }: { onSave: (c: Customer) => void; 
       address: address.trim(), accessCode: code, orders: [],
       since: new Date().toISOString().split("T")[0],
       paymentTerms: terms, notes: notes.trim(),
+      whatsappPaused: false, // Phase 11
     };
     onSave(cust); onClose();
   };
@@ -290,9 +293,10 @@ function NewCustomerModal({ onSave, onClose }: { onSave: (c: Customer) => void; 
 }
 
 // ── Customer detail panel ─────────────────────────────────────────────────────
-function CustomerDetail({ cust, onClose, onStatusChange, isViewer }: {
+function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, isViewer }: {
   cust: Customer; onClose: () => void;
-  onStatusChange: (id: string, s: CustStatus) => void;
+  onStatusChange:   (id: string, s: CustStatus) => void;
+  onWhatsAppToggle: (id: string, paused: boolean) => void;  // Phase 11
   isViewer?: boolean;
 }) {
   const usedCredit = (cust.balance / cust.creditLimit) * 100;
@@ -429,6 +433,19 @@ function CustomerDetail({ cust, onClose, onStatusChange, isViewer }: {
           {!isViewer && cust.status !== "active"   && <button onClick={() => onStatusChange(cust.id, "active")}   style={{ padding: "8px 16px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 8, color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Set Active</button>}
           {!isViewer && cust.status !== "on_hold"  && <button onClick={() => onStatusChange(cust.id, "on_hold")}  style={{ padding: "8px 16px", background: C.amberBg, border: `1px solid ${C.amberBorder}`, borderRadius: 8, color: C.amber, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Put on Hold</button>}
           {!isViewer && cust.status !== "inactive" && <button onClick={() => onStatusChange(cust.id, "inactive")} style={{ padding: "8px 16px", background: C.surface, border: `1px solid ${C.border}`,       borderRadius: 8, color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Deactivate</button>}
+          {/* Phase 11 — WhatsApp pause toggle */}
+          {!isViewer && (
+            <button
+              onClick={() => onWhatsAppToggle(cust.id, !cust.whatsappPaused)}
+              style={{ padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                background: cust.whatsappPaused ? C.surface : C.greenBg,
+                border:     cust.whatsappPaused ? `1px solid ${C.border}` : `1px solid ${C.greenBorder}`,
+                color:      cust.whatsappPaused ? C.muted : C.green,
+              }}
+            >
+              {cust.whatsappPaused ? "▶ Resume WhatsApp" : "⏸ Pause WhatsApp"}
+            </button>
+          )}
           <button onClick={onClose} style={{ padding: "8px 16px", background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", marginLeft: "auto" }}>Close</button>
         </div>
       </div>
@@ -466,8 +483,15 @@ export default function Customers() {
   };
   const changeStatus = (id: string, status: CustStatus) => {
     save(customers.map(c => c.id === id ? { ...c, status } : c));
-    updateCustomerInDb(id, { status }); // fire-and-forget
+    updateCustomerInDb(id, { status });
     setSelected(prev => prev?.id === id ? { ...prev, status } : prev);
+  };
+
+  // Phase 11 — toggle WhatsApp pause per customer
+  const toggleWhatsApp = (id: string, paused: boolean) => {
+    save(customers.map(c => c.id === id ? { ...c, whatsappPaused: paused } : c));
+    updateCustomerInDb(id, { whatsappPaused: paused });
+    setSelected(prev => prev?.id === id ? { ...prev, whatsappPaused: paused } : prev);
   };
 
   const visible = customers.filter(c => {
@@ -586,7 +610,7 @@ export default function Customers() {
       </Card>
 
       {showNew  && <NewCustomerModal onSave={addCustomer} onClose={() => setShowNew(false)} />}
-      {selected && <CustomerDetail  cust={selected} onClose={() => setSelected(null)} onStatusChange={changeStatus} isViewer={isViewer} />}
+      {selected && <CustomerDetail cust={selected} onClose={() => setSelected(null)} onStatusChange={changeStatus} onWhatsAppToggle={toggleWhatsApp} isViewer={isViewer} />}
     </div>
   );
 }

@@ -48,6 +48,8 @@ export interface WorkspaceConfig {
   suggestedPlan:       "starter" | "growth" | "business" | "scale" | "enterprise";
   poApprovalThreshold: number;
   currency:            string;  // Phase 15 — ISO 4217 code e.g. "USD"
+  whatsappEnabled:     boolean; // Phase 11
+  whatsappStages:      string;  // Phase 11 — comma-separated e.g. "Confirmed,Shipped,Delivered"
 }
 
 export const DEFAULT_WORKSPACE: WorkspaceConfig = {
@@ -59,7 +61,9 @@ export const DEFAULT_WORKSPACE: WorkspaceConfig = {
   onboardingDone:      false,
   suggestedPlan:       "starter",
   poApprovalThreshold: 0,
-  currency:            "USD",  // Phase 15
+  currency:            "USD",   // Phase 15
+  whatsappEnabled:     false,   // Phase 11
+  whatsappStages:      "Confirmed,Shipped,Delivered", // Phase 11
 };
 
 export const PLANS = {
@@ -112,6 +116,8 @@ export function loadWorkspace(): WorkspaceConfig | null {
     const parsed = JSON.parse(raw) as WorkspaceConfig;
     if (parsed.poApprovalThreshold === undefined) parsed.poApprovalThreshold = 0;
     if (parsed.currency            === undefined) parsed.currency            = "USD";
+    if (parsed.whatsappEnabled     === undefined) parsed.whatsappEnabled     = false;
+    if (parsed.whatsappStages      === undefined) parsed.whatsappStages      = "Confirmed,Shipped,Delivered";
     return parsed;
   } catch {
     return null;

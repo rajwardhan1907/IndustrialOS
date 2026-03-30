@@ -108,7 +108,9 @@ export default function OnboardingPage() {
       onboardingDone: true,
       suggestedPlan:  plan,
       poApprovalThreshold: 0,
-      currency:            "USD",  // Phase 15
+      currency:            "USD",   // Phase 15
+      whatsappEnabled:     false,   // Phase 11
+      whatsappStages:      "Confirmed,Shipped,Delivered", // Phase 11
     };
 
     // Save to localStorage (keeps app working as before)

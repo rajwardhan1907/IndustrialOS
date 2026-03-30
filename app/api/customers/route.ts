@@ -93,8 +93,9 @@ export async function PATCH(req: Request) {
         ...(body.balanceDue  !== undefined && { balanceDue:  body.balanceDue  }),
         ...(body.status      !== undefined && { status:      body.status      }),
         ...(body.portalCode  !== undefined && { portalCode:  body.portalCode  }),
-        ...(body.notes       !== undefined && { notes:       body.notes       }),
-        ...(body.orders      !== undefined && { orders:      body.orders      }),
+        ...(body.notes           !== undefined && { notes:           body.notes           }),
+        ...(body.orders          !== undefined && { orders:          body.orders          }),
+        ...(body.whatsappPaused  !== undefined && { whatsappPaused:  body.whatsappPaused  }),  // Phase 11
       },
     })
     return NextResponse.json(customer)

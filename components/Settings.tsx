@@ -76,6 +76,15 @@ export default function Settings({ workspace, onUpdate }: {
   // ── Phase 15 — Currency ────────────────────────────────────────────────────
   const [currency, setCurrency] = useState(workspace.currency ?? "USD");
 
+  // ── Phase 11 — WhatsApp ────────────────────────────────────────────────────
+  const WA_STAGES = ["Confirmed", "Picked", "Shipped", "Delivered"];
+  const [waEnabled, setWaEnabled]   = useState(workspace.whatsappEnabled ?? false);
+  const [waStages,  setWaStages]    = useState<string[]>(
+    workspace.whatsappStages ? workspace.whatsappStages.split(",").map(s => s.trim()) : ["Confirmed", "Shipped", "Delivered"]
+  );
+  const toggleWaStage = (stage: string) =>
+    setWaStages(prev => prev.includes(stage) ? prev.filter(s => s !== stage) : [...prev, stage]);
+
   // ── Phase 9 — Signup link copy state ──────────────────────────────────────
   const [copied, setCopied] = useState(false);
   const workspaceDbId = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") || "" : "";
@@ -115,20 +124,28 @@ export default function Settings({ workspace, onUpdate }: {
       modules,
       customTabs,
       poApprovalThreshold: cleanThreshold,
-      currency,           // Phase 15
+      currency,                          // Phase 15
+      whatsappEnabled: waEnabled,        // Phase 11
+      whatsappStages:  waStages.join(","),// Phase 11
     };
     saveWorkspace(updated);
     onUpdate(updated);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
 
-    // Phase 15: Sync currency + threshold to DB (fire-and-forget)
+    // Sync to DB (fire-and-forget)
     const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
     if (wid) {
       fetch("/api/workspaces", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: wid, currency, poApprovalThreshold: cleanThreshold }),
+        body: JSON.stringify({
+          id: wid,
+          currency,
+          poApprovalThreshold: cleanThreshold,
+          whatsappEnabled: waEnabled,        // Phase 11
+          whatsappStages:  waStages.join(","),// Phase 11
+        }),
       }).catch(() => {/* non-blocking */});
     }
   };
@@ -271,6 +288,62 @@ export default function Settings({ workspace, onUpdate }: {
         <div style={{ marginTop: 10, fontSize: 12, color: C.muted }}>
           Currently set to <strong>{currency}</strong>. This is used as the default on invoices, quotes, and customer profiles.
         </div>
+      </Section>
+
+      {/* ── Phase 11: WhatsApp Order Updates ── */}
+      <Section title="WhatsApp Order Updates">
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          Automatically send your customers a WhatsApp message when their order advances. Powered by Twilio. Requires <strong>TWILIO_ACCOUNT_SID</strong>, <strong>TWILIO_AUTH_TOKEN</strong>, and <strong>TWILIO_WHATSAPP_FROM</strong> in your environment variables.
+        </p>
+
+        {/* Master toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}>
+          <div
+            onClick={() => setWaEnabled(v => !v)}
+            style={{
+              width: 44, height: 24, borderRadius: 12, cursor: "pointer",
+              background: waEnabled ? C.green : C.border,
+              position: "relative", transition: "background 0.2s", flexShrink: 0,
+            }}
+          >
+            <div style={{
+              width: 18, height: 18, borderRadius: "50%", background: "#fff",
+              position: "absolute", top: 3,
+              left: waEnabled ? 23 : 3, transition: "left 0.2s",
+              boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+            }} />
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: waEnabled ? C.green : C.muted }}>
+            {waEnabled ? "WhatsApp notifications ON" : "WhatsApp notifications OFF"}
+          </span>
+        </div>
+
+        {/* Stage toggles */}
+        {waEnabled && (
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+              Send message when order reaches:
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+              {WA_STAGES.map(stage => {
+                const active = waStages.includes(stage);
+                return (
+                  <button key={stage} onClick={() => toggleWaStage(stage)} style={{
+                    padding: "7px 14px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    background: active ? C.blueBg   : C.bg,
+                    border:     active ? `1px solid ${C.blueBorder}` : `1px solid ${C.border}`,
+                    color:      active ? C.blue     : C.muted,
+                  }}>
+                    {stage === "Confirmed" ? "✅ Confirmed" : stage === "Picked" ? "📦 Picked" : stage === "Shipped" ? "🚚 Shipped" : "🎉 Delivered"}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ marginTop: 12, fontSize: 12, color: C.muted }}>
+              Messages are sent to the customer's phone number. You can pause WhatsApp per customer in the Customers tab.
+            </div>
+          </div>
+        )}
       </Section>
 
       {/* ── Phase 16: PO Approval Threshold ── */}

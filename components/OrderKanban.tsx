@@ -1,7 +1,7 @@
 "use client";
 // components/OrderKanban.tsx
-// Phase 4: Now loads from DB via fetchOrdersFromDb().
-// Writes still go to localStorage immediately (fast UI) + DB in background.
+// Phase 4:  Now loads from DB via fetchOrdersFromDb().
+// Phase 11: Fires WhatsApp notification on stage advance.
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
@@ -180,7 +180,24 @@ export default function OrderKanban() {
         const idx = STAGES.indexOf(o.stage);
         if (idx >= STAGES.length - 1) return o;
         const newStage = STAGES[idx + 1];
-        updateOrderInDb(id, { stage: newStage }); // update DB in background
+        updateOrderInDb(id, { stage: newStage });
+
+        // Phase 11 — fire WhatsApp notification (fire-and-forget)
+        const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+        if (wid) {
+          fetch("/api/whatsapp", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderId:      o.id,
+              customerName: o.customer,
+              stage:        newStage,
+              sku:          o.sku,
+              workspaceId:  wid,
+            }),
+          }).catch(() => {/* non-blocking */});
+        }
+
         return { ...o, stage: newStage };
       });
       saveOrders(updated);

@@ -14,7 +14,9 @@ model Workspace {
   industry            String
   createdAt           DateTime @default(now())
   poApprovalThreshold Float    @default(0)
-  currency            String   @default("USD")  // Phase 15
+  currency            String   @default("USD")   // Phase 15
+  whatsappEnabled     Boolean  @default(false)   // Phase 11
+  whatsappStages      String   @default("Confirmed,Shipped,Delivered") // Phase 11
 
   users          User[]
   orders         Order[]
@@ -91,11 +93,12 @@ model Customer {
   totalSpend  Float     @default(0)
   status      String    @default("active")
   portalCode  String    @default("")
-  notes       String    @default("")
-  orders      Json      @default("[]")
-  workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id])
-  createdAt   DateTime  @default(now())
+  notes           String    @default("")
+  orders          Json      @default("[]")
+  whatsappPaused  Boolean   @default(false)  // Phase 11
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt       DateTime  @default(now())
 }
 
 // ── Quote ─────────────────────────────────────────────────────────────────────

@@ -34,6 +34,8 @@ export async function PATCH(req: Request) {
         ...(body.name                !== undefined && { name:                body.name                }),
         ...(body.poApprovalThreshold !== undefined && { poApprovalThreshold: body.poApprovalThreshold }),
         ...(body.currency            !== undefined && { currency:            body.currency            }),  // Phase 15
+        ...(body.whatsappEnabled     !== undefined && { whatsappEnabled:     body.whatsappEnabled     }),  // Phase 11
+        ...(body.whatsappStages      !== undefined && { whatsappStages:      body.whatsappStages      }),  // Phase 11
       },
     })
     return NextResponse.json(workspace)
