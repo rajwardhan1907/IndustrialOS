@@ -213,7 +213,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [session]);
 
-  const [pipe, setPipe] = useState<any>(null);
   const [crm,  setCrm]  = useState({
     salesforce: "disconnected",
     hubspot:    "disconnected",
@@ -277,7 +276,7 @@ export default function App() {
       );
       case "pipeline":  return (
         <ErrorBoundary label="Pipeline failed to load">
-          <Pipeline pipe={pipe} setPipe={setPipe} />
+          <Pipeline />
         </ErrorBoundary>
       );
       case "orders":    return (
