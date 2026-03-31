@@ -148,56 +148,6 @@ async function deleteInvoiceFromDb(id: string): Promise<void> {
   try { await fetch(`/api/invoices?id=${id}`, { method: "DELETE" }); } catch {}
 }
 
-function seedDemoInvoices(): Invoice[] {
-  const today = new Date();
-  const past   = (d: number) => new Date(today.getTime() - d * 86400000).toISOString().split("T")[0];
-  const future = (d: number) => new Date(today.getTime() + d * 86400000).toISOString().split("T")[0];
-
-  const demos: Invoice[] = [
-    {
-      id: "demo1", invoiceNumber: "INV-2026-0312",
-      customer: "Acme Corp",
-      items: [
-        { id: "i1", desc: "SKU-4821 — Industrial bolts M10", qty: 6, unitPrice: 4050, total: 24300 },
-      ],
-      subtotal: 24300, tax: 1944, total: 26244, amountPaid: 0,
-      paymentTerms: "Net 30", issueDate: past(10), dueDate: future(20),
-      status: "unpaid", notes: "Please pay by due date.", currency: "USD", createdAt: past(10),
-    },
-    {
-      id: "demo2", invoiceNumber: "INV-2026-0201",
-      customer: "TechWave Ltd",
-      items: [
-        { id: "i2", desc: "SKU-2210 — Conveyor belt assembly", qty: 8, unitPrice: 5600, total: 44800 },
-      ],
-      subtotal: 44800, tax: 3584, total: 48384, amountPaid: 48384,
-      paymentTerms: "Net 30", issueDate: past(25), dueDate: past(5),
-      status: "paid", notes: "", currency: "USD", createdAt: past(25),
-    },
-    {
-      id: "demo3", invoiceNumber: "INV-2026-0188",
-      customer: "NovaBuild Inc",
-      items: [
-        { id: "i3", desc: "SKU-3318 — Steel framing unit",     qty: 4, unitPrice: 3800, total: 15200 },
-        { id: "i4", desc: "SKU-7753 — Anchor bolts (set/100)", qty: 2, unitPrice: 4375, total: 8750  },
-      ],
-      subtotal: 23950, tax: 1916, total: 25866, amountPaid: 0,
-      paymentTerms: "Net 30", issueDate: past(45), dueDate: past(15),
-      status: "overdue", notes: "Second reminder sent.", currency: "USD", createdAt: past(45),
-    },
-    {
-      id: "demo4", invoiceNumber: "INV-2026-0298",
-      customer: "TechWave Ltd",
-      items: [
-        { id: "i5", desc: "SKU-9034 — Motor controller unit", qty: 3, unitPrice: 4200, total: 12600 },
-      ],
-      subtotal: 12600, tax: 1008, total: 13608, amountPaid: 7000,
-      paymentTerms: "Net 60", issueDate: past(14), dueDate: future(46),
-      status: "partial", notes: "Partial payment of $7,000 received.", currency: "USD", createdAt: past(14),
-    },
-  ];
-  return demos;
-}
 
 const Card = ({ children, style = {} }: any) => (
   <div style={{
@@ -250,15 +200,7 @@ export default function Invoicing() {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
   const [view,     setView]     = useState<"list" | "create" | "detail">("list");
-  const [invoices, setInvoices] = useState<Invoice[]>(() => {
-    const saved = loadInvoices();
-    if (saved.length === 0) {
-      const demo = seedDemoInvoices();
-      saveInvoices(demo);
-      return demo;
-    }
-    return saved;
-  });
+  const [invoices, setInvoices] = useState<Invoice[]>(() => loadInvoices());
   const [selected,  setSelected]  = useState<Invoice | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payError,  setPayError]  = useState("");

@@ -107,44 +107,6 @@ const StatusBadge = ({ status }: { status: ContractStatus }) => {
   );
 };
 
-// ── Seed data (shown first time, before DB loads) ─────────────────────────────
-function seedContracts(): Contract[] {
-  const today  = new Date();
-  const past   = (d: number) => new Date(today.getTime() - d * 86400000).toISOString().split("T")[0];
-  const future = (d: number) => new Date(today.getTime() + d * 86400000).toISOString().split("T")[0];
-  return [
-    {
-      id: "ct1", contractNumber: "CT-2026-1001",
-      title: "Steel Supply Agreement — Acme Corp",
-      customer: "Acme Corp",
-      minOrderQty: 500, agreedPricing: "Fixed rate $4,050/unit for SKU-4821. 5% rebate above 2,000 units/quarter.",
-      deliverySLA: 14, value: 480000,
-      startDate: past(180), expiryDate: future(185),
-      status: "active", notes: "Preferred supplier contract. Auto-renews if not cancelled 60 days prior.",
-      createdAt: past(180),
-    },
-    {
-      id: "ct2", contractNumber: "CT-2026-1002",
-      title: "Conveyor Components — TechWave Ltd",
-      customer: "TechWave Ltd",
-      minOrderQty: 100, agreedPricing: "SKU-2210 at $5,320/unit — 5% discount on contract rate. Net 60 payment.",
-      deliverySLA: 21, value: 220000,
-      startDate: past(300), expiryDate: future(25),
-      status: "expiring", notes: "Renewal discussion ongoing. Customer has indicated interest in a 2-year extension.",
-      createdAt: past(300),
-    },
-    {
-      id: "ct3", contractNumber: "CT-2025-0871",
-      title: "Annual Framing Supply — NovaBuild Inc",
-      customer: "NovaBuild Inc",
-      minOrderQty: 200, agreedPricing: "SKU-3318 at $3,610/unit. Price locked for 12 months.",
-      deliverySLA: 10, value: 150000,
-      startDate: past(400), expiryDate: past(35),
-      status: "expired", notes: "Expired — pending renewal. Customer last contacted 2 weeks ago.",
-      createdAt: past(400),
-    },
-  ];
-}
 
 // ── New Contract Form ─────────────────────────────────────────────────────────
 function NewContractModal({ onSave, onClose }: {
@@ -258,15 +220,7 @@ export default function Contracts() {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
 
-  const [contracts, setContracts] = useState<Contract[]>(() => {
-    const saved = loadContracts();
-    if (saved.length === 0) {
-      const seed = seedContracts();
-      saveContracts(seed);
-      return seed;
-    }
-    return saved;
-  });
+  const [contracts, setContracts] = useState<Contract[]>(() => loadContracts());
   const [view,     setView]     = useState<"list" | "detail">("list");
   const [selected, setSelected] = useState<Contract | null>(null);
   const [showNew,  setShowNew]  = useState(false);

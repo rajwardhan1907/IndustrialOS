@@ -60,32 +60,6 @@ function getWorkspaceId(): string {
   return localStorage.getItem("workspaceDbId") ?? "";
 }
 
-// ── Seed demo data ────────────────────────────────────────────────────────────
-function seedInventory(): InventoryItem[] {
-  const ago = (h: number) => new Date(Date.now() - h * 3600000).toISOString();
-  return [
-    { id:"inv1",  sku:"SKU-4821", name:"Industrial Bolts M10 (Box/100)",   category:"Fasteners",   stockLevel:1240, reorderPoint:200, reorderQty:500, unitCost:4.50,   warehouse:"Warehouse A", zone:"A", binLocation:"A-02-1", lastSynced:ago(1),  supplier:"SteelCo Industries"  },
-    { id:"inv2",  sku:"SKU-7753", name:"Bearing Assembly B-204",           category:"Bearings",    stockLevel:85,   reorderPoint:100, reorderQty:200, unitCost:45.00,  warehouse:"Warehouse A", zone:"B", binLocation:"B-07-3", lastSynced:ago(2),  supplier:"PrecisionParts GmbH" },
-    { id:"inv3",  sku:"SKU-3318", name:"Steel Framing Unit 200x100",       category:"Structural",  stockLevel:42,   reorderPoint:50,  reorderQty:100, unitCost:38.00,  warehouse:"Warehouse B", zone:"A", binLocation:"A-15-2", lastSynced:ago(3),  supplier:"SteelCo Industries"  },
-    { id:"inv4",  sku:"SKU-9034", name:"Motor Controller Unit MC-400",     category:"Electronics", stockLevel:0,    reorderPoint:20,  reorderQty:50,  unitCost:420.00, warehouse:"Warehouse A", zone:"C", binLocation:"C-03-1", lastSynced:ago(4),  supplier:"TechEquip Asia"      },
-    { id:"inv5",  sku:"SKU-2210", name:"Conveyor Belt Assembly CB-60",     category:"Mechanical",  stockLevel:18,   reorderPoint:25,  reorderQty:30,  unitCost:560.00, warehouse:"Warehouse B", zone:"B", binLocation:"B-12-4", lastSynced:ago(1),  supplier:"PrecisionParts GmbH" },
-    { id:"inv6",  sku:"SKU-5512", name:"Hydraulic Cylinder 80mm Bore",     category:"Hydraulics",  stockLevel:310,  reorderPoint:50,  reorderQty:100, unitCost:95.00,  warehouse:"Warehouse A", zone:"D", binLocation:"D-04-2", lastSynced:ago(2),  supplier:"SteelCo Industries"  },
-    { id:"inv7",  sku:"SKU-1190", name:"Safety Gloves Class 4 (Pair)",     category:"Safety",      stockLevel:12,   reorderPoint:100, reorderQty:200, unitCost:8.50,   warehouse:"Warehouse C", zone:"A", binLocation:"A-01-1", lastSynced:ago(5),  supplier:"PackRight Solutions" },
-    { id:"inv8",  sku:"SKU-8834", name:"Pneumatic Valve 3/2 Way",          category:"Pneumatics",  stockLevel:220,  reorderPoint:40,  reorderQty:80,  unitCost:32.00,  warehouse:"Warehouse A", zone:"B", binLocation:"B-09-1", lastSynced:ago(3),  supplier:"PrecisionParts GmbH" },
-    { id:"inv9",  sku:"SKU-6621", name:"Anchor Bolts M16 (Box/50)",        category:"Fasteners",   stockLevel:5,    reorderPoint:80,  reorderQty:200, unitCost:12.00,  warehouse:"Warehouse B", zone:"A", binLocation:"A-03-2", lastSynced:ago(6),  supplier:"SteelCo Industries"  },
-    { id:"inv10", sku:"SKU-3047", name:"Chain Drive Sprocket 40T",         category:"Mechanical",  stockLevel:67,   reorderPoint:30,  reorderQty:60,  unitCost:28.00,  warehouse:"Warehouse A", zone:"C", binLocation:"C-11-3", lastSynced:ago(2),  supplier:"PrecisionParts GmbH" },
-  ];
-}
-
-function seedConflicts(): ConflictLog[] {
-  return [
-    { id:1, sku:"SKU-4821", field:"price",  before:"$4.20",  after:"$4.50",  src:"CRM sync",   time:"2m ago",  status:"alert"    },
-    { id:2, sku:"SKU-7753", field:"stock",  before:"90",     after:"85",     src:"WH scan",    time:"5m ago",  status:"alert"    },
-    { id:3, sku:"SKU-3318", field:"price",  before:"$36.00", after:"$38.00", src:"Supplier",   time:"12m ago", status:"resolved" },
-    { id:4, sku:"SKU-2210", field:"stock",  before:"22",     after:"18",     src:"Order fill", time:"1h ago",  status:"resolved" },
-  ];
-}
-
 // ── localStorage (cache) ──────────────────────────────────────────────────────
 const INV_KEY = "industrialos_inventory";
 const CON_KEY = "industrialos_inv_conflicts";
@@ -94,12 +68,7 @@ export function loadInventory(): InventoryItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(INV_KEY);
-    if (!raw) {
-      const demo = seedInventory();
-      localStorage.setItem(INV_KEY, JSON.stringify(demo));
-      return demo;
-    }
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 
@@ -112,12 +81,7 @@ export function loadConflicts(): ConflictLog[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(CON_KEY);
-    if (!raw) {
-      const demo = seedConflicts();
-      localStorage.setItem(CON_KEY, JSON.stringify(demo));
-      return demo;
-    }
-    return JSON.parse(raw);
+    return raw ? JSON.parse(raw) : [];
   } catch { return []; }
 }
 

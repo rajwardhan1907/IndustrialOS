@@ -161,6 +161,25 @@ export default function App() {
   const [alerts, setAlerts] = useState<any[]>([]);
 
   useEffect(() => {
+    // One-time migration: clear old localStorage seed/demo data so the app
+    // starts blank for real use. A flag prevents this running more than once.
+    if (!localStorage.getItem("industrialos_seed_cleared_v1")) {
+      const SEED_KEYS = [
+        "industrialos_inventory",
+        "industrialos_inv_conflicts",
+        "industrialos_suppliers",
+        "industrialos_pos",
+        "industrialos_orders",
+        "industrialos_shipments",
+        "industrialos_customers",
+        "industrialos_invoices",
+        "industrialos_contracts",
+        "industrialos_quotes",
+      ];
+      SEED_KEYS.forEach(k => localStorage.removeItem(k));
+      localStorage.setItem("industrialos_seed_cleared_v1", "1");
+    }
+
     const ws = loadWorkspace();
     if (!ws || !ws.onboardingDone) { router.push("/onboarding"); return; }
     setWorkspace(ws);

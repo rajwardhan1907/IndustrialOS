@@ -43,58 +43,11 @@ interface Customer {
   whatsappPaused:  boolean;      // Phase 11
 }
 
-// ── Seed data ─────────────────────────────────────────────────────────────────
-const SEED: Customer[] = [
-  {
-    id: "c1", company: "Acme Corp", industry: "Manufacturing", status: "active",
-    creditLimit: 100000, balance: 26244, totalSpend: 154300,
-    contact: { name: "James Hartley", role: "Purchasing Manager", email: "buyer@acmecorp.com", phone: "+1 312-555-0192" },
-    address: "400 W Superior St, Chicago, IL 60654",
-    accessCode: "ACME2024",
-    orders: [
-      { number: "INV-2026-0312", date: "Mar 5, 2026",  value: 26244, status: "Overdue" },
-      { number: "INV-2026-0201", date: "Feb 20, 2026", value: 16416, status: "Paid"    },
-    ],
-    since: "2023-06-01", whatsappPaused: false, paymentTerms: "Net 15", notes: "Key account. Prefers email comms. Always orders in bulk.",
-  },
-  {
-    id: "c2", company: "TechWave Ltd", industry: "Technology", status: "active",
-    creditLimit: 200000, balance: 24384, totalSpend: 287400,
-    contact: { name: "Sarah Chen", role: "Head of Procurement", email: "purchasing@techwave.com", phone: "+1 415-555-0234" },
-    address: "101 California St, San Francisco, CA 94111",
-    accessCode: "TECH2024",
-    orders: [
-      { number: "INV-2026-0298", date: "Mar 1, 2026",  value: 48384, status: "Partial" },
-    ],
-    since: "2022-11-15", whatsappPaused: false, paymentTerms: "Net 30", notes: "Large quarterly orders. Net 30 — occasionally pays in 45 days.",
-  },
-  {
-    id: "c3", company: "Midland Steel", industry: "Distribution", status: "active",
-    creditLimit: 75000, balance: 24408, totalSpend: 98500,
-    contact: { name: "Robert Marsh",  role: "Operations Director", email: "orders@midlandsteel.com", phone: "+1 312-555-0371" },
-    address: "2200 S Halsted St, Chicago, IL 60608",
-    accessCode: "MIDL2024",
-    orders: [
-      { number: "INV-2026-0188", date: "Mar 10, 2026", value: 24408, status: "Sent"  },
-    ],
-    since: "2024-01-10", whatsappPaused: false, paymentTerms: "Net 30", notes: "New customer. Good payment record so far.",
-  },
-  {
-    id: "c4", company: "Apex Industrial",  industry: "Construction", status: "on_hold",
-    creditLimit: 50000, balance: 18200, totalSpend: 62100,
-    contact: { name: "Diana Perez",   role: "Buyer",                email: "diana@apexind.com",          phone: "+1 214-555-0089" },
-    address: "300 Commerce St, Dallas, TX 75201",
-    accessCode: "APEX2024",
-    orders: [],
-    since: "2023-09-20", whatsappPaused: false, paymentTerms: "Prepaid", notes: "Account on hold — overdue balance. Contact before taking new orders.",
-  },
-];
-
 const STORAGE_KEY = "industrialos_customers";
 function loadCustomers(): Customer[] {
-  if (typeof window === "undefined") return SEED;
-  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : SEED; }
-  catch { return SEED; }
+  if (typeof window === "undefined") return [];
+  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : []; }
+  catch { return []; }
 }
 function saveCustomers(list: Customer[]) {
   if (typeof window !== "undefined") localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
