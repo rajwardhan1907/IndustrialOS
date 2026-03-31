@@ -1,10 +1,12 @@
 "use client";
 // Phase 17: CSV export added.
+// Phase 13: AI Negotiation Assistant panel added.
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { fmt, C } from "@/lib/utils";
 import { PricingRule, applyPricingRules, getRulesSummary } from "@/lib/pricingRules";
 import { downloadCSV } from "@/lib/exportCSV";
+import { loadWorkspace } from "@/lib/workspace";
 import {
   Plus, Sparkles, ChevronLeft, FileText,
   Clock, CheckCircle, XCircle, Send, Trash2,
@@ -146,8 +148,15 @@ export default function Quotes() {
   const [aiError,   setAiError]  = useState("");
   const [draft,     setDraft]    = useState<Quote | null>(null);
   const [selected,  setSelected] = useState<Quote | null>(null);
-  const [priceRules, setPriceRules] = useState<PricingRule[]>([]);  // Phase 12
-  const [rulesBanner, setRulesBanner] = useState("");               // Phase 12
+  const [priceRules,       setPriceRules]       = useState<PricingRule[]>([]);  // Phase 12
+  const [rulesBanner,      setRulesBanner]      = useState("");                 // Phase 12
+  // Phase 13 — AI Negotiation
+  const [aiNegotiationOn,  setAiNegotiationOn]  = useState(false);
+  const [showNegotiation,  setShowNegotiation]  = useState(false);
+  const [negLoading,       setNegLoading]       = useState(false);
+  const [negSuggestion,    setNegSuggestion]    = useState("");
+  const [negCtx,           setNegCtx]           = useState("");
+  const [negError,         setNegError]         = useState("");
   const textRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -169,7 +178,31 @@ export default function Quotes() {
         .then(data => { if (Array.isArray(data)) setPriceRules(data); })
         .catch(() => {});
     }
+    // Phase 13: check if AI negotiation is enabled
+    const ws = loadWorkspace();
+    if (ws) setAiNegotiationOn(ws.aiNegotiation ?? false);
   }, []);
+
+  // Phase 13 — AI Negotiation
+  const runNegotiation = async (quote: Quote) => {
+    setNegLoading(true);
+    setNegSuggestion("");
+    setNegError("");
+    try {
+      const res = await fetch("/api/ai/negotiate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quote, prompt: negCtx }),
+      });
+      const data = await res.json();
+      if (!res.ok) setNegError(data.error ?? "AI error");
+      else setNegSuggestion(data.suggestion ?? "");
+    } catch (e: unknown) {
+      setNegError(e instanceof Error ? e.message : "Request failed");
+    } finally {
+      setNegLoading(false);
+    }
+  };
 
   const generate = async () => {
     if (!prompt.trim()) return;
@@ -674,6 +707,53 @@ export default function Quotes() {
               </button>
             ))}
           </div>
+        </Card>
+      )}
+
+      {/* Phase 13: AI Negotiation Assistant */}
+      {aiNegotiationOn && !isViewer && (
+        <Card>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: showNegotiation ? 14 : 0 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontSize:16 }}>🤖</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:C.text }}>Negotiation Assistant</div>
+                <div style={{ fontSize:11, color:C.muted }}>AI-powered counter-offer strategy</div>
+              </div>
+            </div>
+            <button onClick={() => { setShowNegotiation(v=>!v); setNegSuggestion(""); setNegError(""); }} style={{
+              padding:"6px 14px", background: showNegotiation ? C.bg : C.blueBg,
+              border:`1px solid ${showNegotiation ? C.border : C.blueBorder}`,
+              borderRadius:8, color: showNegotiation ? C.muted : C.blue,
+              fontSize:12, fontWeight:700, cursor:"pointer",
+            }}>
+              {showNegotiation ? "Hide" : "Get Advice"}
+            </button>
+          </div>
+          {showNegotiation && (
+            <div>
+              <textarea
+                value={negCtx}
+                onChange={e => setNegCtx(e.target.value)}
+                placeholder="Optional: add context (e.g. 'customer is pushing back on price, wants 15% off overall')"
+                rows={2}
+                style={{ width:"100%", padding:"9px 11px", background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, color:C.text, fontSize:13, resize:"vertical", outline:"none", boxSizing:"border-box", marginBottom:10 }}
+              />
+              <button onClick={() => runNegotiation(selected)} disabled={negLoading} style={{
+                padding:"8px 20px", background:C.blue, border:"none", borderRadius:8,
+                color:"#fff", fontSize:13, fontWeight:700, cursor: negLoading ? "not-allowed" : "pointer",
+                opacity: negLoading ? 0.7 : 1,
+              }}>
+                {negLoading ? "Analysing…" : "Suggest Counter-Offer"}
+              </button>
+              {negError && <div style={{ marginTop:10, padding:"10px 14px", background:C.redBg, border:`1px solid ${C.redBorder}`, borderRadius:8, color:C.red, fontSize:13 }}>{negError}</div>}
+              {negSuggestion && (
+                <div style={{ marginTop:12, padding:"14px 16px", background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, fontSize:13, color:C.text, lineHeight:1.7, whiteSpace:"pre-wrap" }}>
+                  {negSuggestion}
+                </div>
+              )}
+            </div>
+          )}
         </Card>
       )}
 

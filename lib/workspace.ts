@@ -2,6 +2,9 @@
 // Phase 18: Added "returns" to ModuleId.
 // Phase 15: Added currency field to WorkspaceConfig.
 // Phase 12 (roadmap): Added "contracts" to ModuleId.
+// Phase 13 (roadmap): Added AI feature toggles.
+// Phase 17 (roadmap): Added accounting integration flags.
+// Phase 20 (roadmap): Added "reports" to ModuleId.
 
 export type Industry =
   | "manufacturer"
@@ -30,7 +33,8 @@ export type ModuleId =
   | "pipeline"
   | "health"
   | "returns"      // Phase 18
-  | "contracts";   // Phase 12 (roadmap)
+  | "contracts"    // Phase 12 (roadmap)
+  | "reports";     // Phase 20 (roadmap)
 
 export interface CustomTab {
   id:    string;
@@ -49,9 +53,16 @@ export interface WorkspaceConfig {
   onboardingDone:      boolean;
   suggestedPlan:       "starter" | "growth" | "business" | "scale" | "enterprise";
   poApprovalThreshold: number;
-  currency:            string;  // Phase 15 — ISO 4217 code e.g. "USD"
-  whatsappEnabled:     boolean; // Phase 11
-  whatsappStages:      string;  // Phase 11 — comma-separated e.g. "Confirmed,Shipped,Delivered"
+  currency:            string;   // Phase 15 — ISO 4217 code e.g. "USD"
+  whatsappEnabled:     boolean;  // Phase 11
+  whatsappStages:      string;   // Phase 11 — comma-separated e.g. "Confirmed,Shipped,Delivered"
+  // Phase 13 (roadmap) — AI feature toggles
+  aiNegotiation:       boolean;  // Negotiation assistant on quotes
+  aiReorder:           boolean;  // Smart reorder prediction in inventory
+  aiPriceCompare:      boolean;  // Supplier price comparison in PO creation
+  // Phase 17 (roadmap) — Accounting integrations
+  quickbooksConnected: boolean;
+  xeroConnected:       boolean;
 }
 
 export const DEFAULT_WORKSPACE: WorkspaceConfig = {
@@ -63,9 +74,14 @@ export const DEFAULT_WORKSPACE: WorkspaceConfig = {
   onboardingDone:      false,
   suggestedPlan:       "starter",
   poApprovalThreshold: 0,
-  currency:            "USD",   // Phase 15
-  whatsappEnabled:     false,   // Phase 11
-  whatsappStages:      "Confirmed,Shipped,Delivered", // Phase 11
+  currency:            "USD",
+  whatsappEnabled:     false,
+  whatsappStages:      "Confirmed,Shipped,Delivered",
+  aiNegotiation:       false,
+  aiReorder:           false,
+  aiPriceCompare:      false,
+  quickbooksConnected: false,
+  xeroConnected:       false,
 };
 
 export const PLANS = {
@@ -116,10 +132,16 @@ export function loadWorkspace(): WorkspaceConfig | null {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as WorkspaceConfig;
+    // Backward-compat defaults for new fields
     if (parsed.poApprovalThreshold === undefined) parsed.poApprovalThreshold = 0;
     if (parsed.currency            === undefined) parsed.currency            = "USD";
     if (parsed.whatsappEnabled     === undefined) parsed.whatsappEnabled     = false;
     if (parsed.whatsappStages      === undefined) parsed.whatsappStages      = "Confirmed,Shipped,Delivered";
+    if (parsed.aiNegotiation       === undefined) parsed.aiNegotiation       = false;
+    if (parsed.aiReorder           === undefined) parsed.aiReorder           = false;
+    if (parsed.aiPriceCompare      === undefined) parsed.aiPriceCompare      = false;
+    if (parsed.quickbooksConnected === undefined) parsed.quickbooksConnected = false;
+    if (parsed.xeroConnected       === undefined) parsed.xeroConnected       = false;
     return parsed;
   } catch {
     return null;

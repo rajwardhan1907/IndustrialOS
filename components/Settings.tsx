@@ -1,5 +1,7 @@
 "use client";
 // components/Settings.tsx
+// Phase 17: Added QuickBooks/Xero accounting integration section.
+// Phase 13: Added AI feature toggles section.
 // Phase 16: Added PO Approval Threshold setting.
 // Phase 9:  Added Customer Self-Signup Link section.
 // Phase 15: Added workspace currency selector.
@@ -77,6 +79,46 @@ export default function Settings({ workspace, onUpdate }: {
   // ── Phase 15 — Currency ────────────────────────────────────────────────────
   const [currency, setCurrency] = useState(workspace.currency ?? "USD");
 
+  // ── Phase 13 — AI feature toggles ────────────────────────────────────────
+  const [aiNegotiation, setAiNegotiation] = useState(workspace.aiNegotiation  ?? false);
+  const [aiReorder,     setAiReorder]     = useState(workspace.aiReorder       ?? false);
+  const [aiPriceCompare,setAiPriceCompare]= useState(workspace.aiPriceCompare  ?? false);
+
+  // ── Phase 17 — Accounting ─────────────────────────────────────────────────
+  const [accountingStatus, setAccountingStatus] = useState<{
+    quickbooks: { connected: boolean; available: boolean };
+    xero:       { connected: boolean; available: boolean };
+  } | null>(null);
+  const [accountingMsg, setAccountingMsg] = useState("");
+
+  useEffect(() => {
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+    if (!wid) return;
+    fetch(`/api/accounting?action=status&workspaceId=${wid}`)
+      .then(r => r.json())
+      .then(d => setAccountingStatus(d))
+      .catch(() => {});
+  }, []);
+
+  const handleAccountingAction = async (provider: "quickbooks" | "xero", action: "auth" | "disconnect" | "sync") => {
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+    if (!wid) return;
+    setAccountingMsg("");
+    if (action === "auth") {
+      const res  = await fetch(`/api/accounting?action=auth&provider=${provider}&workspaceId=${wid}`);
+      const data = await res.json();
+      if (data.url) { window.open(data.url, "_blank"); }
+      else setAccountingMsg(data.error ?? "OAuth not available — add credentials to .env");
+    } else {
+      const res  = await fetch("/api/accounting", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, provider, workspaceId: wid }) });
+      const data = await res.json();
+      setAccountingMsg(data.message ?? data.error ?? "Done");
+      // Refresh status
+      const s = await fetch(`/api/accounting?action=status&workspaceId=${wid}`).then(r => r.json()).catch(() => null);
+      if (s) setAccountingStatus(s);
+    }
+  };
+
   // ── Phase 11 — WhatsApp ────────────────────────────────────────────────────
   const WA_STAGES = ["Confirmed", "Picked", "Shipped", "Delivered"];
   const [waEnabled, setWaEnabled]   = useState(workspace.whatsappEnabled ?? false);
@@ -126,8 +168,11 @@ export default function Settings({ workspace, onUpdate }: {
       customTabs,
       poApprovalThreshold: cleanThreshold,
       currency,                          // Phase 15
-      whatsappEnabled: waEnabled,        // Phase 11
-      whatsappStages:  waStages.join(","),// Phase 11
+      whatsappEnabled:  waEnabled,             // Phase 11
+      whatsappStages:   waStages.join(","),    // Phase 11
+      aiNegotiation,                           // Phase 13
+      aiReorder,                               // Phase 13
+      aiPriceCompare,                          // Phase 13
     };
     saveWorkspace(updated);
     onUpdate(updated);
@@ -432,6 +477,86 @@ export default function Settings({ workspace, onUpdate }: {
             <Plus size={13} /> Add Tab
           </button>
         </div>
+      </Section>
+
+      {/* ── Phase 13: AI Features ── */}
+      <Section title="🤖 AI Features">
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          Requires <strong>ANTHROPIC_API_KEY</strong> in your environment variables. Toggle each AI feature on or off below.
+        </p>
+        {[
+          { key: "aiNegotiation",  label: "Negotiation Assistant",      desc: "Suggests counter-offer strategies on quotes",          val: aiNegotiation,  set: setAiNegotiation  },
+          { key: "aiReorder",      label: "Smart Reorder Prediction",   desc: "Predicts optimal reorder quantities in inventory",      val: aiReorder,      set: setAiReorder      },
+          { key: "aiPriceCompare", label: "Supplier Price Comparison",  desc: "Shows best price per SKU across all past POs",         val: aiPriceCompare, set: setAiPriceCompare },
+        ].map(feat => (
+          <div key={feat.key} style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 12 }}>
+            <div onClick={() => feat.set((v: boolean) => !v)} style={{
+              width: 44, height: 24, borderRadius: 12, cursor: "pointer", flexShrink: 0,
+              background: feat.val ? C.blue : C.border,
+              position: "relative", transition: "background 0.2s",
+            }}>
+              <div style={{
+                width: 18, height: 18, borderRadius: "50%", background: "#fff",
+                position: "absolute", top: 3, left: feat.val ? 23 : 3,
+                transition: "left 0.2s", boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+              }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: feat.val ? C.blue : C.text }}>{feat.label}</div>
+              <div style={{ fontSize: 12, color: C.muted }}>{feat.desc}</div>
+            </div>
+          </div>
+        ))}
+      </Section>
+
+      {/* ── Phase 17: Accounting Integrations ── */}
+      <Section title="🔗 Accounting Integrations">
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          Connect QuickBooks Online or Xero to sync invoices automatically. Requires OAuth credentials in your server environment variables.
+        </p>
+        {accountingMsg && (
+          <div style={{ padding: "10px 14px", background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 9, fontSize: 13, color: C.blue, marginBottom: 14 }}>
+            {accountingMsg}
+          </div>
+        )}
+        {(["quickbooks", "xero"] as const).map(provider => {
+          const info = accountingStatus?.[provider];
+          const label = provider === "quickbooks" ? "QuickBooks Online" : "Xero";
+          const icon  = provider === "quickbooks" ? "🟢" : "🔵";
+          return (
+            <div key={provider} style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 16px", background: C.bg, border: `1px solid ${C.border}`,
+              borderRadius: 10, marginBottom: 10,
+            }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{icon} {label}</div>
+                <div style={{ fontSize: 12, color: info?.connected ? C.green : C.muted, marginTop: 2 }}>
+                  {info?.connected ? "✓ Connected" : info?.available ? "Not connected" : "Credentials not set"}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {info?.connected ? (
+                  <>
+                    <button onClick={() => handleAccountingAction(provider, "sync")} style={{
+                      padding: "7px 14px", background: C.blueBg, border: `1px solid ${C.blueBorder}`,
+                      borderRadius: 8, color: C.blue, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    }}>Sync</button>
+                    <button onClick={() => handleAccountingAction(provider, "disconnect")} style={{
+                      padding: "7px 14px", background: C.redBg, border: `1px solid ${C.redBorder}`,
+                      borderRadius: 8, color: C.red, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    }}>Disconnect</button>
+                  </>
+                ) : (
+                  <button onClick={() => handleAccountingAction(provider, "auth")} style={{
+                    padding: "7px 14px", background: C.blue, border: "none",
+                    borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  }}>Connect</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </Section>
 
       {/* ── Phase 12: Pricing Rules ── */}

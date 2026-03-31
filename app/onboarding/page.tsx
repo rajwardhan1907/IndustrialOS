@@ -111,6 +111,11 @@ export default function OnboardingPage() {
       currency:            "USD",   // Phase 15
       whatsappEnabled:     false,   // Phase 11
       whatsappStages:      "Confirmed,Shipped,Delivered", // Phase 11
+      aiNegotiation:       false,   // Phase 13
+      aiReorder:           false,   // Phase 13
+      aiPriceCompare:      false,   // Phase 13
+      quickbooksConnected: false,   // Phase 17
+      xeroConnected:       false,   // Phase 17
     };
 
     // Save to localStorage (keeps app working as before)

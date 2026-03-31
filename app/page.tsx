@@ -25,8 +25,9 @@ import Settings      from "@/components/Settings";
 import Suppliers     from "@/components/Suppliers";
 import Shipping      from "@/components/Shipping";
 import Returns       from "@/components/Returns";
-import Contracts     from "@/components/Contracts";
-import ErrorBoundary from "@/components/ErrorBoundary";
+import Contracts      from "@/components/Contracts";
+import ReportBuilder  from "@/components/ReportBuilder";
+import ErrorBoundary  from "@/components/ErrorBoundary";
 import LoadingSpinner, { DashboardSkeleton } from "@/components/LoadingSpinner";
 
 import { C } from "@/lib/utils";
@@ -48,6 +49,7 @@ const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
   health:    { label: "System Health", icon: Heart           },
   returns:   { label: "Returns & RMA", icon: RotateCcw       },
   contracts: { label: "Contracts",     icon: ClipboardList   },
+  reports:   { label: "Reports",       icon: BarChart2       },
 };
 
 function ComingSoon({ label }: { label: string }) {
@@ -317,6 +319,11 @@ export default function App() {
       case "contracts": return (
         <ErrorBoundary label="Contracts failed to load">
           <Contracts />
+        </ErrorBoundary>
+      );
+      case "reports": return (
+        <ErrorBoundary label="Reports failed to load">
+          <ReportBuilder />
         </ErrorBoundary>
       );
     }

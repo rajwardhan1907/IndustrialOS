@@ -1,12 +1,19 @@
 "use client";
 // components/InventorySync.tsx
+// Phase 22: Demand Forecasting panel added.
+// Phase 19: Barcode Scanner button added.
+// Phase 13: Smart Reorder Prediction panel added.
 // Phase 4: Loads from DB on mount, writes to DB in background.
 // localStorage used as fast cache — falls back silently if DB unavailable.
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { AlertTriangle, CheckCircle, XCircle, Zap, Package, MapPin, RefreshCw, Plus, X } from "lucide-react";
+import { AlertTriangle, CheckCircle, XCircle, Zap, Package, MapPin, RefreshCw, Plus, X, ScanLine, Brain, TrendingUp } from "lucide-react";
 import { C } from "@/lib/utils";
+import { loadWorkspace } from "@/lib/workspace";
+import dynamic from "next/dynamic";
+
+const BarcodeScanner = dynamic(() => import("./BarcodeScanner"), { ssr: false });
 import {
   InventoryItem, ConflictLog, WarehouseZone,
   loadInventory, saveInventory,
@@ -187,6 +194,23 @@ export default function InventorySync() {
   const [applied,   setApplied]   = useState(false);
   const [showAdd,   setShowAdd]   = useState(false);
 
+  // Phase 13/19/22 — AI + Barcode feature flags
+  const [aiReorderOn,     setAiReorderOn]     = useState(false);
+  const [showBarcode,     setShowBarcode]      = useState(false);
+  const [scannedSku,      setScannedSku]       = useState("");
+
+  // Phase 13 — Smart Reorder
+  const [reorderLoading,  setReorderLoading]   = useState(false);
+  const [reorderResults,  setReorderResults]   = useState<{ sku:string; name:string; suggestedQty:number; urgency:string; reasoning:string }[]>([]);
+  const [reorderMsg,      setReorderMsg]       = useState("");
+  const [reorderErr,      setReorderErr]       = useState("");
+
+  // Phase 22 — Demand Forecast
+  const [forecastLoading, setForecastLoading]  = useState(false);
+  const [forecastResults, setForecastResults]  = useState<{ sku:string; name:string; forecast30d:number; trend:string; stockoutRisk:string; insight:string }[]>([]);
+  const [forecastMsg,     setForecastMsg]      = useState("");
+  const [forecastErr,     setForecastErr]      = useState("");
+
   // Load from localStorage immediately, then refresh from DB
   useEffect(() => {
     setItems(loadInventory());
@@ -194,7 +218,38 @@ export default function InventorySync() {
     fetchInventoryFromDb().then(dbItems => {
       if (dbItems.length > 0) setItems(dbItems);
     });
+    // Phase 13: check AI toggle
+    const ws = loadWorkspace();
+    if (ws) setAiReorderOn(ws.aiReorder ?? false);
   }, []);
+
+  // Phase 13 — Smart Reorder
+  const runReorder = async () => {
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+    if (!wid) return;
+    setReorderLoading(true); setReorderErr(""); setReorderResults([]); setReorderMsg("");
+    try {
+      const res  = await fetch("/api/ai/reorder", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ workspaceId:wid }) });
+      const data = await res.json();
+      if (!res.ok) setReorderErr(data.error ?? "AI error");
+      else { setReorderResults(data.suggestions ?? []); setReorderMsg(data.message ?? ""); }
+    } catch (e:unknown) { setReorderErr(e instanceof Error ? e.message : "Request failed"); }
+    finally { setReorderLoading(false); }
+  };
+
+  // Phase 22 — Demand Forecast
+  const runForecast = async () => {
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+    if (!wid) return;
+    setForecastLoading(true); setForecastErr(""); setForecastResults([]); setForecastMsg("");
+    try {
+      const res  = await fetch("/api/ai/forecast", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ workspaceId:wid }) });
+      const data = await res.json();
+      if (!res.ok) setForecastErr(data.error ?? "AI error");
+      else { setForecastResults(data.forecasts ?? []); setForecastMsg(data.message ?? ""); }
+    } catch (e:unknown) { setForecastErr(e instanceof Error ? e.message : "Request failed"); }
+    finally { setForecastLoading(false); }
+  };
 
   // ── Derived data ──────────────────────────────────────────────────────────
   const alertItems    = items.filter(i => ["low","critical","out_of_stock"].includes(getStockStatus(i)));
@@ -297,8 +352,32 @@ export default function InventorySync() {
         ))}
       </div>
 
+      {/* Phase 19: Barcode Scanner overlay */}
+      {showBarcode && (
+        <BarcodeScanner
+          onDetected={(value) => {
+            setScannedSku(value);
+            setShowBarcode(false);
+            // Auto-jump to stock tab and highlight the scanned SKU
+            setView("stock");
+          }}
+          onClose={() => setShowBarcode(false)}
+        />
+      )}
+
+      {/* Scanned SKU banner */}
+      {scannedSku && (
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 16px", background:C.greenBg, border:`1px solid ${C.greenBorder}`, borderRadius:10 }}>
+          <span style={{ fontSize:13, color:C.green, fontWeight:700 }}>
+            <ScanLine size={13} style={{ verticalAlign:"middle", marginRight:6 }} />
+            Scanned: <strong>{scannedSku}</strong>
+          </span>
+          <button onClick={() => setScannedSku("")} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted }}><X size={14}/></button>
+        </div>
+      )}
+
       {/* ── Tab nav ── */}
-      <div style={{ display:"flex", gap:8 }}>
+      <div style={{ display:"flex", gap:8, flexWrap:"wrap" as const }}>
         {(["stock","alerts","conflicts","pricing"] as const).map(t => (
           <button key={t} onClick={() => setView(t)} style={{
             padding:"8px 18px", borderRadius:9, fontSize:13, fontWeight:600, cursor:"pointer",
@@ -309,6 +388,31 @@ export default function InventorySync() {
             {t === "stock" ? "📦 Stock" : t === "alerts" ? "⚠️ Alerts" : t === "conflicts" ? "🔀 Conflicts" : "⚡ Pricing"}
           </button>
         ))}
+        {/* Phase 19 scan button */}
+        <button onClick={() => setShowBarcode(true)} style={{
+          display:"flex", alignItems:"center", gap:6,
+          padding:"8px 16px", borderRadius:9, fontSize:13, fontWeight:600, cursor:"pointer",
+          background:C.surface, color:C.muted, border:`1px solid ${C.border}`,
+        }}>
+          <ScanLine size={14}/> Scan Barcode
+        </button>
+        {/* Phase 13/22 AI buttons */}
+        {aiReorderOn && (
+          <button onClick={runReorder} disabled={reorderLoading} style={{
+            display:"flex", alignItems:"center", gap:6,
+            padding:"8px 16px", borderRadius:9, fontSize:13, fontWeight:600, cursor:reorderLoading?"not-allowed":"pointer",
+            background:C.blueBg, color:C.blue, border:`1px solid ${C.blueBorder}`, opacity:reorderLoading?0.7:1,
+          }}>
+            <Brain size={14}/> {reorderLoading ? "Predicting…" : "Reorder AI"}
+          </button>
+        )}
+        <button onClick={runForecast} disabled={forecastLoading} style={{
+          display:"flex", alignItems:"center", gap:6,
+          padding:"8px 16px", borderRadius:9, fontSize:13, fontWeight:600, cursor:forecastLoading?"not-allowed":"pointer",
+          background:C.purpleBg, color:C.purple, border:`1px solid ${C.purpleBorder}`, opacity:forecastLoading?0.7:1,
+        }}>
+          <TrendingUp size={14}/> {forecastLoading ? "Forecasting…" : "Demand Forecast"}
+        </button>
       </div>
 
       {/* ══════════════════════════════════════════════
@@ -484,6 +588,80 @@ export default function InventorySync() {
             Affects {items.filter(i=>i.category===rule.cat).length} SKU(s) in the <strong>{rule.cat}</strong> category.
           </div>
         </Card>
+      )}
+
+      {/* ── Phase 13: Smart Reorder Results ── */}
+      {(reorderResults.length > 0 || reorderMsg || reorderErr) && (
+        <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:"20px 22px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+            <Brain size={16} color={C.blue}/>
+            <div style={{ fontWeight:700, fontSize:15, color:C.text }}>Smart Reorder Suggestions</div>
+          </div>
+          {reorderErr  && <div style={{ padding:"10px 14px", background:C.redBg,  border:`1px solid ${C.redBorder}`,  borderRadius:8, color:C.red,  fontSize:13 }}>{reorderErr}</div>}
+          {reorderMsg  && <div style={{ padding:"10px 14px", background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8, color:C.green,fontSize:13 }}>{reorderMsg}</div>}
+          {reorderResults.map(r => (
+            <div key={r.sku} style={{ padding:"12px 14px", background:C.bg, border:`1px solid ${C.border}`, borderRadius:10, marginBottom:8 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:6 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{r.name} <span style={{ color:C.muted, fontWeight:400 }}>({r.sku})</span></div>
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <span style={{ fontSize:12, fontWeight:700,
+                    color: r.urgency==="critical"?C.red:r.urgency==="high"?C.amber:C.blue,
+                    background: r.urgency==="critical"?C.redBg:r.urgency==="high"?C.amberBg:C.blueBg,
+                    border: `1px solid ${r.urgency==="critical"?C.redBorder:r.urgency==="high"?C.amberBorder:C.blueBorder}`,
+                    padding:"2px 8px", borderRadius:6,
+                  }}>{r.urgency}</span>
+                  <span style={{ fontSize:13, fontWeight:800, color:C.blue }}>Suggest: {r.suggestedQty} units</span>
+                </div>
+              </div>
+              <div style={{ fontSize:12, color:C.muted }}>{r.reasoning}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Phase 22: Demand Forecast Results ── */}
+      {(forecastResults.length > 0 || forecastMsg || forecastErr) && (
+        <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:14, padding:"20px 22px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+            <TrendingUp size={16} color={C.purple}/>
+            <div style={{ fontWeight:700, fontSize:15, color:C.text }}>30-Day Demand Forecast</div>
+          </div>
+          {forecastErr  && <div style={{ padding:"10px 14px", background:C.redBg,  border:`1px solid ${C.redBorder}`,  borderRadius:8, color:C.red,  fontSize:13 }}>{forecastErr}</div>}
+          {forecastMsg  && <div style={{ padding:"10px 14px", background:C.greenBg,border:`1px solid ${C.greenBorder}`,borderRadius:8, color:C.green,fontSize:13 }}>{forecastMsg}</div>}
+          {forecastResults.length > 0 && (
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+              <thead>
+                <tr style={{ background:C.bg }}>
+                  {["SKU","Name","Forecast (30d)","Trend","Stockout Risk","Insight"].map(h => (
+                    <th key={h} style={{ padding:"8px 12px", textAlign:"left", fontSize:11, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:"0.05em" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {forecastResults.map(f => (
+                  <tr key={f.sku} style={{ borderTop:`1px solid ${C.border}` }}>
+                    <td style={{ padding:"10px 12px", fontFamily:"monospace", color:C.blue, fontWeight:700 }}>{f.sku}</td>
+                    <td style={{ padding:"10px 12px", color:C.text }}>{f.name}</td>
+                    <td style={{ padding:"10px 12px", fontWeight:700, color:C.text }}>{f.forecast30d}</td>
+                    <td style={{ padding:"10px 12px" }}>
+                      <span style={{ fontSize:12, fontWeight:700,
+                        color:f.trend==="rising"?C.green:f.trend==="declining"?C.red:C.muted }}>
+                        {f.trend==="rising"?"↑ Rising":f.trend==="declining"?"↓ Declining":"→ Stable"}
+                      </span>
+                    </td>
+                    <td style={{ padding:"10px 12px" }}>
+                      <span style={{ fontSize:12, fontWeight:700,
+                        color:f.stockoutRisk==="high"?C.red:f.stockoutRisk==="medium"?C.amber:C.green }}>
+                        {f.stockoutRisk.charAt(0).toUpperCase()+f.stockoutRisk.slice(1)}
+                      </span>
+                    </td>
+                    <td style={{ padding:"10px 12px", color:C.muted, fontSize:12 }}>{f.insight}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       )}
     </div>
   );

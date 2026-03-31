@@ -1,5 +1,6 @@
 "use client";
 // components/Suppliers.tsx
+// Phase 13: Supplier price comparison in PO creation.
 // Phase 16: Purchase Approval Workflows added.
 // Phase 17: CSV export added.
 // POs above the workspace threshold need admin approval before advancing.
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { downloadCSV } from "@/lib/exportCSV";
 import { C } from "@/lib/utils";
+import { loadWorkspace } from "@/lib/workspace";
 import {
   Supplier, PurchaseOrder, POItem, SupplierStatus, SupplierCategory,
   POStatus, PaymentTerms, ApprovalStatus,
@@ -132,11 +134,12 @@ function NewSupplierModal({ onSave, onClose }: {
 }
 
 // ── New PO Modal ──────────────────────────────────────────────────────────────
-function NewPOModal({ suppliers, onSave, onClose, approvalThreshold }: {
+function NewPOModal({ suppliers, onSave, onClose, approvalThreshold, aiPriceCompare }: {
   suppliers: Supplier[]
   onSave: (po: PurchaseOrder) => void
   onClose: () => void
   approvalThreshold: number
+  aiPriceCompare: boolean
 }) {
   const [supplierId,   setSupplierId]   = useState(suppliers[0]?.id ?? "")
   const [paymentTerms, setPaymentTerms] = useState<PaymentTerms>("Net 30")
@@ -144,6 +147,23 @@ function NewPOModal({ suppliers, onSave, onClose, approvalThreshold }: {
   const [notes,        setNotes]        = useState("")
   const [items,        setItems]        = useState<POItem[]>([{ id:"pi-0", desc:"", sku:"", qty:1, unitPrice:0, total:0 }])
   const [error,        setError]        = useState("")
+
+  // Phase 13: price comparison
+  const [priceData,    setPriceData]    = useState<Record<string, { supplier:string; latestPrice:number; lowestPrice:number; orderCount:number }[]>>({})
+  const [priceLoading, setPriceLoading] = useState<Record<string,boolean>>({})
+
+  const comparePrices = async (sku: string) => {
+    if (!sku.trim() || !aiPriceCompare) return
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null
+    if (!wid) return
+    setPriceLoading(prev => ({ ...prev, [sku]: true }))
+    try {
+      const res  = await fetch(`/api/ai/price-compare?workspaceId=${wid}&sku=${encodeURIComponent(sku)}`)
+      const data = await res.json()
+      if (data.comparisons) setPriceData(prev => ({ ...prev, [sku]: data.comparisons }))
+    } catch {}
+    finally { setPriceLoading(prev => ({ ...prev, [sku]: false })) }
+  }
 
   const inp: any = { padding:"8px 10px", background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, color:C.text, fontSize:12, outline:"none", fontFamily:"inherit" }
 
@@ -245,7 +265,35 @@ function NewPOModal({ suppliers, onSave, onClose, approvalThreshold }: {
               {items.map((it,idx)=>(
                 <tr key={it.id}>
                   <td style={{ padding:"6px 4px" }}><input value={it.desc} onChange={e=>updateItem(idx,"desc",e.target.value)} placeholder="Description" style={{ ...inp, width:"100%" }}/></td>
-                  <td style={{ padding:"6px 4px" }}><input value={it.sku} onChange={e=>updateItem(idx,"sku",e.target.value)} placeholder="SKU" style={{ ...inp, width:80 }}/></td>
+                  <td style={{ padding:"6px 4px" }}>
+                    <div style={{ display:"flex", gap:4, alignItems:"center" }}>
+                      <input value={it.sku} onChange={e=>updateItem(idx,"sku",e.target.value)} placeholder="SKU" style={{ ...inp, width:80 }}/>
+                      {aiPriceCompare && it.sku.trim() && (
+                        <button
+                          type="button"
+                          onClick={() => comparePrices(it.sku)}
+                          disabled={priceLoading[it.sku]}
+                          title="Compare supplier prices"
+                          style={{ padding:"4px 7px", background:C.blueBg, border:`1px solid ${C.blueBorder}`, borderRadius:6, cursor:"pointer", fontSize:10, color:C.blue, fontWeight:700, whiteSpace:"nowrap" as const }}>
+                          {priceLoading[it.sku] ? "…" : "💲"}
+                        </button>
+                      )}
+                    </div>
+                    {/* Price comparison results */}
+                    {priceData[it.sku] && priceData[it.sku].length > 0 && (
+                      <div style={{ marginTop:4, padding:"6px 8px", background:C.blueBg, border:`1px solid ${C.blueBorder}`, borderRadius:6, fontSize:11, color:C.text }}>
+                        <div style={{ fontWeight:700, color:C.blue, marginBottom:3 }}>Past prices for {it.sku}:</div>
+                        {priceData[it.sku].map((c,ci) => (
+                          <div key={ci} style={{ display:"flex", justifyContent:"space-between", color:C.muted }}>
+                            <span>{c.supplier}</span>
+                            <span style={{ fontWeight:700, color:c.supplier===priceData[it.sku][0].supplier?C.green:C.text }}>
+                              ${c.latestPrice?.toFixed(2)} (low: ${c.lowestPrice?.toFixed(2)})
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding:"6px 4px" }}><input type="number" min="1" value={it.qty} onChange={e=>updateItem(idx,"qty",e.target.value)} style={{ ...inp, width:56 }}/></td>
                   <td style={{ padding:"6px 4px" }}><input type="number" min="0" step="0.01" value={it.unitPrice} onChange={e=>updateItem(idx,"unitPrice",e.target.value)} style={{ ...inp, width:80 }}/></td>
                   <td style={{ padding:"6px 8px", fontWeight:700, color:C.green }}>{fmtMoney(it.total)}</td>
@@ -287,6 +335,9 @@ export default function Suppliers() {
   const [showNewPO,  setShowNewPO]  = useState(false)
   const [subTab,     setSubTab]     = useState<"info"|"pos">("info")
 
+  // Phase 13: price comparison toggle
+  const [aiPriceCompare, setAiPriceCompare] = useState(false)
+
   // Phase 16: approval threshold loaded from DB / localStorage
   const [approvalThreshold,    setApprovalThreshold]    = useState(0)
   const [thresholdInput,       setThresholdInput]       = useState("0")
@@ -297,6 +348,10 @@ export default function Suppliers() {
     setPOs(loadPOs())
     fetchSuppliersFromDb().then(data => { if (data.length > 0) setSuppliers(data) })
     fetchPOsFromDb().then(data => { if (data.length > 0) setPOs(data) })
+
+    // Phase 13: check AI price compare toggle
+    const ws = loadWorkspace()
+    if (ws) setAiPriceCompare(ws.aiPriceCompare ?? false)
 
     // Phase 16: load approval threshold from workspace in DB
     const wsId = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null
@@ -400,7 +455,7 @@ export default function Suppliers() {
     <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
 
       {showNewSup && <NewSupplierModal onSave={handleNewSupplier} onClose={()=>setShowNewSup(false)}/>}
-      {showNewPO  && <NewPOModal suppliers={suppliers} onSave={handleNewPO} onClose={()=>setShowNewPO(false)} approvalThreshold={approvalThreshold}/>}
+      {showNewPO  && <NewPOModal suppliers={suppliers} onSave={handleNewPO} onClose={()=>setShowNewPO(false)} approvalThreshold={approvalThreshold} aiPriceCompare={aiPriceCompare}/>}
 
       {/* ── Header ── */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
