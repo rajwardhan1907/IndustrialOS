@@ -1,5 +1,6 @@
 // app/api/notifications/route.ts
-// Queries the DB for real alerts — overdue invoices, low stock, new portal orders.
+// Queries the DB for real alerts — overdue invoices, low stock, new portal orders,
+// and expiring/expired contracts (Phase 12 roadmap).
 // No new DB table needed. Read state is tracked in localStorage on the client.
 
 import { NextResponse } from 'next/server'
@@ -34,7 +35,19 @@ export async function GET(req: Request) {
     })
     const lowStock = allInventory.filter(i => i.stockLevel <= i.reorderPoint)
 
-    // ── 3. New portal orders (last 24 hours) ─────────────────────────────────
+    // ── 3. Expiring / expired contracts (Phase 12 roadmap) ───────────────────
+    const in30Days = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
+    const expiringContracts = await prisma.contract.findMany({
+      where: {
+        workspaceId,
+        status:     { not: 'draft' },
+        expiryDate: { lte: in30Days },
+      },
+      select: { id: true, contractNumber: true, title: true, customer: true, expiryDate: true },
+      orderBy: { expiryDate: 'asc' },
+    })
+
+    // ── 4. New portal orders (last 24 hours) ─────────────────────────────────
     const portalOrders = await prisma.order.findMany({
       where: {
         workspaceId,
@@ -73,6 +86,24 @@ export async function GET(req: Request) {
         body:     `${item.name} · ${item.stockLevel} units left (reorder at ${item.reorderPoint})`,
         tab:      'inventory',
         createdAt: new Date().toISOString(),
+      })
+    })
+
+    expiringContracts.forEach(c => {
+      const daysLeft = Math.ceil((new Date(c.expiryDate).getTime() - today.getTime()) / 86400000)
+      const expired  = daysLeft < 0
+      notifications.push({
+        id:       `contract-${c.id}`,
+        type:     'contract',
+        severity: expired ? 'error' : 'warn',
+        title:    expired
+          ? `Contract Expired — ${c.customer}`
+          : `Contract Expiring — ${c.customer}`,
+        body:     expired
+          ? `${c.contractNumber} · ${c.title} · expired ${Math.abs(daysLeft)}d ago`
+          : `${c.contractNumber} · ${c.title} · expires in ${daysLeft}d`,
+        tab:      'contracts',
+        createdAt: c.expiryDate,
       })
     })
 

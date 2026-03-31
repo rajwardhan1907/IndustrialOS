@@ -23,7 +23,7 @@ function saveReadIds(ids: Set<string>) {
 
 interface Notification {
   id:        string;
-  type:      "invoice" | "inventory" | "order";
+  type:      "invoice" | "inventory" | "order" | "contract";
   severity:  "error" | "warn" | "info";
   title:     string;
   body:      string;
@@ -97,13 +97,17 @@ export default function NotificationBell({ onNavigate, workspaceId }: {
   };
 
   const grouped: Record<string, Notification[]> = {
+    contract:  notifications.filter((n: Notification) => n.type === "contract"),
     order:     notifications.filter((n: Notification) => n.type === "order"),
     invoice:   notifications.filter((n: Notification) => n.type === "invoice"),
     inventory: notifications.filter((n: Notification) => n.type === "inventory"),
   };
 
   const groupLabels: Record<string, string> = {
-    order: "🛒 New Portal Orders", invoice: "🧾 Overdue Invoices", inventory: "📦 Stock Alerts",
+    contract:  "📋 Contract Alerts",
+    order:     "🛒 New Portal Orders",
+    invoice:   "🧾 Overdue Invoices",
+    inventory: "📦 Stock Alerts",
   };
 
   return (
@@ -172,7 +176,7 @@ export default function NotificationBell({ onNavigate, workspaceId }: {
             <div style={{ textAlign: "center", padding: "40px 24px", color: C.muted }}>
               <div style={{ fontSize: 36, marginBottom: 10 }}>🎉</div>
               <div style={{ fontWeight: 700, fontSize: 14, color: C.text, marginBottom: 4 }}>All clear!</div>
-              <div style={{ fontSize: 12 }}>No overdue invoices, low stock, or new portal orders.</div>
+              <div style={{ fontSize: 12 }}>No overdue invoices, expiring contracts, low stock, or new portal orders.</div>
             </div>
           )}
           {loading && notifications.length === 0 && (
@@ -180,7 +184,7 @@ export default function NotificationBell({ onNavigate, workspaceId }: {
           )}
 
           {/* Groups */}
-          {(["order", "invoice", "inventory"] as const).map((type) => {
+          {(["contract", "order", "invoice", "inventory"] as const).map((type) => {
             const items = grouped[type];
             if (!items?.length) return null;
             return (

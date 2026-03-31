@@ -28,7 +28,8 @@ model Workspace {
   purchaseOrders PurchaseOrder[]
   shipments      Shipment[]
   returns        Return[]
-  pricingRules   PricingRule[]   // Phase 12
+  pricingRules   PricingRule[]
+  contracts      Contract[]      // Phase 12 (roadmap)
 }
 
 // ── User ──────────────────────────────────────────────────────────────────────
@@ -222,6 +223,27 @@ model PricingRule {
   workspaceId  String
   workspace    Workspace @relation(fields: [workspaceId], references: [id])
   createdAt    DateTime  @default(now())
+}
+
+// ── Contract & SLA Tracker ───────────────────────────────────────────────────
+// Phase 12 (roadmap) — track contracts with customers.
+// Status is auto-derived: draft → active → expiring (≤30 days) → expired
+model Contract {
+  id             String    @id @default(cuid())
+  contractNumber String
+  title          String
+  customer       String
+  minOrderQty    Int       @default(0)    // agreed minimum order quantity per period
+  agreedPricing  String    @default("")   // free-text description of pricing terms
+  deliverySLA    Int       @default(7)    // max delivery days agreed in contract
+  value          Float     @default(0)   // total contract value
+  startDate      String
+  expiryDate     String
+  status         String    @default("active") // draft | active | expiring | expired
+  notes          String    @default("")
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt      DateTime  @default(now())
 }
 
 // ── Return / RMA ──────────────────────────────────────────────────────────────

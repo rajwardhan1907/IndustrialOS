@@ -1,6 +1,7 @@
 // lib/workspace.ts
 // Phase 18: Added "returns" to ModuleId.
 // Phase 15: Added currency field to WorkspaceConfig.
+// Phase 12 (roadmap): Added "contracts" to ModuleId.
 
 export type Industry =
   | "manufacturer"
@@ -28,7 +29,8 @@ export type ModuleId =
   | "crm"
   | "pipeline"
   | "health"
-  | "returns";     // Phase 18
+  | "returns"      // Phase 18
+  | "contracts";   // Phase 12 (roadmap)
 
 export interface CustomTab {
   id:    string;

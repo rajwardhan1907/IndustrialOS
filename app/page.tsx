@@ -8,7 +8,7 @@ import { Zap, Plus, Settings as SettingsIcon, X } from "lucide-react";
 import {
   LayoutDashboard, ShoppingCart, Package, FileText,
   Receipt, Truck, Users, Factory, BarChart2,
-  GitMerge, Upload, Heart, Link as LinkIcon, RotateCcw,
+  GitMerge, Upload, Heart, Link as LinkIcon, RotateCcw, ClipboardList,
 } from "lucide-react";
 
 import Dashboard     from "@/components/Dashboard";
@@ -25,6 +25,7 @@ import Settings      from "@/components/Settings";
 import Suppliers     from "@/components/Suppliers";
 import Shipping      from "@/components/Shipping";
 import Returns       from "@/components/Returns";
+import Contracts     from "@/components/Contracts";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import LoadingSpinner, { DashboardSkeleton } from "@/components/LoadingSpinner";
 
@@ -46,6 +47,7 @@ const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
   pipeline:  { label: "SKU Pipeline",  icon: Upload          },
   health:    { label: "System Health", icon: Heart           },
   returns:   { label: "Returns & RMA", icon: RotateCcw       },
+  contracts: { label: "Contracts",     icon: ClipboardList   },
 };
 
 function ComingSoon({ label }: { label: string }) {
@@ -310,6 +312,11 @@ export default function App() {
       case "returns":   return (
         <ErrorBoundary label="Returns failed to load">
           <Returns />
+        </ErrorBoundary>
+      );
+      case "contracts": return (
+        <ErrorBoundary label="Contracts failed to load">
+          <Contracts />
         </ErrorBoundary>
       );
     }
