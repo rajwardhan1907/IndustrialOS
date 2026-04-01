@@ -3,10 +3,12 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Alert, Modal,
+  RefreshControl, ActivityIndicator, Alert, Modal, Platform,
 } from "react-native";
-import * as Haptics from "expo-haptics";
 import { theme, s } from "../lib/theme";
+
+let Haptics: any = null;
+if (Platform.OS !== "web") Haptics = require("expo-haptics");
 import { fetchOrders, updateOrderStage, getSession } from "../lib/api";
 
 interface Order {
@@ -54,7 +56,7 @@ export default function OrdersScreen() {
       await updateOrderStage(order.id, newStage);
       setOrders(prev => prev.map(o => o.id === order.id ? { ...o, stage: newStage } : o));
       setSelected(sel => sel && sel.id === order.id ? { ...sel, stage: newStage } : sel);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (Haptics) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Alert.alert("Error", e.message);
     }
@@ -96,7 +98,9 @@ export default function OrdersScreen() {
 
       <ScrollView
         contentContainerStyle={{ padding: 12 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />}
+        refreshControl={Platform.OS !== "web"
+          ? <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />
+          : undefined}
       >
         {displayed.length === 0 && (
           <Text style={{ textAlign: "center", color: theme.muted, marginTop: 40, fontSize: 14 }}>No orders in this stage.</Text>

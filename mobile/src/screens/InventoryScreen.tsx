@@ -3,11 +3,19 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, ActivityIndicator, TextInput, Alert, Modal,
+  RefreshControl, ActivityIndicator, TextInput, Alert, Modal, Platform,
 } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
-import * as Haptics from "expo-haptics";
 import { theme, s } from "../lib/theme";
+
+let CameraView: any           = null;
+let useCameraPermissions: any = () => [null, async () => ({ granted: false })];
+let Haptics: any              = null;
+if (Platform.OS !== "web") {
+  const cam            = require("expo-camera");
+  CameraView           = cam.CameraView;
+  useCameraPermissions = cam.useCameraPermissions;
+  Haptics              = require("expo-haptics");
+}
 import { fetchInventory, updateInventoryItem, getSession } from "../lib/api";
 
 interface Item {
@@ -62,6 +70,7 @@ export default function InventoryScreen() {
   }, [search, items]);
 
   const openScanner = async () => {
+    if (Platform.OS === "web") { setScanning(true); return; }
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) { Alert.alert("Camera permission denied"); return; }
@@ -73,7 +82,7 @@ export default function InventoryScreen() {
   const handleScan = ({ data }: { type: string; data: string }) => {
     if (scanned) return;
     setScanned(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    if (Haptics) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setScanning(false);
     // Auto-search for the scanned SKU
     setSearch(data);
@@ -93,7 +102,7 @@ export default function InventoryScreen() {
       await updateInventoryItem(editItem.id, { stockLevel: qty });
       setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, stockLevel: qty } : i));
       setEditItem(null);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (Haptics) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Alert.alert("Error", e.message);
     }
@@ -124,7 +133,9 @@ export default function InventoryScreen() {
 
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingTop: 8 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />}
+        refreshControl={Platform.OS !== "web"
+          ? <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />
+          : undefined}
       >
         <Text style={styles.count}>{filtered.length} item{filtered.length !== 1 ? "s" : ""}</Text>
 
@@ -171,23 +182,34 @@ export default function InventoryScreen() {
         )}
       </ScrollView>
 
-      {/* Barcode scanner modal */}
+      {/* Barcode scanner modal — camera on native, text input on web */}
       <Modal visible={scanning} animationType="slide">
-        <View style={{ flex: 1, backgroundColor: "#000" }}>
-          <CameraView
-            style={{ flex: 1 }}
-            facing="back"
-            onBarcodeScanned={scanned ? undefined : handleScan}
-            barcodeScannerSettings={{ barcodeTypes: ["qr", "ean13", "ean8", "code128", "code39", "upcA", "upcE"] }}
-          />
-          <View style={styles.scanOverlay}>
-            <View style={styles.scanFrame} />
-            <Text style={styles.scanHint}>Point camera at a barcode</Text>
-            <TouchableOpacity style={styles.cancelBtn} onPress={() => setScanning(false)}>
-              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Cancel</Text>
-            </TouchableOpacity>
+        {Platform.OS === "web" ? (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Enter SKU</Text>
+              <TextInput style={styles.input} placeholder="e.g. SKU-001" placeholderTextColor={theme.subtle}
+                autoFocus returnKeyType="search"
+                onSubmitEditing={e => { setScanning(false); setSearch(e.nativeEvent.text.trim()); }} />
+              <TouchableOpacity style={styles.btnOutline} onPress={() => setScanning(false)}>
+                <Text style={styles.btnOutlineText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        ) : (
+          <View style={{ flex: 1, backgroundColor: "#000" }}>
+            {CameraView && <CameraView style={{ flex: 1 }} facing="back"
+              onBarcodeScanned={scanned ? undefined : handleScan}
+              barcodeScannerSettings={{ barcodeTypes: ["qr", "ean13", "ean8", "code128", "code39", "upcA", "upcE"] }} />}
+            <View style={styles.scanOverlay}>
+              <View style={styles.scanFrame} />
+              <Text style={styles.scanHint}>Point camera at a barcode</Text>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setScanning(false)}>
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </Modal>
 
       {/* Edit stock modal */}

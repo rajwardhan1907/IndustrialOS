@@ -2,10 +2,12 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Alert, Modal,
+  RefreshControl, ActivityIndicator, Alert, Modal, Platform,
 } from "react-native";
-import * as Haptics from "expo-haptics";
 import { theme, s } from "../lib/theme";
+
+let Haptics: any = null;
+if (Platform.OS !== "web") Haptics = require("expo-haptics");
 import { fetchShipments, updateShipmentStatus, getSession } from "../lib/api";
 
 interface Shipment {
@@ -52,7 +54,7 @@ export default function ShipmentsScreen() {
       await updateShipmentStatus(ship.id, newStatus);
       setShipments(prev => prev.map(s => s.id === ship.id ? { ...s, status: newStatus } : s));
       setSelected(sel => sel && sel.id === ship.id ? { ...sel, status: newStatus } : sel);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      if (Haptics) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Alert.alert("Error", e.message);
     }
@@ -85,7 +87,9 @@ export default function ShipmentsScreen() {
 
       <ScrollView
         contentContainerStyle={{ padding: 12 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />}
+        refreshControl={Platform.OS !== "web"
+          ? <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />
+          : undefined}
       >
         {displayed.length === 0 && (
           <Text style={{ textAlign: "center", color: theme.muted, marginTop: 40, fontSize: 14 }}>No shipments in this status.</Text>
