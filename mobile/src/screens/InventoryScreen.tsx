@@ -1,6 +1,6 @@
 // mobile/src/screens/InventoryScreen.tsx
 // Stock list + barcode scanning for warehouse workers
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   RefreshControl, ActivityIndicator, TextInput, Alert, Modal,

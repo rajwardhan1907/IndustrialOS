@@ -4,12 +4,7 @@
     "slug":        "industrialos",
     "version":     "1.0.0",
     "orientation": "portrait",
-    "icon":        "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#1A2A4A"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.industrialos.app",
@@ -19,10 +14,6 @@
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1A2A4A"
-      },
       "package": "com.industrialos.app",
       "permissions": [
         "CAMERA",
@@ -34,11 +25,14 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      ["expo-camera",      { "cameraPermission": "Allow IndustrialOS to access your camera for barcode scanning." }],
-      ["expo-notifications",{ "icon": "./assets/icon.png", "color": "#2C4A8F" }]
+      ["expo-camera", { "cameraPermission": "Allow IndustrialOS to access your camera for barcode scanning." }],
+      ["expo-notifications", { "color": "#2C4A8F" }]
     ],
     "scheme": "industrialos",
-    "web": { "bundler": "metro", "output": "static" },
+    "web": {
+      "bundler": "metro",
+      "output":  "static"
+    },
     "extra": {
       "eas": { "projectId": "industrialos" }
     }
