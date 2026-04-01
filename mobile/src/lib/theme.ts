@@ -1,0 +1,71 @@
+// mobile/src/lib/theme.ts — Design tokens matching the web app colours
+export const theme = {
+  bg:          "#F5F3EF",
+  surface:     "#FFFFFF",
+  text:        "#2C2A26",
+  muted:       "#6B6560",
+  subtle:      "#A8A39E",
+  border:      "#E8E3DC",
+  blue:        "#2C4A8F",
+  blueBg:      "#EBF0FA",
+  blueBorder:  "#B3C3E8",
+  green:       "#2e7d5e",
+  greenBg:     "#EDF6F1",
+  greenBorder: "#B8DECE",
+  red:         "#C0392B",
+  redBg:       "#FDF0EE",
+  redBorder:   "#F0B8B2",
+  amber:       "#B86A00",
+  amberBg:     "#FEF5E7",
+  amberBorder: "#F5D9A0",
+  purple:      "#6B4CA0",
+};
+
+export const s = {
+  card: {
+    backgroundColor:  theme.surface,
+    borderRadius:     14,
+    padding:          16,
+    marginBottom:     12,
+    shadowColor:      "#000",
+    shadowOpacity:    0.06,
+    shadowOffset:     { width: 0, height: 2 },
+    shadowRadius:     6,
+    elevation:        2,
+  } as const,
+  heading: {
+    fontSize:   18,
+    fontWeight: "700" as const,
+    color:      theme.text,
+    marginBottom: 4,
+  },
+  label: {
+    fontSize:  11,
+    color:     theme.muted,
+    fontWeight: "600" as const,
+    marginBottom: 4,
+  },
+  body: {
+    fontSize: 13,
+    color:    theme.text,
+    lineHeight: 20,
+  },
+  muted: {
+    fontSize: 12,
+    color:    theme.muted,
+  },
+  badge: (bg: string, color: string, border: string) => ({
+    paddingHorizontal: 10,
+    paddingVertical:   3,
+    borderRadius:      999,
+    backgroundColor:   bg,
+    borderWidth:       1,
+    borderColor:       border,
+    alignSelf:         "flex-start" as const,
+  }),
+  badgeText: (color: string) => ({
+    fontSize:   11,
+    fontWeight: "700" as const,
+    color,
+  }),
+};

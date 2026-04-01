@@ -34,7 +34,8 @@ export type ModuleId =
   | "health"
   | "returns"      // Phase 18
   | "contracts"    // Phase 12 (roadmap)
-  | "reports";     // Phase 20 (roadmap)
+  | "reports"      // Phase 20 (roadmap)
+  | "edi";         // Phase 23
 
 export interface CustomTab {
   id:    string;

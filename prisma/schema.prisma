@@ -29,7 +29,9 @@ model Workspace {
   shipments      Shipment[]
   returns        Return[]
   pricingRules   PricingRule[]
-  contracts      Contract[]      // Phase 12 (roadmap)
+  contracts      Contract[]       // Phase 12
+  ediPartners    EdiPartner[]     // Phase 23
+  ediTransactions EdiTransaction[] // Phase 23
 }
 
 // ── User ──────────────────────────────────────────────────────────────────────
@@ -266,4 +268,48 @@ model Return {
   workspace    Workspace @relation(fields: [workspaceId], references: [id])
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+// ── EDI Trading Partner ───────────────────────────────────────────────────────
+// Phase 23 — EDI Support (X12 + EDIFACT)
+// One record per trading partner (customer or supplier that uses EDI).
+model EdiPartner {
+  id             String    @id @default(cuid())
+  name           String                        // human label, e.g. "Acme Corp EDI"
+  standard       String    @default("X12")     // "X12" | "EDIFACT"
+  // X12 ISA identifiers
+  isaQualifier   String    @default("01")       // ISA06 sender qual
+  isaId          String    @default("")         // ISA06 sender ID (15 chars)
+  partnerQual    String    @default("01")       // ISA08 receiver qual
+  partnerId      String    @default("")         // ISA08 receiver ID
+  // EDIFACT UNB identifiers
+  unbSenderId    String    @default("")
+  unbReceiverId  String    @default("")
+  // which transaction sets this partner uses
+  txSets         String    @default("850,855,856,810") // comma-separated
+  active         Boolean   @default(true)
+  notes          String    @default("")
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+  transactions   EdiTransaction[]
+  createdAt      DateTime  @default(now())
+}
+
+// ── EDI Transaction Log ───────────────────────────────────────────────────────
+// One row per EDI message sent or received.
+model EdiTransaction {
+  id              String     @id @default(cuid())
+  direction       String                           // "inbound" | "outbound"
+  standard        String     @default("X12")       // "X12" | "EDIFACT"
+  txSet           String                           // e.g. "850", "ORDERS"
+  controlNumber   String     @default("")
+  partnerId       String
+  partner         EdiPartner @relation(fields: [partnerId], references: [id])
+  status          String     @default("received")  // received | processed | error | sent | acked
+  rawPayload      String     @db.Text             // full EDI text stored for audit
+  parsedJson      Json?                            // parsed structured data
+  errorMsg        String     @default("")
+  workspaceId     String
+  workspace       Workspace  @relation(fields: [workspaceId], references: [id])
+  createdAt       DateTime   @default(now())
 }

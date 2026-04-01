@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import Dashboard     from "@/components/Dashboard";
+import EDIPanel      from "@/components/EDIPanel";
 import Pipeline      from "@/components/Pipeline";
 import OrderKanban   from "@/components/OrderKanban";
 import InventorySync from "@/components/InventorySync";
@@ -50,6 +51,7 @@ const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
   returns:   { label: "Returns & RMA", icon: RotateCcw       },
   contracts: { label: "Contracts",     icon: ClipboardList   },
   reports:   { label: "Reports",       icon: BarChart2       },
+  edi:       { label: "EDI",           icon: Zap             },
 };
 
 function ComingSoon({ label }: { label: string }) {
@@ -342,6 +344,11 @@ export default function App() {
       case "reports": return (
         <ErrorBoundary label="Reports failed to load">
           <ReportBuilder />
+        </ErrorBoundary>
+      );
+      case "edi": return (
+        <ErrorBoundary label="EDI failed to load">
+          <EDIPanel />
         </ErrorBoundary>
       );
     }
