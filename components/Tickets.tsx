@@ -246,7 +246,7 @@ function TicketDetail({ ticket, users, session, onUpdate, onBack }: {
         {ticket.linkedLabel && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: C.bg, borderRadius: 8, marginBottom: 14, width: "fit-content" }}>
             <Tag size={12} color={C.blue} />
-            <span style={{ fontSize: 12, color: C.blue, fontWeight: 600 }}>{ticket.linkedLabel}</span>
+            <span style={{ fontSize: 12, color: C.blue, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }} onClick={() => { if (ticket.linkedType === "inventory") onNavigate?.("inventory"); else if (ticket.linkedType === "customer") onNavigate?.("customers"); else if (ticket.linkedType === "order") onNavigate?.("orders"); }}>{ticket.linkedLabel}</span>
           </div>
         )}
 
@@ -322,7 +322,7 @@ function TicketDetail({ ticket, users, session, onUpdate, onBack }: {
 }
 
 // ── Main Tickets Component ────────────────────────────────────────────────────
-export default function Tickets({ workspaceId, session: sessionProp }: { workspaceId?: string; session?: any }) {
+export default function Tickets({ workspaceId, session: sessionProp, onNavigate }: { workspaceId?: string; session?: any; onNavigate?: (tab: string) => void }) {
   const { data: sessionData } = useSession();
   const session = sessionProp ?? sessionData;
   const wsId = workspaceId ?? getWorkspaceId();
@@ -429,7 +429,7 @@ export default function Tickets({ workspaceId, session: sessionProp }: { workspa
                   </div>
                   {t.linkedLabel && (
                     <div style={{ fontSize: 11, color: C.blue, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                      <Tag size={10} /> {t.linkedLabel}
+                      <Tag size={10} /> <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => { if (t.linkedType === "inventory") onNavigate?.("inventory"); else if (t.linkedType === "customer") onNavigate?.("customers"); else if (t.linkedType === "order") onNavigate?.("orders"); }}>{t.linkedLabel}</span>
                     </div>
                   )}
                 </div>

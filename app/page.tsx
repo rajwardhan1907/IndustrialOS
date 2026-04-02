@@ -266,6 +266,8 @@ export default function App() {
 
   const allTabs = [...moduleTabs, ...customTabList];
 
+  const goTo = (moduleId: string) => setTab(moduleId);
+
   const renderContent = () => {
     if (tab === "settings") {
       return (
@@ -287,12 +289,12 @@ export default function App() {
       );
       case "orders":    return (
         <ErrorBoundary label="Orders failed to load">
-          <OrderKanban />
+          <OrderKanban onNavigate={goTo} />
         </ErrorBoundary>
       );
       case "inventory": return (
         <ErrorBoundary label="Inventory failed to load">
-          <InventorySync />
+          <InventorySync onNavigate={goTo} />
         </ErrorBoundary>
       );
       case "crm":       return (
@@ -307,12 +309,12 @@ export default function App() {
       );
       case "quotes":    return (
         <ErrorBoundary label="Quotes failed to load">
-          <Quotes />
+          <Quotes onNavigate={goTo} />
         </ErrorBoundary>
       );
       case "invoicing": return (
         <ErrorBoundary label="Invoicing failed to load">
-          <Invoicing />
+          <Invoicing onNavigate={goTo} />
         </ErrorBoundary>
       );
       case "customers": return (
@@ -332,17 +334,17 @@ export default function App() {
       );
       case "shipping":  return (
         <ErrorBoundary label="Shipping failed to load">
-          <Shipping />
+          <Shipping onNavigate={goTo} />
         </ErrorBoundary>
       );
       case "returns":   return (
         <ErrorBoundary label="Returns failed to load">
-          <Returns />
+          <Returns onNavigate={goTo} />
         </ErrorBoundary>
       );
       case "contracts": return (
         <ErrorBoundary label="Contracts failed to load">
-          <Contracts />
+          <Contracts onNavigate={goTo} />
         </ErrorBoundary>
       );
       case "reports": return (
@@ -357,7 +359,7 @@ export default function App() {
       );
       case "tickets": return (
         <ErrorBoundary label="Tickets failed to load">
-          <Tickets workspaceId={session?.user?.workspaceId || (typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") ?? "" : "")} session={session} />
+          <Tickets workspaceId={session?.user?.workspaceId || (typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") ?? "" : "")} session={session} onNavigate={goTo} />
         </ErrorBoundary>
       );
       case "ai": return (

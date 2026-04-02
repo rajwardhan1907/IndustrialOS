@@ -62,29 +62,71 @@ export async function POST(req: Request) {
 }
 
 // UPDATE an inventory item (stock level, reorder point, etc.)
+// Automation 8: after update, if stockLevel <= reorderPoint → auto-raise low-stock ticket
 export async function PATCH(req: Request) {
   try {
     const body = await req.json()
     if (!body.id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400, headers: CORS })
     }
-    const item = await prisma.inventoryItem.update({
-      where: { id: body.id },
-      data: {
-        ...(body.sku          !== undefined && { sku:          body.sku          }),
-        ...(body.name         !== undefined && { name:         body.name         }),
-        ...(body.category     !== undefined && { category:     body.category     }),
-        ...(body.stockLevel   !== undefined && { stockLevel:   body.stockLevel   }),
-        ...(body.reorderPoint !== undefined && { reorderPoint: body.reorderPoint }),
-        ...(body.reorderQty   !== undefined && { reorderQty:   body.reorderQty   }),
-        ...(body.unitCost     !== undefined && { unitCost:     body.unitCost     }),
-        ...(body.warehouse    !== undefined && { warehouse:    body.warehouse    }),
-        ...(body.zone         !== undefined && { zone:         body.zone         }),
-        ...(body.binLocation  !== undefined && { binLocation:  body.binLocation  }),
-        ...(body.lastSynced   !== undefined && { lastSynced:   body.lastSynced   }),
-        ...(body.supplier     !== undefined && { supplier:     body.supplier     }),
-      },
+
+    const item = await prisma.$transaction(async (tx) => {
+      const updated = await tx.inventoryItem.update({
+        where: { id: body.id },
+        data: {
+          ...(body.sku          !== undefined && { sku:          body.sku          }),
+          ...(body.name         !== undefined && { name:         body.name         }),
+          ...(body.category     !== undefined && { category:     body.category     }),
+          ...(body.stockLevel   !== undefined && { stockLevel:   body.stockLevel   }),
+          ...(body.reorderPoint !== undefined && { reorderPoint: body.reorderPoint }),
+          ...(body.reorderQty   !== undefined && { reorderQty:   body.reorderQty   }),
+          ...(body.unitCost     !== undefined && { unitCost:     body.unitCost     }),
+          ...(body.warehouse    !== undefined && { warehouse:    body.warehouse    }),
+          ...(body.zone         !== undefined && { zone:         body.zone         }),
+          ...(body.binLocation  !== undefined && { binLocation:  body.binLocation  }),
+          ...(body.lastSynced   !== undefined && { lastSynced:   body.lastSynced   }),
+          ...(body.supplier     !== undefined && { supplier:     body.supplier     }),
+        },
+      })
+
+      // Automation 8 — raise low-stock ticket when stockLevel drops to/below reorderPoint
+      const isLow = updated.reorderPoint > 0 && updated.stockLevel <= updated.reorderPoint
+      if (isLow) {
+        // Avoid duplicate open tickets for the same inventory item
+        const openTicket = await tx.ticket.findFirst({
+          where: {
+            linkedId:    updated.id,
+            workspaceId: updated.workspaceId,
+            status:      { notIn: ['resolved', 'closed'] },
+          },
+        })
+        if (!openTicket) {
+          // Get next ticket number
+          const count = await tx.ticket.count({ where: { workspaceId: updated.workspaceId } })
+          await tx.ticket.create({
+            data: {
+              ticketNumber: `TKT-AUTO-${updated.sku}`,
+              title:        `Low stock: ${updated.name} (${updated.sku})`,
+              description:  `Stock level ${updated.stockLevel} has reached or dropped below reorder point of ${updated.reorderPoint}. Current stock: ${updated.stockLevel}. Reorder qty: ${updated.reorderQty}.`,
+              type:         'alert',
+              priority:     'high',
+              status:       'open',
+              assignedTo:   '',
+              assignedName: '',
+              raisedBy:     '',
+              raisedName:   '',
+              linkedType:   'inventory',
+              linkedId:     updated.id,
+              linkedLabel:  `${updated.name} — ${updated.sku}`,
+              workspaceId:  updated.workspaceId,
+            },
+          })
+        }
+      }
+
+      return updated
     })
+
     return NextResponse.json(item, { headers: CORS })
   } catch (err: any) {
     console.error('Inventory PATCH error:', err)

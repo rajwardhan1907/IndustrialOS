@@ -200,7 +200,7 @@ function NewShipmentModal({ onSave, onClose }: {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function Shipping() {
+export default function Shipping({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
   const [shipments, setShipments] = useState<Shipment[]>([]);
@@ -378,7 +378,7 @@ export default function Shipping() {
               {filtered.map((s,i)=>(
                 <tr key={s.id} onClick={()=>setSelected(s)} style={{ borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none", cursor:"pointer" }}>
                   <td style={{ padding:"13px 16px", fontWeight:700, color:C.blue, fontFamily:"monospace" }}>{s.shipmentNumber}</td>
-                  <td style={{ padding:"13px 16px", fontWeight:600, color:C.text }}>{s.customer}</td>
+                  <td style={{ padding:"13px 16px", fontWeight:600, color:C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{s.customer}</span></td>
                   <td style={{ padding:"13px 16px" }}><CarrierBadge carrier={s.carrier}/></td>
                   <td style={{ padding:"13px 16px", fontFamily:"monospace", fontSize:11, color:C.muted }}>{s.trackingNumber}</td>
                   <td style={{ padding:"13px 16px", fontSize:12, color:C.muted }}>
@@ -459,7 +459,7 @@ export default function Shipping() {
               {/* Shipment info */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 {[
-                  { label:"Customer",  val:selected.customer        },
+                  { label:"Customer",  val:selected.customer, tab:"customers" },
                   { label:"Order",     val:selected.orderId         },
                   { label:"Origin",    val:selected.origin          },
                   { label:"Destination",val:selected.destination    },

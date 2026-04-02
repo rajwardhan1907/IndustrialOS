@@ -216,7 +216,7 @@ function NewContractModal({ onSave, onClose }: {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function Contracts() {
+export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
 
@@ -281,7 +281,7 @@ export default function Contracts() {
               <StatusBadge status={selected.status} />
             </div>
             <p style={{ color: C.muted, fontSize: 13 }}>
-              {selected.contractNumber} · Customer: <strong style={{ color: C.text }}>{selected.customer}</strong>
+              {selected.contractNumber} · Customer: <strong style={{ color: C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{selected.customer}</span></strong>
             </p>
           </div>
           {!isViewer && (
@@ -484,7 +484,7 @@ export default function Contracts() {
                         <div style={{ width: 28, height: 28, borderRadius: 7, background: C.blueBg, border: `1px solid ${C.blueBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: C.blue, flexShrink: 0 }}>
                           {c.customer.charAt(0)}
                         </div>
-                        {c.customer}
+                        <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{c.customer}</span>
                       </div>
                     </td>
                     <td style={{ padding: "12px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(c.value)}</td>

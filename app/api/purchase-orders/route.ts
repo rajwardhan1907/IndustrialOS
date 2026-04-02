@@ -80,32 +80,61 @@ export async function POST(req: Request) {
 
 // UPDATE a purchase order
 // Phase 16: approvalStatus, approvedBy, approvedAt can be patched here.
+// Automation 3: approvalStatus → "approved" OR status → "received" → add stock to inventory
 export async function PATCH(req: Request) {
   try {
     const body = await req.json()
     if (!body.id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400, headers: CORS })
     }
-    const po = await prisma.purchaseOrder.update({
-      where: { id: body.id },
-      data: {
-        ...(body.status         !== undefined && { status:         body.status         }),
-        ...(body.poNumber       !== undefined && { poNumber:       body.poNumber       }),
-        ...(body.supplierId     !== undefined && { supplierId:     body.supplierId     }),
-        ...(body.supplierName   !== undefined && { supplierName:   body.supplierName   }),
-        ...(body.items          !== undefined && { items:          body.items          }),
-        ...(body.subtotal       !== undefined && { subtotal:       body.subtotal       }),
-        ...(body.tax            !== undefined && { tax:            body.tax            }),
-        ...(body.total          !== undefined && { total:          body.total          }),
-        ...(body.paymentTerms   !== undefined && { paymentTerms:   body.paymentTerms   }),
-        ...(body.expectedDate   !== undefined && { expectedDate:   body.expectedDate   }),
-        ...(body.notes          !== undefined && { notes:          body.notes          }),
-        // Phase 16 approval fields
-        ...(body.approvalStatus !== undefined && { approvalStatus: body.approvalStatus }),
-        ...(body.approvedBy     !== undefined && { approvedBy:     body.approvedBy     }),
-        ...(body.approvedAt     !== undefined && { approvedAt:     body.approvedAt     }),
-      },
+
+    const po = await prisma.$transaction(async (tx) => {
+      const updated = await tx.purchaseOrder.update({
+        where: { id: body.id },
+        data: {
+          ...(body.status         !== undefined && { status:         body.status         }),
+          ...(body.poNumber       !== undefined && { poNumber:       body.poNumber       }),
+          ...(body.supplierId     !== undefined && { supplierId:     body.supplierId     }),
+          ...(body.supplierName   !== undefined && { supplierName:   body.supplierName   }),
+          ...(body.items          !== undefined && { items:          body.items          }),
+          ...(body.subtotal       !== undefined && { subtotal:       body.subtotal       }),
+          ...(body.tax            !== undefined && { tax:            body.tax            }),
+          ...(body.total          !== undefined && { total:          body.total          }),
+          ...(body.paymentTerms   !== undefined && { paymentTerms:   body.paymentTerms   }),
+          ...(body.expectedDate   !== undefined && { expectedDate:   body.expectedDate   }),
+          ...(body.notes          !== undefined && { notes:          body.notes          }),
+          // Phase 16 approval fields
+          ...(body.approvalStatus !== undefined && { approvalStatus: body.approvalStatus }),
+          ...(body.approvedBy     !== undefined && { approvedBy:     body.approvedBy     }),
+          ...(body.approvedAt     !== undefined && { approvedAt:     body.approvedAt     }),
+        },
+      })
+
+      // Automation 3 — add stock when PO is approved or received
+      const shouldAddStock =
+        body.approvalStatus === 'approved' || body.status === 'received'
+
+      if (shouldAddStock) {
+        const itemsArr = Array.isArray(updated.items) ? updated.items as any[] : []
+        for (const lineItem of itemsArr) {
+          const sku = lineItem?.sku
+          const qty = Number(lineItem?.qty ?? 0)
+          if (!sku || qty <= 0) continue
+          const invItem = await tx.inventoryItem.findFirst({
+            where: { sku, workspaceId: updated.workspaceId },
+          })
+          if (invItem) {
+            await tx.inventoryItem.update({
+              where: { id: invItem.id },
+              data:  { stockLevel: invItem.stockLevel + qty },
+            })
+          }
+        }
+      }
+
+      return updated
     })
+
     return NextResponse.json(po, { headers: CORS })
   } catch (err: any) {
     console.error('PurchaseOrders PATCH error:', err)

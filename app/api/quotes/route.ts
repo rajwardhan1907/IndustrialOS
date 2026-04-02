@@ -64,27 +64,69 @@ export async function POST(req: Request) {
 }
 
 // UPDATE a quote (change status, edit fields)
+// Automation 2: status → "accepted" → auto-create order + subtract inventory
 export async function PATCH(req: Request) {
   try {
     const body = await req.json()
     if (!body.id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400, headers: CORS })
     }
-    const quote = await prisma.quote.update({
-      where: { id: body.id },
-      data: {
-        ...(body.status       !== undefined && { status:       body.status       }),
-        ...(body.customer     !== undefined && { customer:     body.customer     }),
-        ...(body.items        !== undefined && { items:        body.items        }),
-        ...(body.subtotal     !== undefined && { subtotal:     body.subtotal     }),
-        ...(body.discountAmt  !== undefined && { discountAmt:  body.discountAmt  }),
-        ...(body.tax          !== undefined && { tax:          body.tax          }),
-        ...(body.total        !== undefined && { total:        body.total        }),
-        ...(body.validUntil   !== undefined && { validUntil:   body.validUntil   }),
-        ...(body.paymentTerms !== undefined && { paymentTerms: body.paymentTerms }),
-        ...(body.notes        !== undefined && { notes:        body.notes        }),
-      },
+
+    const quote = await prisma.$transaction(async (tx) => {
+      const updated = await tx.quote.update({
+        where: { id: body.id },
+        data: {
+          ...(body.status       !== undefined && { status:       body.status       }),
+          ...(body.customer     !== undefined && { customer:     body.customer     }),
+          ...(body.items        !== undefined && { items:        body.items        }),
+          ...(body.subtotal     !== undefined && { subtotal:     body.subtotal     }),
+          ...(body.discountAmt  !== undefined && { discountAmt:  body.discountAmt  }),
+          ...(body.tax          !== undefined && { tax:          body.tax          }),
+          ...(body.total        !== undefined && { total:        body.total        }),
+          ...(body.validUntil   !== undefined && { validUntil:   body.validUntil   }),
+          ...(body.paymentTerms !== undefined && { paymentTerms: body.paymentTerms }),
+          ...(body.notes        !== undefined && { notes:        body.notes        }),
+        },
+      })
+
+      // Automation 2 — auto-create order when quote is accepted
+      if (body.status === 'accepted') {
+        const itemsArr = Array.isArray(updated.items) ? updated.items as any[] : []
+        const firstItem = itemsArr[0]
+        const sku = firstItem?.sku ?? updated.quoteNumber ?? ''
+        const qty = firstItem?.qty ?? 1
+
+        const order = await tx.order.create({
+          data: {
+            customer:    updated.customer,
+            sku,
+            items:       qty,
+            value:       updated.total,
+            stage:       'Placed',
+            priority:    'MED',
+            source:      'quote',
+            notes:       `Auto-created from quote ${updated.quoteNumber}`,
+            workspaceId: updated.workspaceId,
+          },
+        })
+
+        // Also subtract inventory for the newly placed order
+        if (sku) {
+          const invItem = await tx.inventoryItem.findFirst({
+            where: { sku, workspaceId: updated.workspaceId },
+          })
+          if (invItem) {
+            await tx.inventoryItem.update({
+              where: { id: invItem.id },
+              data:  { stockLevel: Math.max(0, invItem.stockLevel - qty) },
+            })
+          }
+        }
+      }
+
+      return updated
     })
+
     return NextResponse.json(quote, { headers: CORS })
   } catch (err: any) {
     console.error('Quotes PATCH error:', err)

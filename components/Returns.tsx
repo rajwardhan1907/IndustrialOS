@@ -220,7 +220,7 @@ function NewReturnModal({ onSave, onClose }: {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function Returns() {
+export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
 
@@ -458,8 +458,8 @@ export default function Returns() {
                     <tr key={ret.id} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
                       onClick={() => setSelected(ret)}>
                       <td style={{ padding: "13px 16px", fontWeight: 700, color: C.blue, fontFamily: "monospace" }}>{ret.rmaNumber}</td>
-                      <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}>{ret.customer}</td>
-                      <td style={{ padding: "13px 16px", color: C.muted, fontFamily: "monospace" }}>{ret.sku}</td>
+                      <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{ret.customer}</span></td>
+                      <td style={{ padding: "13px 16px", color: C.muted, fontFamily: "monospace" }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("inventory")}>{ret.sku}</span></td>
                       <td style={{ padding: "13px 16px", color: C.text }}>{ret.qty}</td>
                       <td style={{ padding: "13px 16px", color: C.muted }}>{REASON_LABELS[ret.reason]}</td>
                       <td style={{ padding: "13px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(ret.refundAmount)}</td>

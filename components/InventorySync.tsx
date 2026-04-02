@@ -181,7 +181,7 @@ const StatusBadge = ({ item }: { item: InventoryItem }) => {
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function InventorySync() {
+export default function InventorySync({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
   const [items,     setItems]     = useState<InventoryItem[]>([]);
@@ -498,7 +498,7 @@ export default function InventorySync() {
                   <AlertTriangle size={16} color={s.color}/>
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{item.name}</div>
-                    <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{item.sku} · {item.warehouse} · {item.zone}/{item.binLocation}</div>
+                    <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{item.sku} · {item.warehouse} · {item.zone}/{item.binLocation}{item.supplier ? <> · <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("suppliers")}>{item.supplier}</span></> : ""}</div>
                   </div>
                   <div style={{ textAlign:"right" }}>
                     <div style={{ fontSize:14, fontWeight:800, color:s.color }}>{item.stockLevel} units</div>

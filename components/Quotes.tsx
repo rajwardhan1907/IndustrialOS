@@ -138,7 +138,7 @@ const Badge = ({ status }: { status: Quote["status"] }) => {
   );
 };
 
-export default function Quotes() {
+export default function Quotes({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
   const [view,      setView]     = useState<"list"|"new"|"detail">("list");
@@ -404,7 +404,7 @@ export default function Quotes() {
                   onMouseEnter={e => (e.currentTarget.style.background=C.bg)}
                   onMouseLeave={e => (e.currentTarget.style.background="transparent")}>
                   <td style={{ padding:"12px 16px", fontWeight:700, color:C.blue, fontFamily:"monospace" }}>{q.quoteNumber}</td>
-                  <td style={{ padding:"12px 16px", color:C.text, fontWeight:600 }}>{q.customer}</td>
+                  <td style={{ padding:"12px 16px", color:C.text, fontWeight:600 }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{q.customer}</span></td>
                   <td style={{ padding:"12px 16px", color:C.muted }}>{q.items.length} item{q.items.length!==1?"s":""}</td>
                   <td style={{ padding:"12px 16px", fontWeight:700, color:C.text }}>{fmtMoney(q.total)}</td>
                   <td style={{ padding:"12px 16px", color:C.muted }}>{fmtDate(q.validUntil)}</td>
@@ -595,7 +595,7 @@ export default function Quotes() {
             <Badge status={selected.status}/>
           </div>
           <p style={{ color:C.muted, fontSize:13 }}>
-            Created {fmtDate(selected.createdAt)} · Customer: <strong style={{ color:C.text }}>{selected.customer}</strong>
+            Created {fmtDate(selected.createdAt)} · Customer: <strong style={{ color:C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{selected.customer}</span></strong>
           </p>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>

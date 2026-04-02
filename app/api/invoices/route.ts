@@ -65,24 +65,48 @@ export async function POST(req: Request) {
 }
 
 // UPDATE an invoice (record payment, change status, etc.)
+// Automation 5: status → "paid" → reduce customer balanceDue
 export async function PATCH(req: Request) {
   try {
     const body = await req.json()
     if (!body.id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400, headers: CORS })
     }
-    const invoice = await prisma.invoice.update({
-      where: { id: body.id },
-      data: {
-        ...(body.status     !== undefined && { status:     body.status     }),
-        ...(body.amountPaid !== undefined && { amountPaid: body.amountPaid }),
-        ...(body.notes      !== undefined && { notes:      body.notes      }),
-        ...(body.items      !== undefined && { items:      body.items      }),
-        ...(body.subtotal   !== undefined && { subtotal:   body.subtotal   }),
-        ...(body.tax        !== undefined && { tax:        body.tax        }),
-        ...(body.total      !== undefined && { total:      body.total      }),
-      },
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      const updated = await tx.invoice.update({
+        where: { id: body.id },
+        data: {
+          ...(body.status     !== undefined && { status:     body.status     }),
+          ...(body.amountPaid !== undefined && { amountPaid: body.amountPaid }),
+          ...(body.notes      !== undefined && { notes:      body.notes      }),
+          ...(body.items      !== undefined && { items:      body.items      }),
+          ...(body.subtotal   !== undefined && { subtotal:   body.subtotal   }),
+          ...(body.tax        !== undefined && { tax:        body.tax        }),
+          ...(body.total      !== undefined && { total:      body.total      }),
+        },
+      })
+
+      // Automation 5 — reduce customer balanceDue when invoice is paid
+      if (body.status === 'paid') {
+        const customerName = updated.customer.toLowerCase().trim()
+        const customer = await tx.customer.findFirst({
+          where: {
+            workspaceId: updated.workspaceId,
+            name: { mode: 'insensitive', equals: updated.customer },
+          },
+        })
+        if (customer) {
+          await tx.customer.update({
+            where: { id: customer.id },
+            data:  { balanceDue: Math.max(0, customer.balanceDue - updated.total) },
+          })
+        }
+      }
+
+      return updated
     })
+
     return NextResponse.json(invoice, { headers: CORS })
   } catch (err: any) {
     console.error('Invoices PATCH error:', err)

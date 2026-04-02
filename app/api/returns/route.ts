@@ -81,22 +81,45 @@ export async function POST(req: Request) {
 }
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
+// Automation 4: status → "received" → add stock back to inventory
 export async function PATCH(req: Request) {
   try {
     const body = await req.json()
     if (!body.id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400, headers: CORS })
     }
-    const ret = await prisma.return.update({
-      where: { id: body.id },
-      data: {
-        ...(body.status       !== undefined && { status:       body.status       }),
-        ...(body.notes        !== undefined && { notes:        body.notes        }),
-        ...(body.refundAmount !== undefined && { refundAmount: body.refundAmount }),
-        ...(body.refundMethod !== undefined && { refundMethod: body.refundMethod }),
-        ...(body.description  !== undefined && { description:  body.description  }),
-      },
+
+    const ret = await prisma.$transaction(async (tx) => {
+      // Fetch current return record first so we have sku + qty
+      const current = await tx.return.findUnique({ where: { id: body.id } })
+
+      const updated = await tx.return.update({
+        where: { id: body.id },
+        data: {
+          ...(body.status       !== undefined && { status:       body.status       }),
+          ...(body.notes        !== undefined && { notes:        body.notes        }),
+          ...(body.refundAmount !== undefined && { refundAmount: body.refundAmount }),
+          ...(body.refundMethod !== undefined && { refundMethod: body.refundMethod }),
+          ...(body.description  !== undefined && { description:  body.description  }),
+        },
+      })
+
+      // Automation 4 — add returned stock back to inventory
+      if (body.status === 'received' && current?.sku) {
+        const invItem = await tx.inventoryItem.findFirst({
+          where: { sku: current.sku, workspaceId: updated.workspaceId },
+        })
+        if (invItem) {
+          await tx.inventoryItem.update({
+            where: { id: invItem.id },
+            data:  { stockLevel: invItem.stockLevel + (current.qty ?? 1) },
+          })
+        }
+      }
+
+      return updated
     })
+
     return NextResponse.json(ret, { headers: CORS })
   } catch (err: any) {
     console.error('Returns PATCH error:', err)

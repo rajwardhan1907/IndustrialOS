@@ -157,7 +157,7 @@ function NewOrderModal({ onSave, onClose }: {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function OrderKanban() {
+export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
   const [orders,     setOrders]     = useState<Order[]>([]);
@@ -353,7 +353,7 @@ export default function OrderKanban() {
                         }}>{o.priority}</span>
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {o.customer}
+                        <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{o.customer}</span>
                       </div>
                       <div style={{ fontSize: 11, color: C.subtle, marginBottom: 4 }}>
                         {o.items} unit{o.items !== 1 ? "s" : ""} · {o.sku}
