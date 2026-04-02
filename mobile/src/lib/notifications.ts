@@ -68,6 +68,8 @@ export async function syncPushToken(token: string, workspaceId: string, authToke
 }
 
 // Listen for incoming push notifications while app is foregrounded
-export function usePushNotifications(onReceive: (n: Notifications.Notification) => void) {
+export async function usePushNotifications(onReceive: (n: any) => void) {
+  const ready = await loadNativeModules();
+  if (!ready) return; // web — no-op
   Notifications.addNotificationReceivedListener(onReceive);
 }
