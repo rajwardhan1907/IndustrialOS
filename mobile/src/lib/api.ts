@@ -26,23 +26,32 @@ const storage = {
 };
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
-export async function storeSession(token: string, workspaceId: string, role: string) {
+export async function storeSession(token: string, workspaceId: string, role: string, userId: string, email?: string, name?: string) {
   await storage.setItem("auth_token",   token);
   await storage.setItem("workspace_id", workspaceId);
   await storage.setItem("user_role",    role);
+  await storage.setItem("user_id",      userId);
+  if (email) await storage.setItem("user_email", email);
+  if (name)  await storage.setItem("user_name",  name);
 }
 
 export async function getSession() {
   const token       = await storage.getItem("auth_token");
   const workspaceId = await storage.getItem("workspace_id");
   const role        = await storage.getItem("user_role");
-  return { token, workspaceId, role };
+  const userId      = await storage.getItem("user_id");
+  const email       = await storage.getItem("user_email");
+  const name        = await storage.getItem("user_name");
+  return { token, workspaceId, role, userId, email, name };
 }
 
 export async function clearSession() {
   await storage.removeItem("auth_token");
   await storage.removeItem("workspace_id");
   await storage.removeItem("user_role");
+  await storage.removeItem("user_id");
+  await storage.removeItem("user_email");
+  await storage.removeItem("user_name");
 }
 
 // ── Generic fetch wrapper ─────────────────────────────────────────────────────
@@ -121,5 +130,97 @@ export async function login(email: string, password: string) {
   return apiFetch("/api/auth/mobile-token", {
     method: "POST",
     body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function changePassword(userId: string, currentPassword: string, newPassword: string) {
+  return apiFetch("/api/users/change-password", {
+    method: "POST",
+    body: JSON.stringify({ userId, currentPassword, newPassword }),
+  });
+}
+
+// ── Quotes ────────────────────────────────────────────────────────────────────
+export async function fetchQuotes(workspaceId: string) {
+  return apiFetch(`/api/quotes?workspaceId=${workspaceId}`);
+}
+
+export async function updateQuoteStatus(id: string, status: string) {
+  return apiFetch("/api/quotes", {
+    method: "PATCH",
+    body: JSON.stringify({ id, status }),
+  });
+}
+
+// ── Customers ─────────────────────────────────────────────────────────────────
+export async function fetchCustomers(workspaceId: string) {
+  return apiFetch(`/api/customers?workspaceId=${workspaceId}`);
+}
+
+// ── Suppliers ─────────────────────────────────────────────────────────────────
+export async function fetchSuppliers(workspaceId: string) {
+  return apiFetch(`/api/suppliers?workspaceId=${workspaceId}`);
+}
+
+// ── Returns ───────────────────────────────────────────────────────────────────
+export async function fetchReturns(workspaceId: string) {
+  return apiFetch(`/api/returns?workspaceId=${workspaceId}`);
+}
+
+export async function updateReturnStatus(id: string, status: string) {
+  return apiFetch("/api/returns", {
+    method: "PATCH",
+    body: JSON.stringify({ id, status }),
+  });
+}
+
+// ── Purchase Orders ───────────────────────────────────────────────────────────
+export async function fetchPurchaseOrders(workspaceId: string) {
+  return apiFetch(`/api/purchase-orders?workspaceId=${workspaceId}`);
+}
+
+export async function updatePOApproval(id: string, approvalStatus: string, approvedBy?: string) {
+  return apiFetch("/api/purchase-orders", {
+    method: "PATCH",
+    body: JSON.stringify({ id, approvalStatus, approvedBy }),
+  });
+}
+
+// ── Invoices ──────────────────────────────────────────────────────────────────
+export async function fetchInvoices(workspaceId: string) {
+  return apiFetch(`/api/invoices?workspaceId=${workspaceId}`);
+}
+
+// ── Contracts ─────────────────────────────────────────────────────────────────
+export async function fetchContracts(workspaceId: string) {
+  return apiFetch(`/api/contracts?workspaceId=${workspaceId}`);
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+export async function fetchAnalytics(workspaceId: string) {
+  return apiFetch(`/api/dashboard?workspaceId=${workspaceId}`);
+}
+
+// ── Tickets ───────────────────────────────────────────────────────────────────
+export async function fetchTickets(workspaceId: string) {
+  return apiFetch(`/api/tickets?workspaceId=${workspaceId}`);
+}
+
+export async function createTicket(data: object) {
+  return apiFetch("/api/tickets", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateTicket(id: string, fields: object) {
+  return apiFetch("/api/tickets", { method: "PATCH", body: JSON.stringify({ id, ...fields }) });
+}
+
+export async function fetchTicketComments(ticketId: string) {
+  return apiFetch(`/api/tickets/comments?ticketId=${ticketId}`);
+}
+
+export async function postTicketComment(ticketId: string, authorId: string, authorName: string, body: string) {
+  return apiFetch("/api/tickets/comments", {
+    method: "POST",
+    body: JSON.stringify({ ticketId, authorId, authorName, body }),
   });
 }

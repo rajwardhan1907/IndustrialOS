@@ -4,7 +4,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Zap, Plus, Settings as SettingsIcon, X } from "lucide-react";
+import { Zap, Plus, Settings as SettingsIcon, X, Ticket, Sparkles } from "lucide-react";
 import {
   LayoutDashboard, ShoppingCart, Package, FileText,
   Receipt, Truck, Users, Factory, BarChart2,
@@ -27,6 +27,8 @@ import Suppliers     from "@/components/Suppliers";
 import Shipping      from "@/components/Shipping";
 import Returns       from "@/components/Returns";
 import Contracts      from "@/components/Contracts";
+import Tickets       from "@/components/Tickets";
+import AIInsights    from "@/components/AIInsights";
 import ReportBuilder  from "@/components/ReportBuilder";
 import ErrorBoundary  from "@/components/ErrorBoundary";
 import LoadingSpinner, { DashboardSkeleton } from "@/components/LoadingSpinner";
@@ -52,6 +54,8 @@ const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
   contracts: { label: "Contracts",     icon: ClipboardList   },
   reports:   { label: "Reports",       icon: BarChart2       },
   edi:       { label: "EDI",           icon: Zap             },
+  tickets:   { label: "Tickets",       icon: Ticket          },
+  ai:        { label: "AI Insights",   icon: Sparkles        },
 };
 
 function ComingSoon({ label }: { label: string }) {
@@ -349,6 +353,16 @@ export default function App() {
       case "edi": return (
         <ErrorBoundary label="EDI failed to load">
           <EDIPanel />
+        </ErrorBoundary>
+      );
+      case "tickets": return (
+        <ErrorBoundary label="Tickets failed to load">
+          <Tickets workspaceId={session?.user?.workspaceId || (typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") ?? "" : "")} session={session} />
+        </ErrorBoundary>
+      );
+      case "ai": return (
+        <ErrorBoundary label="AI Insights failed to load">
+          <AIInsights workspaceId={session?.user?.workspaceId || (typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") ?? "" : "")} />
         </ErrorBoundary>
       );
     }

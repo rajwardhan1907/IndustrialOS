@@ -773,6 +773,12 @@ function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; cur
   const [invError,   setInvError]   = useState("");
   const [invLoading, setInvLoading] = useState(false);
   const [invSuccess, setInvSuccess] = useState("");
+  const [cpCurrent,  setCpCurrent]  = useState("");
+  const [cpNew,      setCpNew]      = useState("");
+  const [cpConfirm,  setCpConfirm]  = useState("");
+  const [cpLoading,  setCpLoading]  = useState(false);
+  const [cpError,    setCpError]    = useState("");
+  const [cpSuccess,  setCpSuccess]  = useState("");
 
   useEffect(() => {
     if (!workspaceId) { setLoading(false); return; }
@@ -814,6 +820,28 @@ function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; cur
     setUsers(prev => [...prev, data]);
     setInvSuccess(`${data.name} added! Default password is changeme123.`);
     setInvName(""); setInvEmail(""); setInvRole("operator");
+  };
+
+  const handleChangePassword = async () => {
+    setCpError(""); setCpSuccess("");
+    if (!cpNew || !cpCurrent || !cpConfirm) { setCpError("All fields are required."); return; }
+    if (cpNew !== cpConfirm) { setCpError("New passwords do not match."); return; }
+    if (cpNew.length < 6) { setCpError("Password must be at least 6 characters."); return; }
+    const me = users.find(u => u.email === currentUserId);
+    if (!me) { setCpError("Could not find your account."); return; }
+    setCpLoading(true);
+    try {
+      const res = await fetch("/api/users/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: me.id, currentPassword: cpCurrent, newPassword: cpNew }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setCpError(data.error ?? "Failed to update password."); return; }
+      setCpSuccess("Password updated successfully!");
+      setCpCurrent(""); setCpNew(""); setCpConfirm("");
+    } catch { setCpError("Network error. Please try again."); }
+    finally { setCpLoading(false); }
   };
 
   const inpStyle = (val: string, set: (v: string) => void, ph: string, type = "text") => (
@@ -913,6 +941,25 @@ function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; cur
           })}
         </div>
       )}
+
+      {/* ── Change Password ── */}
+      <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: C.text, marginBottom: 14 }}>🔑 Change Your Password</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 380 }}>
+          <input type="password" value={cpCurrent} onChange={e => setCpCurrent(e.target.value)} placeholder="Current password"
+            style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none" }} />
+          <input type="password" value={cpNew} onChange={e => setCpNew(e.target.value)} placeholder="New password (min 6 chars)"
+            style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none" }} />
+          <input type="password" value={cpConfirm} onChange={e => setCpConfirm(e.target.value)} placeholder="Confirm new password"
+            style={{ padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none" }} />
+          {cpError   && <div style={{ fontSize: 12, color: C.red }}>{cpError}</div>}
+          {cpSuccess && <div style={{ fontSize: 12, color: C.green }}>{cpSuccess}</div>}
+          <button onClick={handleChangePassword} disabled={cpLoading}
+            style={{ padding: "9px 20px", background: cpLoading ? C.border : C.blue, border: "none", borderRadius: 8, color: cpLoading ? C.muted : "#fff", fontSize: 13, fontWeight: 700, cursor: cpLoading ? "not-allowed" : "pointer", alignSelf: "flex-start" }}>
+            {cpLoading ? "Updating…" : "Update Password"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

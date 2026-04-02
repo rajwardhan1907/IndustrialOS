@@ -32,6 +32,7 @@ model Workspace {
   contracts      Contract[]       // Phase 12
   ediPartners    EdiPartner[]     // Phase 23
   ediTransactions EdiTransaction[] // Phase 23
+  tickets        Ticket[]         // Phase 24
 }
 
 // ── User ──────────────────────────────────────────────────────────────────────
@@ -312,4 +313,37 @@ model EdiTransaction {
   workspaceId     String
   workspace       Workspace  @relation(fields: [workspaceId], references: [id])
   createdAt       DateTime   @default(now())
+}
+
+// ── Ticket ────────────────────────────────────────────────────────────────────
+model Ticket {
+  id           String          @id @default(cuid())
+  ticketNumber String
+  title        String
+  description  String          @default("")
+  type         String          @default("issue")
+  priority     String          @default("medium")
+  status       String          @default("open")
+  assignedTo   String          @default("")
+  assignedName String          @default("")
+  raisedBy     String          @default("")
+  raisedName   String          @default("")
+  linkedType   String          @default("")
+  linkedId     String          @default("")
+  linkedLabel  String          @default("")
+  workspaceId  String
+  workspace    Workspace       @relation(fields: [workspaceId], references: [id])
+  comments     TicketComment[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+}
+
+model TicketComment {
+  id         String   @id @default(cuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String   @default("")
+  authorName String   @default("")
+  body       String
+  createdAt  DateTime @default(now())
 }
