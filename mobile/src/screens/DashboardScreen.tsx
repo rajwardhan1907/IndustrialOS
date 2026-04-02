@@ -8,7 +8,7 @@ import { theme, s } from "../lib/theme";
 import { fetchDashboard, getSession } from "../lib/api";
 
 interface Metric { label: string; value: string | number; sub?: string }
-interface Alert  { id: string; title: string; type: string; time: string }
+interface Alert  { id: string | number; title?: string; msg?: string; type?: string; sev?: string; time: string }
 
 export default function DashboardScreen() {
   const [metrics,     setMetrics]     = useState<Metric[]>([]);
@@ -25,11 +25,12 @@ export default function DashboardScreen() {
       const { workspaceId } = await getSession();
       if (!workspaceId) { setError("Not logged in"); return; }
       const data = await fetchDashboard(workspaceId);
+      const met = data.met ?? data; // API returns { met, chart, alerts }
       setMetrics([
-        { label: "Open Orders",      value: data.openOrders      ?? 0, sub: "awaiting fulfilment" },
-        { label: "Low Stock Items",  value: data.lowStockItems   ?? 0, sub: "need reorder"        },
-        { label: "Pending Invoices", value: data.pendingInvoices ?? 0, sub: "unpaid"              },
-        { label: "Revenue (30d)",    value: `$${(data.revenue30d ?? 0).toLocaleString()}`, sub: "last 30 days" },
+        { label: "Open Orders",   value: met.activeOrders ?? met.openOrders      ?? 0, sub: "awaiting fulfilment" },
+        { label: "Queue Depth",   value: met.queue        ?? 0,                        sub: "placed + confirmed"  },
+        { label: "Revenue (MTD)", value: `$${(met.rev     ?? met.revenue30d      ?? 0).toLocaleString()}`, sub: "this month" },
+        { label: "SKUs Tracked",  value: met.skus         ?? met.lowStockItems   ?? 0, sub: "in inventory"        },
       ]);
       setAlerts(data.alerts ?? []);
       setCompanyName(data.companyName ?? "IndustrialOS");
@@ -43,14 +44,14 @@ export default function DashboardScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  const alertColor = (type: string) => {
-    if (type === "critical" || type === "error") return theme.red;
-    if (type === "warning")                      return theme.amber;
+  const alertColor = (sev: string) => {
+    if (sev === "critical" || sev === "error" || sev === "err") return theme.red;
+    if (sev === "warning"  || sev === "warn")                   return theme.amber;
     return theme.blue;
   };
-  const alertBg = (type: string) => {
-    if (type === "critical" || type === "error") return theme.redBg;
-    if (type === "warning")                      return theme.amberBg;
+  const alertBg = (sev: string) => {
+    if (sev === "critical" || sev === "error" || sev === "err") return theme.redBg;
+    if (sev === "warning"  || sev === "warn")                   return theme.amberBg;
     return theme.blueBg;
   };
 
@@ -94,8 +95,8 @@ export default function DashboardScreen() {
         <>
           <Text style={[s.heading, { marginTop: 8, marginBottom: 10 }]}>Active Alerts</Text>
           {alerts.slice(0, 10).map((a, i) => (
-            <View key={i} style={[s.card, { backgroundColor: alertBg(a.type), borderWidth: 1, borderColor: alertColor(a.type) + "44", marginBottom: 8 }]}>
-              <Text style={{ fontWeight: "700", fontSize: 13, color: alertColor(a.type) }}>{a.title}</Text>
+            <View key={i} style={[s.card, { backgroundColor: alertBg(a.type ?? a.sev), borderWidth: 1, borderColor: alertColor(a.type ?? a.sev) + "44", marginBottom: 8 }]}>
+              <Text style={{ fontWeight: "700", fontSize: 13, color: alertColor(a.type ?? a.sev) }}>{a.title ?? a.msg}</Text>
               <Text style={{ fontSize: 11, color: theme.muted, marginTop: 2 }}>{a.time}</Text>
             </View>
           ))}

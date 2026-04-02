@@ -1,12 +1,21 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+const CORS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS })
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const workspaceId = searchParams.get('workspaceId')
     if (!workspaceId) {
-      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 })
+      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400, headers: CORS })
     }
 
     const now = new Date()
@@ -101,9 +110,10 @@ export async function GET(req: Request) {
       },
       chart,
       alerts,
-    })
+    }, { headers: CORS })
   } catch (err: any) {
     console.error('Dashboard GET error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
+
+    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
   }
 }

@@ -6,12 +6,22 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+const CORS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS })
+}
+
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const workspaceId = searchParams.get('workspaceId')
     if (!workspaceId) {
-      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 })
+      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400, headers: CORS })
     }
 
     const today    = new Date()
@@ -119,9 +129,20 @@ export async function GET(req: Request) {
       })
     })
 
-    return NextResponse.json({ notifications })
+    return NextResponse.json({ notifications }, { headers: CORS })
   } catch (err: any) {
     console.error('Notifications GET error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
+    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
+  }
+}
+
+// PATCH — mark a notification as read (graceful no-op; read state is derived from source data)
+export async function PATCH(req: Request) {
+  try {
+    // Notification read state is derived at query time from source records.
+    // We accept the call so the mobile app doesn't get a 405, and return success.
+    return NextResponse.json({ success: true }, { headers: CORS })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
   }
 }

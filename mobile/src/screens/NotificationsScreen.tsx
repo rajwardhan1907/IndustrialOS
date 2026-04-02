@@ -8,14 +8,15 @@ import { theme, s } from "../lib/theme";
 import { fetchNotifications, markNotificationRead, getSession } from "../lib/api";
 
 interface Notification {
-  id: string; title: string; body: string; type: string;
+  id: string; title: string; body: string; type: string; severity?: string;
   read: boolean; createdAt: string;
 }
 
-function notifColor(type: string) {
-  if (type === "critical" || type === "error") return { color: theme.red,   bg: theme.redBg,   border: theme.redBorder };
-  if (type === "warning")                      return { color: theme.amber, bg: theme.amberBg, border: theme.amberBorder };
-  return                                              { color: theme.blue,  bg: theme.blueBg,  border: theme.blueBorder };
+function notifColor(n: Notification) {
+  const level = n.severity ?? n.type;
+  if (level === "critical" || level === "error") return { color: theme.red,   bg: theme.redBg,   border: theme.redBorder };
+  if (level === "warning"  || level === "warn")  return { color: theme.amber, bg: theme.amberBg, border: theme.amberBorder };
+  return                                                { color: theme.blue,  bg: theme.blueBg,  border: theme.blueBorder };
 }
 
 export default function NotificationsScreen() {
@@ -29,7 +30,7 @@ export default function NotificationsScreen() {
       const { workspaceId } = await getSession();
       if (!workspaceId) return;
       const data = await fetchNotifications(workspaceId);
-      setNotifs(data);
+      setNotifs(Array.isArray(data) ? data : (data.notifications ?? []));
     } catch (e: any) {
       Alert.alert("Error", e.message);
     } finally {
@@ -72,7 +73,7 @@ export default function NotificationsScreen() {
       )}
 
       {notifs.map(n => {
-        const c = notifColor(n.type);
+        const c = notifColor(n);
         return (
           <TouchableOpacity
             key={n.id}
