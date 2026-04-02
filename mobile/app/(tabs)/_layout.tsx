@@ -67,7 +67,7 @@ export default function TabLayout() {
       }}
     >
       {TAB_MAP.map(tab => {
-        const enabled = tab.feature === "Profile" || features[tab.feature] ?? false;
+        const enabled = tab.feature === "Profile" || (features[tab.feature] ?? false);
         return (
           <Tabs.Screen
             key={tab.name}
