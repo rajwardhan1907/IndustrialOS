@@ -1,13 +1,24 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+const CORS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS });
+}
+
+
 // GET customers — workspaceId is required (prevents cross-tenant data leaks)
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const workspaceId = searchParams.get('workspaceId')
     if (!workspaceId) {
-      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 })
+      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400, headers: CORS })
     }
 
     const customers = await prisma.customer.findMany({
@@ -35,10 +46,10 @@ export async function GET(req: Request) {
       totalSpend: spendMap[c.name.toLowerCase().trim()] || 0,
     }))
 
-    return NextResponse.json(customersWithSpend)
+    return NextResponse.json(customersWithSpend, { headers: CORS })
   } catch (err: any) {
     console.error('Customers GET error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
+    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
   }
 }
 
@@ -47,7 +58,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     if (!body.workspaceId) {
-      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 })
+      return NextResponse.json({ error: 'workspaceId is required' }, { status: 400, headers: CORS })
     }
     const customer = await prisma.customer.create({
       data: {
@@ -66,10 +77,10 @@ export async function POST(req: Request) {
         workspaceId: body.workspaceId,
       },
     })
-    return NextResponse.json(customer)
+    return NextResponse.json(customer, { headers: CORS })
   } catch (err: any) {
     console.error('Customers POST error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
+    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
   }
 }
 
@@ -78,7 +89,7 @@ export async function PATCH(req: Request) {
   try {
     const body = await req.json()
     if (!body.id) {
-      return NextResponse.json({ error: 'id is required' }, { status: 400 })
+      return NextResponse.json({ error: 'id is required' }, { status: 400, headers: CORS })
     }
     const customer = await prisma.customer.update({
       where: { id: body.id },
@@ -98,10 +109,10 @@ export async function PATCH(req: Request) {
         ...(body.whatsappPaused  !== undefined && { whatsappPaused:  body.whatsappPaused  }),  // Phase 11
       },
     })
-    return NextResponse.json(customer)
+    return NextResponse.json(customer, { headers: CORS })
   } catch (err: any) {
     console.error('Customers PATCH error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
+    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
   }
 }
 
@@ -111,12 +122,12 @@ export async function DELETE(req: Request) {
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     if (!id) {
-      return NextResponse.json({ error: 'id is required' }, { status: 400 })
+      return NextResponse.json({ error: 'id is required' }, { status: 400, headers: CORS })
     }
     await prisma.customer.delete({ where: { id } })
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true }, { headers: CORS })
   } catch (err: any) {
     console.error('Customers DELETE error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
+    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
   }
 }

@@ -1,15 +1,25 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
+const CORS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
 export default withAuth(
   function middleware(req) {
-    const token    = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
-    const role     = (token?.role as string) ?? "viewer";
+
+    // ── Handle CORS preflight for all API routes ───────────────────────────
+    if (req.method === "OPTIONS" && pathname.startsWith("/api/")) {
+      return new NextResponse(null, { status: 204, headers: CORS });
+    }
+
+    const token = req.nextauth.token;
+    const role  = (token?.role as string) ?? "viewer";
 
     // ── Block operator / viewer from mutating users via API ─────────────────
-    // GET is fine — they can see who's in the workspace.
-    // POST (invite), PATCH (change role), DELETE (remove) are admin-only.
     if (
       pathname.startsWith("/api/users") &&
       req.method !== "GET" &&
@@ -17,7 +27,7 @@ export default withAuth(
     ) {
       return NextResponse.json(
         { error: "Forbidden — admin role required" },
-        { status: 403 }
+        { status: 403, headers: CORS }
       );
     }
 
@@ -29,17 +39,33 @@ export default withAuth(
     ) {
       return NextResponse.json(
         { error: "Forbidden — admin role required" },
-        { status: 403 }
+        { status: 403, headers: CORS }
       );
     }
 
-    return NextResponse.next();
+    // ── Add CORS headers to every API response ─────────────────────────────
+    const response = NextResponse.next();
+    if (pathname.startsWith("/api/")) {
+      Object.entries(CORS).forEach(([k, v]) => response.headers.set(k, v));
+    }
+    return response;
   },
   {
     secret: process.env.NEXTAUTH_SECRET,
     pages:  { signIn: "/login" },
     callbacks: {
-      authorized: ({ token }) => !!token,
+      authorized: ({ token, req }) => {
+        const pathname = req.nextUrl.pathname;
+        // Always allow OPTIONS preflights through
+        if (req.method === "OPTIONS") return true;
+        // Allow mobile Bearer token requests to all API routes
+        if (pathname.startsWith("/api/")) {
+          const auth = req.headers.get("authorization") ?? "";
+          if (auth.startsWith("Bearer ")) return true;
+        }
+        // Fall back to NextAuth session for web app
+        return !!token;
+      },
     },
   }
 );
