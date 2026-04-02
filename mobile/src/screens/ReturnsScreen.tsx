@@ -1,16 +1,20 @@
 // mobile/src/screens/ReturnsScreen.tsx
+// View returns + advance status + Create Return
 import React, { useEffect, useState, useCallback } from "react";
 import {
-  View, Text, ScrollView, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Alert,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  RefreshControl, ActivityIndicator, Alert, Modal, TextInput,
 } from "react-native";
 import { theme, s } from "../lib/theme";
-import { fetchReturns, updateReturnStatus, getSession } from "../lib/api";
+import { fetchReturns, updateReturnStatus, createReturn, getSession } from "../lib/api";
 
 interface Return {
   id: string; rmaNumber: string; customer: string; sku: string;
   qty: number; reason: string; status: string;
 }
+
+const REASONS = ["defective", "wrong_item", "damaged", "other"];
+const STATUSES = ["requested", "approved", "received", "refunded"];
 
 function statusColor(st: string) {
   if (st === "requested") return { color: theme.blue,    bg: theme.blueBg,    border: theme.blueBorder    };
@@ -22,10 +26,18 @@ function statusColor(st: string) {
 }
 
 export default function ReturnsScreen() {
-  const [returns,   setReturns]   = useState<Return[]>([]);
-  const [loading,   setLoading]   = useState(true);
+  const [returns,    setReturns]    = useState<Return[]>([]);
+  const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selected,  setSelected]  = useState<Return | null>(null);
+  const [selected,   setSelected]   = useState<Return | null>(null);
+  // New return state
+  const [showNew,    setShowNew]    = useState(false);
+  const [newCustomer,setNewCustomer]= useState("");
+  const [newSku,     setNewSku]     = useState("");
+  const [newQty,     setNewQty]     = useState("1");
+  const [newReason,  setNewReason]  = useState("defective");
+  const [newDesc,    setNewDesc]    = useState("");
+  const [creating,   setCreating]   = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
@@ -40,14 +52,35 @@ export default function ReturnsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  const submitNew = async () => {
+    if (!newCustomer.trim()) { Alert.alert("Required", "Customer is required."); return; }
+    if (!newSku.trim())      { Alert.alert("Required", "SKU is required."); return; }
+    const qty = parseInt(newQty, 10) || 1;
+    setCreating(true);
+    try {
+      const { workspaceId } = await getSession();
+      if (!workspaceId) return;
+      const rmaNumber = "RMA-" + Date.now();
+      const r = await createReturn({
+        workspaceId, rmaNumber, customer: newCustomer.trim(),
+        sku: newSku.trim(), qty, reason: newReason,
+        description: newDesc.trim() || undefined, status: "requested",
+      });
+      setReturns(prev => [r, ...prev]);
+      setShowNew(false);
+      setNewCustomer(""); setNewSku(""); setNewQty("1"); setNewReason("defective"); setNewDesc("");
+      Alert.alert("Created", `Return ${r.rmaNumber} created.`);
+    } catch (e: any) { Alert.alert("Error", e.message); }
+    finally { setCreating(false); }
+  };
+
   if (loading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}><ActivityIndicator size="large" color={theme.blue} /></View>;
 
   if (selected) {
     const st = statusColor(selected.status);
-    const statuses = ["requested", "approved", "received", "refunded"];
-    const currentIdx = statuses.indexOf(selected.status);
-    const canAdvance = currentIdx >= 0 && currentIdx < statuses.length - 1;
-    const nextStatus = canAdvance ? statuses[currentIdx + 1] : null;
+    const currentIdx = STATUSES.indexOf(selected.status);
+    const canAdvance = currentIdx >= 0 && currentIdx < STATUSES.length - 1;
+    const nextStatus = canAdvance ? STATUSES[currentIdx + 1] : null;
 
     const advanceStatus = async () => {
       if (!nextStatus) return;
@@ -70,13 +103,15 @@ export default function ReturnsScreen() {
             <View style={s.badge(st.bg, st.color, st.border)}><Text style={s.badgeText(st.color)}>{selected.status.toUpperCase()}</Text></View>
             <Text style={{ fontSize: 13, color: theme.muted, marginTop: 12 }}>SKU: {selected.sku}</Text>
             <Text style={{ fontSize: 13, color: theme.muted }}>Qty: {selected.qty}</Text>
-            <Text style={{ fontSize: 13, color: theme.muted, marginTop: 8 }}>Reason: {selected.reason}</Text>
+            <Text style={{ fontSize: 13, color: theme.muted, marginTop: 8 }}>Reason: {selected.reason.replace("_", " ")}</Text>
           </View>
-          {canAdvance && nextStatus && (
+          {canAdvance && nextStatus ? (
             <TouchableOpacity onPress={advanceStatus} style={[s.card, { backgroundColor: theme.blueBg, borderColor: theme.blueBorder, borderWidth: 1, marginTop: 16 }]}>
-              <Text style={{ color: theme.blue, fontWeight: "700", fontSize: 14 }}>→ Move to {nextStatus.charAt(0).toUpperCase() + nextStatus.slice(1)}</Text>
+              <Text style={{ color: theme.blue, fontWeight: "700", fontSize: 14 }}>
+                → Move to {nextStatus.charAt(0).toUpperCase() + nextStatus.slice(1)}
+              </Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </ScrollView>
       </View>
     );
@@ -91,7 +126,7 @@ export default function ReturnsScreen() {
         <Text style={[s.heading, { marginBottom: 16 }]}>Returns</Text>
         {returns.length === 0 ? (
           <View style={[s.card, { alignItems: "center", padding: 32 }]}>
-            <Text style={{ color: theme.muted, fontSize: 13 }}>No returns found.</Text>
+            <Text style={{ color: theme.muted, fontSize: 13 }}>No returns found. Tap + to log one.</Text>
           </View>
         ) : returns.map(r => {
           const st = statusColor(r.status);
@@ -107,6 +142,63 @@ export default function ReturnsScreen() {
           );
         })}
       </ScrollView>
+
+      {/* FAB */}
+      <TouchableOpacity onPress={() => setShowNew(true)} style={styles.fab}>
+        <Text style={{ color: "#fff", fontSize: 24, fontWeight: "300" }}>+</Text>
+      </TouchableOpacity>
+
+      {/* Create Return Modal */}
+      <Modal visible={showNew} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}>
+            <View style={styles.modalCard}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <Text style={styles.modalTitle}>New Return</Text>
+                <TouchableOpacity onPress={() => setShowNew(false)}>
+                  <Text style={{ fontSize: 20, color: theme.muted }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={s.label}>CUSTOMER *</Text>
+              <TextInput style={styles.input} value={newCustomer} onChangeText={setNewCustomer}
+                placeholder="Customer name" placeholderTextColor={theme.subtle} />
+              <Text style={s.label}>SKU *</Text>
+              <TextInput style={styles.input} value={newSku} onChangeText={setNewSku}
+                placeholder="e.g. SKU-001" placeholderTextColor={theme.subtle} />
+              <Text style={s.label}>QUANTITY</Text>
+              <TextInput style={styles.input} value={newQty} onChangeText={setNewQty}
+                keyboardType="number-pad" placeholder="1" placeholderTextColor={theme.subtle} />
+              <Text style={s.label}>REASON</Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, marginTop: 4 }}>
+                {REASONS.map(r => (
+                  <TouchableOpacity key={r} onPress={() => setNewReason(r)}
+                    style={[styles.chip, newReason === r && { backgroundColor: theme.blue, borderColor: theme.blue }]}>
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: newReason === r ? "#fff" : theme.muted }}>
+                      {r.replace("_", " ")}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <Text style={s.label}>DESCRIPTION</Text>
+              <TextInput style={[styles.input, { minHeight: 60 }]} value={newDesc} onChangeText={setNewDesc}
+                placeholder="Additional details…" placeholderTextColor={theme.subtle} multiline />
+              <TouchableOpacity onPress={submitNew} disabled={creating}
+                style={{ backgroundColor: theme.blue, borderRadius: 10, padding: 14, alignItems: "center", opacity: creating ? 0.6 : 1, marginTop: 4 }}>
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{creating ? "Creating…" : "Create Return"}</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  fab:         { position: "absolute", bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.blue, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.2, shadowOffset: { width: 0, height: 4 }, shadowRadius: 8, elevation: 6 },
+  modalOverlay:{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
+  modalCard:   { backgroundColor: theme.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
+  modalTitle:  { fontSize: 18, fontWeight: "800", color: theme.text },
+  input:       { borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 10, color: theme.text, fontSize: 13, backgroundColor: theme.bg, marginBottom: 12, marginTop: 4 },
+  chip:        { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.bg },
+});

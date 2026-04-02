@@ -1,8 +1,13 @@
 // mobile/app/(tabs)/_layout.tsx — Dynamic bottom tab bar
+// FIX 2: async feature load via SecureStore (native) / localStorage (web)
+// FIX 3: AppState listener so toggling features in Profile refreshes tabs immediately
 import React, { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
-import { Text, Platform } from "react-native";
+import { Text, Platform, AppState } from "react-native";
+import * as SecureStore from "expo-secure-store";
 import { theme } from "../../src/lib/theme";
+
+const FEATURES_KEY = "mobile_features";
 
 const HIGH_PRIORITY = ["Dashboard","Orders","Inventory","Shipments","Notifications","Tickets"];
 
@@ -13,12 +18,15 @@ const DEFAULT_FEATURES: Record<string, boolean> = {
   Invoicing: false, Analytics: false, Contracts: false,
 };
 
-function loadFeatures(): Record<string, boolean> {
+async function loadFeatures(): Promise<Record<string, boolean>> {
   try {
-    if (Platform.OS === "web" && typeof localStorage !== "undefined") {
-      const raw = localStorage.getItem("mobile_features");
-      if (raw) return { ...DEFAULT_FEATURES, ...JSON.parse(raw) };
+    let raw: string | null = null;
+    if (Platform.OS === "web") {
+      if (typeof localStorage !== "undefined") raw = localStorage.getItem(FEATURES_KEY);
+    } else {
+      raw = await SecureStore.getItemAsync(FEATURES_KEY);
     }
+    if (raw) return { ...DEFAULT_FEATURES, ...JSON.parse(raw) };
   } catch {}
   return { ...DEFAULT_FEATURES };
 }
@@ -27,7 +35,6 @@ function Icon({ emoji, focused }: { emoji: string; focused: boolean }) {
   return <Text style={{ fontSize: focused ? 22 : 20, opacity: focused ? 1 : 0.6 }}>{emoji}</Text>;
 }
 
-// Map feature name to tab config
 const TAB_MAP: { name: string; feature: string; title: string; emoji: string }[] = [
   { name: "index",           feature: "Dashboard",      title: "Dashboard",  emoji: "⚡" },
   { name: "inventory",       feature: "Inventory",      title: "Inventory",  emoji: "📦" },
@@ -47,11 +54,19 @@ const TAB_MAP: { name: string; feature: string; title: string; emoji: string }[]
 ];
 
 export default function TabLayout() {
-  const [features, setFeatures] = useState(loadFeatures());
+  const [features, setFeatures] = useState<Record<string, boolean>>(DEFAULT_FEATURES);
 
   useEffect(() => {
-    // Reload on mount in case features changed
-    setFeatures(loadFeatures());
+    // Initial load
+    loadFeatures().then(setFeatures);
+
+    // Reload whenever the app comes back to the foreground
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        loadFeatures().then(setFeatures);
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   return (

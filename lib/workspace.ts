@@ -107,17 +107,17 @@ export function getPlan(size: TeamSize): WorkspaceConfig["suggestedPlan"] {
 }
 
 export function getRecommendedModules(industry: Industry): ModuleId[] {
-  const base: ModuleId[] = ["dashboard", "orders", "customers"];
+  const base: ModuleId[] = ["dashboard", "orders", "customers", "tickets"];
   const map: Record<Industry, ModuleId[]> = {
-    manufacturer:  [...base, "inventory", "suppliers", "pipeline", "invoicing", "analytics", "returns"],
-    distributor:   [...base, "inventory", "invoicing", "shipping", "analytics", "returns"],
-    services:      [...base, "quotes", "invoicing", "crm", "analytics"],
-    import_export: [...base, "inventory", "shipping", "invoicing", "suppliers", "returns"],
-    construction:  [...base, "quotes", "suppliers", "invoicing", "analytics"],
-    pharma:        [...base, "inventory", "suppliers", "pipeline", "invoicing", "health", "returns"],
-    food_beverage: [...base, "inventory", "suppliers", "shipping", "invoicing", "returns"],
-    technology:    [...base, "quotes", "invoicing", "crm", "analytics"],
-    other:         [...base, "invoicing"],
+    manufacturer:  [...base, "inventory", "suppliers", "pipeline", "invoicing", "analytics", "returns", "ai"],
+    distributor:   [...base, "inventory", "invoicing", "shipping", "analytics", "returns", "ai"],
+    services:      [...base, "quotes", "invoicing", "crm", "analytics", "ai"],
+    import_export: [...base, "inventory", "shipping", "invoicing", "suppliers", "returns", "ai"],
+    construction:  [...base, "quotes", "suppliers", "invoicing", "analytics", "ai"],
+    pharma:        [...base, "inventory", "suppliers", "pipeline", "invoicing", "health", "returns", "ai"],
+    food_beverage: [...base, "inventory", "suppliers", "shipping", "invoicing", "returns", "ai"],
+    technology:    [...base, "quotes", "invoicing", "crm", "analytics", "ai"],
+    other:         [...base, "invoicing", "ai"],
   };
   return map[industry];
 }
@@ -145,6 +145,8 @@ export function loadWorkspace(): WorkspaceConfig | null {
     if (parsed.aiPriceCompare      === undefined) parsed.aiPriceCompare      = false;
     if (parsed.quickbooksConnected === undefined) parsed.quickbooksConnected = false;
     if (parsed.xeroConnected       === undefined) parsed.xeroConnected       = false;
+    if (!parsed.modules.includes("tickets")) parsed.modules.push("tickets");
+    if (!parsed.modules.includes("ai"))      parsed.modules.push("ai");
     return parsed;
   } catch {
     return null;

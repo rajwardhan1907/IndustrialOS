@@ -1,5 +1,5 @@
 // mobile/src/screens/InventoryScreen.tsx
-// Stock list + barcode scanning for warehouse workers
+// Stock list + barcode scanning + Add Item + extended edit (reorder, zone, bin)
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
@@ -16,7 +16,7 @@ if (Platform.OS !== "web") {
   useCameraPermissions = cam.useCameraPermissions;
   Haptics              = require("expo-haptics");
 }
-import { fetchInventory, updateInventoryItem, getSession } from "../lib/api";
+import { fetchInventory, updateInventoryItem, createInventoryItem, getSession } from "../lib/api";
 
 interface Item {
   id: string; sku: string; name: string; category: string;
@@ -25,14 +25,10 @@ interface Item {
 }
 
 function stockBadge(item: Item) {
-  if (item.stockLevel === 0)                              return { label: "Out",      ...badgeStyle(theme.red,   theme.redBg,   theme.redBorder)   };
-  if (item.stockLevel <= item.reorderPoint * 0.5)         return { label: "Critical", ...badgeStyle(theme.red,   theme.redBg,   theme.redBorder)   };
-  if (item.stockLevel <= item.reorderPoint)               return { label: "Low",      ...badgeStyle(theme.amber, theme.amberBg, theme.amberBorder) };
-  return                                                         { label: "OK",       ...badgeStyle(theme.green, theme.greenBg, theme.greenBorder) };
-}
-
-function badgeStyle(color: string, bg: string, border: string) {
-  return { color, bg, border };
+  if (item.stockLevel === 0)                              return { label: "Out",      color: theme.red,   bg: theme.redBg,   border: theme.redBorder   };
+  if (item.stockLevel <= item.reorderPoint * 0.5)         return { label: "Critical", color: theme.red,   bg: theme.redBg,   border: theme.redBorder   };
+  if (item.stockLevel <= item.reorderPoint)               return { label: "Low",      color: theme.amber, bg: theme.amberBg, border: theme.amberBorder };
+  return                                                         { label: "OK",       color: theme.green, bg: theme.greenBg, border: theme.greenBorder };
 }
 
 export default function InventoryScreen() {
@@ -44,8 +40,22 @@ export default function InventoryScreen() {
   const [scanning,   setScanning]   = useState(false);
   const [scanned,    setScanned]    = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
-  const [editItem,   setEditItem]   = useState<Item | null>(null);
-  const [editQty,    setEditQty]    = useState("");
+  // Edit modal state
+  const [editItem,    setEditItem]    = useState<Item | null>(null);
+  const [editQty,     setEditQty]     = useState("");
+  const [editReorder, setEditReorder] = useState("");
+  const [editZone,    setEditZone]    = useState("");
+  const [editBin,     setEditBin]     = useState("");
+  const [saving,      setSaving]      = useState(false);
+  // New item modal state
+  const [showNew,     setShowNew]     = useState(false);
+  const [newSku,      setNewSku]      = useState("");
+  const [newName,     setNewName]     = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [newStock,    setNewStock]    = useState("");
+  const [newReorder,  setNewReorder]  = useState("");
+  const [newWarehouse,setNewWarehouse]= useState("");
+  const [creating,    setCreating]    = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
@@ -66,12 +76,24 @@ export default function InventoryScreen() {
 
   useEffect(() => {
     const q = search.toLowerCase().trim();
-    setFiltered(q ? items.filter(i => i.sku.toLowerCase().includes(q) || i.name.toLowerCase().includes(q) || i.binLocation.toLowerCase().includes(q)) : items);
+    setFiltered(q ? items.filter(i =>
+      i.sku.toLowerCase().includes(q) ||
+      i.name.toLowerCase().includes(q) ||
+      i.binLocation.toLowerCase().includes(q)
+    ) : items);
   }, [search, items]);
+
+  const openEdit = (item: Item) => {
+    setEditItem(item);
+    setEditQty(String(item.stockLevel));
+    setEditReorder(String(item.reorderPoint));
+    setEditZone(item.zone || "");
+    setEditBin(item.binLocation || "");
+  };
 
   const openScanner = async () => {
     if (Platform.OS === "web") { setScanning(true); return; }
-    if (!permission?.granted) {
+    if (!permission || !permission.granted) {
       const result = await requestPermission();
       if (!result.granted) { Alert.alert("Camera permission denied"); return; }
     }
@@ -84,7 +106,6 @@ export default function InventoryScreen() {
     setScanned(true);
     if (Haptics) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setScanning(false);
-    // Auto-search for the scanned SKU
     setSearch(data);
     const found = items.find(i => i.sku === data || i.binLocation === data);
     if (found) {
@@ -94,18 +115,44 @@ export default function InventoryScreen() {
     }
   };
 
-  const saveStockEdit = async () => {
+  const saveEdit = async () => {
     if (!editItem) return;
     const qty = parseInt(editQty, 10);
     if (isNaN(qty) || qty < 0) { Alert.alert("Invalid qty"); return; }
+    setSaving(true);
     try {
-      await updateInventoryItem(editItem.id, { stockLevel: qty });
-      setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, stockLevel: qty } : i));
+      const fields: Record<string, any> = { stockLevel: qty };
+      const reorder = parseInt(editReorder, 10);
+      if (!isNaN(reorder) && reorder >= 0) fields.reorderPoint = reorder;
+      if (editZone.trim()) fields.zone = editZone.trim();
+      if (editBin.trim())  fields.binLocation = editBin.trim();
+      await updateInventoryItem(editItem.id, fields);
+      setItems(prev => prev.map(i => i.id === editItem.id ? { ...i, stockLevel: qty, ...fields } : i));
       setEditItem(null);
       if (Haptics) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Alert.alert("Error", e.message);
-    }
+    } finally { setSaving(false); }
+  };
+
+  const submitNew = async () => {
+    if (!newSku.trim())  { Alert.alert("Required", "SKU is required."); return; }
+    if (!newName.trim()) { Alert.alert("Required", "Name is required."); return; }
+    setCreating(true);
+    try {
+      const { workspaceId } = await getSession();
+      if (!workspaceId) return;
+      const item = await createInventoryItem({
+        workspaceId, sku: newSku.trim(), name: newName.trim(),
+        category: newCategory.trim(), stockLevel: parseInt(newStock, 10) || 0,
+        reorderPoint: parseInt(newReorder, 10) || 0, warehouse: newWarehouse.trim(),
+      });
+      setItems(prev => [item, ...prev]);
+      setShowNew(false);
+      setNewSku(""); setNewName(""); setNewCategory(""); setNewStock(""); setNewReorder(""); setNewWarehouse("");
+      Alert.alert("Created", `${item.name} added to inventory.`);
+    } catch (e: any) { Alert.alert("Error", e.message); }
+    finally { setCreating(false); }
   };
 
   if (loading) return (
@@ -119,11 +166,8 @@ export default function InventoryScreen() {
       {/* Search + Scan bar */}
       <View style={styles.topBar}>
         <TextInput
-          style={styles.search}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search SKU, name or bin…"
-          placeholderTextColor={theme.subtle}
+          style={styles.search} value={search} onChangeText={setSearch}
+          placeholder="Search SKU, name or bin…" placeholderTextColor={theme.subtle}
           returnKeyType="search"
         />
         <TouchableOpacity style={styles.scanBtn} onPress={openScanner} activeOpacity={0.85}>
@@ -142,7 +186,7 @@ export default function InventoryScreen() {
         {filtered.map(item => {
           const badge = stockBadge(item);
           return (
-            <TouchableOpacity key={item.id} style={s.card} onPress={() => { setEditItem(item); setEditQty(String(item.stockLevel)); }} activeOpacity={0.85}>
+            <TouchableOpacity key={item.id} style={s.card} onPress={() => openEdit(item)} activeOpacity={0.85}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>{item.name}</Text>
@@ -151,7 +195,7 @@ export default function InventoryScreen() {
                     {item.warehouse ? ` · ${item.warehouse}${item.zone ? " " + item.zone : ""}` : ""}
                   </Text>
                 </View>
-                <View style={[s.badge(badge.bg, badge.color, badge.border)]}>
+                <View style={s.badge(badge.bg, badge.color, badge.border)}>
                   <Text style={s.badgeText(badge.color)}>{badge.label}</Text>
                 </View>
               </View>
@@ -164,12 +208,12 @@ export default function InventoryScreen() {
                   <Text style={styles.statLabel}>Reorder At</Text>
                   <Text style={{ fontSize: 16, fontWeight: "700", color: theme.muted }}>{item.reorderPoint}</Text>
                 </View>
-                {item.supplier && (
+                {item.supplier ? (
                   <View>
                     <Text style={styles.statLabel}>Supplier</Text>
                     <Text style={{ fontSize: 12, color: theme.muted }}>{item.supplier}</Text>
                   </View>
-                )}
+                ) : null}
               </View>
             </TouchableOpacity>
           );
@@ -182,7 +226,12 @@ export default function InventoryScreen() {
         )}
       </ScrollView>
 
-      {/* Barcode scanner modal — camera on native, text input on web */}
+      {/* FAB */}
+      <TouchableOpacity onPress={() => setShowNew(true)} style={styles.fab}>
+        <Text style={{ color: "#fff", fontSize: 24, fontWeight: "300" }}>+</Text>
+      </TouchableOpacity>
+
+      {/* Barcode scanner modal */}
       <Modal visible={scanning} animationType="slide">
         {Platform.OS === "web" ? (
           <View style={styles.modalOverlay}>
@@ -212,30 +261,76 @@ export default function InventoryScreen() {
         )}
       </Modal>
 
-      {/* Edit stock modal */}
+      {/* Edit item modal — stock + reorder + zone + bin */}
       <Modal visible={!!editItem} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>{editItem?.name}</Text>
-            <Text style={{ color: theme.muted, fontSize: 12, marginBottom: 16 }}>{editItem?.sku}</Text>
-            <Text style={s.label}>Update Stock Level</Text>
-            <TextInput
-              style={styles.input}
-              value={editQty}
-              onChangeText={setEditQty}
-              keyboardType="number-pad"
-              placeholder="0"
-              placeholderTextColor={theme.subtle}
-            />
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+              <Text style={styles.modalTitle}>{editItem ? editItem.name : ""}</Text>
+              <TouchableOpacity onPress={() => setEditItem(null)}>
+                <Text style={{ fontSize: 20, color: theme.muted }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={{ color: theme.muted, fontSize: 12, marginBottom: 16 }}>{editItem ? editItem.sku : ""}</Text>
+            <Text style={s.label}>STOCK LEVEL</Text>
+            <TextInput style={styles.input} value={editQty} onChangeText={setEditQty}
+              keyboardType="number-pad" placeholder="0" placeholderTextColor={theme.subtle} />
+            <Text style={s.label}>REORDER POINT</Text>
+            <TextInput style={styles.input} value={editReorder} onChangeText={setEditReorder}
+              keyboardType="number-pad" placeholder="0" placeholderTextColor={theme.subtle} />
+            <Text style={s.label}>ZONE</Text>
+            <TextInput style={styles.input} value={editZone} onChangeText={setEditZone}
+              placeholder="e.g. A, B, Cold" placeholderTextColor={theme.subtle} />
+            <Text style={s.label}>BIN LOCATION</Text>
+            <TextInput style={styles.input} value={editBin} onChangeText={setEditBin}
+              placeholder="e.g. A-12-3" placeholderTextColor={theme.subtle} />
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <TouchableOpacity style={[styles.btn, { flex: 1 }]} onPress={saveStockEdit}>
-                <Text style={styles.btnText}>Save</Text>
+              <TouchableOpacity style={[styles.btn, { flex: 2, opacity: saving ? 0.6 : 1 }]} onPress={saveEdit} disabled={saving}>
+                <Text style={styles.btnText}>{saving ? "Saving…" : "Save Changes"}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.btnOutline, { flex: 1 }]} onPress={() => setEditItem(null)}>
                 <Text style={styles.btnOutlineText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* New Item Modal */}
+      <Modal visible={showNew} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end" }}>
+            <View style={styles.modalCard}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+                <Text style={styles.modalTitle}>Add Item</Text>
+                <TouchableOpacity onPress={() => setShowNew(false)}>
+                  <Text style={{ fontSize: 20, color: theme.muted }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={s.label}>SKU *</Text>
+              <TextInput style={styles.input} value={newSku} onChangeText={setNewSku}
+                placeholder="e.g. SKU-001" placeholderTextColor={theme.subtle} />
+              <Text style={s.label}>NAME *</Text>
+              <TextInput style={styles.input} value={newName} onChangeText={setNewName}
+                placeholder="Product name" placeholderTextColor={theme.subtle} />
+              <Text style={s.label}>CATEGORY</Text>
+              <TextInput style={styles.input} value={newCategory} onChangeText={setNewCategory}
+                placeholder="e.g. Electronics" placeholderTextColor={theme.subtle} />
+              <Text style={s.label}>STOCK LEVEL</Text>
+              <TextInput style={styles.input} value={newStock} onChangeText={setNewStock}
+                keyboardType="number-pad" placeholder="0" placeholderTextColor={theme.subtle} />
+              <Text style={s.label}>REORDER POINT</Text>
+              <TextInput style={styles.input} value={newReorder} onChangeText={setNewReorder}
+                keyboardType="number-pad" placeholder="0" placeholderTextColor={theme.subtle} />
+              <Text style={s.label}>WAREHOUSE</Text>
+              <TextInput style={styles.input} value={newWarehouse} onChangeText={setNewWarehouse}
+                placeholder="e.g. Main Warehouse" placeholderTextColor={theme.subtle} />
+              <TouchableOpacity onPress={submitNew} disabled={creating}
+                style={{ backgroundColor: theme.blue, borderRadius: 10, padding: 14, alignItems: "center", opacity: creating ? 0.6 : 1 }}>
+                <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{creating ? "Adding…" : "Add Item"}</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
       </Modal>
     </View>
@@ -249,14 +344,15 @@ const styles = StyleSheet.create({
   scanBtnText:  { color: "#fff", fontWeight: "700", fontSize: 13 },
   count:        { fontSize: 12, color: theme.muted, marginBottom: 10 },
   statLabel:    { fontSize: 10, color: theme.subtle, fontWeight: "600", textTransform: "uppercase" },
+  fab:          { position: "absolute", bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.blue, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.2, shadowOffset: { width: 0, height: 4 }, shadowRadius: 8, elevation: 6 },
   scanOverlay:  { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, justifyContent: "center", alignItems: "center" },
   scanFrame:    { width: 260, height: 180, borderWidth: 2, borderColor: theme.green, borderRadius: 12 },
   scanHint:     { color: "#fff", marginTop: 16, fontSize: 14 },
   cancelBtn:    { marginTop: 32, backgroundColor: "rgba(0,0,0,0.5)", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   modalCard:    { backgroundColor: theme.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
-  modalTitle:   { fontSize: 18, fontWeight: "800", color: theme.text, marginBottom: 2 },
-  input:        { borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12, fontSize: 16, color: theme.text, backgroundColor: theme.bg, marginBottom: 16 },
+  modalTitle:   { fontSize: 18, fontWeight: "800", color: theme.text },
+  input:        { borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 10, fontSize: 13, color: theme.text, backgroundColor: theme.bg, marginBottom: 12, marginTop: 4 },
   btn:          { backgroundColor: theme.blue, borderRadius: 10, padding: 14, alignItems: "center" },
   btnText:      { color: "#fff", fontWeight: "700", fontSize: 14 },
   btnOutline:   { borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 14, alignItems: "center" },

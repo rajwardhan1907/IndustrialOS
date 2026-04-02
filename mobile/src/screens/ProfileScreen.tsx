@@ -1,12 +1,16 @@
 // mobile/src/screens/ProfileScreen.tsx
-import React, { useEffect, useState, useCallback } from "react";
+// FIX 2: async feature load/save via SecureStore (native) / localStorage (web)
+import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Switch, Alert, Platform,
 } from "react-native";
+import * as SecureStore from "expo-secure-store";
 import { theme, s } from "../lib/theme";
 import { getSession, clearSession } from "../lib/api";
 import ChangePasswordScreen from "./ChangePasswordScreen";
+
+const FEATURES_KEY = "mobile_features";
 
 const DEFAULT_FEATURES: Record<string, boolean> = {
   Dashboard: true, Orders: true, Inventory: true, Shipments: true,
@@ -17,20 +21,28 @@ const DEFAULT_FEATURES: Record<string, boolean> = {
 
 const HIGH_PRIORITY = ["Dashboard", "Orders", "Inventory", "Shipments", "Notifications", "Tickets"];
 
-function loadFeatures(): Record<string, boolean> {
-  if (typeof localStorage !== "undefined") {
-    try {
-      const raw = localStorage.getItem("mobile_features");
-      if (raw) return { ...DEFAULT_FEATURES, ...JSON.parse(raw) };
-    } catch {}
-  }
+async function loadFeatures(): Promise<Record<string, boolean>> {
+  try {
+    let raw: string | null = null;
+    if (Platform.OS === "web") {
+      if (typeof localStorage !== "undefined") raw = localStorage.getItem(FEATURES_KEY);
+    } else {
+      raw = await SecureStore.getItemAsync(FEATURES_KEY);
+    }
+    if (raw) return { ...DEFAULT_FEATURES, ...JSON.parse(raw) };
+  } catch {}
   return { ...DEFAULT_FEATURES };
 }
 
-function saveFeatures(f: Record<string, boolean>) {
-  if (typeof localStorage !== "undefined") {
-    try { localStorage.setItem("mobile_features", JSON.stringify(f)); } catch {}
-  }
+async function saveFeatures(f: Record<string, boolean>): Promise<void> {
+  try {
+    const val = JSON.stringify(f);
+    if (Platform.OS === "web") {
+      if (typeof localStorage !== "undefined") localStorage.setItem(FEATURES_KEY, val);
+    } else {
+      await SecureStore.setItemAsync(FEATURES_KEY, val);
+    }
+  } catch {}
 }
 
 interface Props {
@@ -38,20 +50,20 @@ interface Props {
 }
 
 export default function ProfileScreen({ onLogout }: Props) {
-  const [session,         setSession]         = useState<any>({});
-  const [features,        setFeatures]        = useState<Record<string, boolean>>(DEFAULT_FEATURES);
-  const [showChangePwd,   setShowChangePwd]   = useState(false);
+  const [session,       setSession]       = useState<any>({});
+  const [features,      setFeatures]      = useState<Record<string, boolean>>(DEFAULT_FEATURES);
+  const [showChangePwd, setShowChangePwd] = useState(false);
 
   useEffect(() => {
     getSession().then(setSession);
-    setFeatures(loadFeatures());
+    loadFeatures().then(setFeatures);
   }, []);
 
   const toggleFeature = (name: string) => {
     if (HIGH_PRIORITY.includes(name)) return;
     setFeatures(prev => {
       const next = { ...prev, [name]: !prev[name] };
-      saveFeatures(next);
+      saveFeatures(next); // fire-and-forget async save
       return next;
     });
   };
@@ -73,7 +85,7 @@ export default function ProfileScreen({ onLogout }: Props) {
       <View style={[s.card, { marginBottom: 16 }]}>
         <View style={styles.avatar}>
           <Text style={{ fontSize: 24, fontWeight: "800", color: theme.blue }}>
-            {session.name?.[0]?.toUpperCase() ?? "?"}
+            {session.name ? session.name[0].toUpperCase() : "?"}
           </Text>
         </View>
         <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text, textAlign: "center", marginTop: 10 }}>
@@ -83,12 +95,14 @@ export default function ProfileScreen({ onLogout }: Props) {
           {session.email ?? "—"}
         </Text>
         <View style={[styles.roleBadge, { marginTop: 10, alignSelf: "center" }]}>
-          <Text style={{ fontSize: 11, fontWeight: "700", color: theme.blue }}>{(session.role ?? "operator").toUpperCase()}</Text>
+          <Text style={{ fontSize: 11, fontWeight: "700", color: theme.blue }}>
+            {(session.role ?? "operator").toUpperCase()}
+          </Text>
         </View>
       </View>
 
       {/* Change Password */}
-      <TouchableOpacity style={[s.card, styles.row]} onPress={() => setShowChangePwd(true)}>
+      <TouchableOpacity style={[s.card, styles.row, { marginBottom: 16 }]} onPress={() => setShowChangePwd(true)}>
         <Text style={{ fontSize: 14, color: theme.text, fontWeight: "600" }}>🔑 Change Password</Text>
         <Text style={{ color: theme.muted, fontSize: 18 }}>›</Text>
       </TouchableOpacity>
@@ -110,7 +124,7 @@ export default function ProfileScreen({ onLogout }: Props) {
               onValueChange={() => toggleFeature(name)}
               disabled={locked}
               trackColor={{ false: theme.border, true: theme.blue }}
-              thumbColor={enabled ? "#fff" : "#fff"}
+              thumbColor="#fff"
             />
           </View>
         );

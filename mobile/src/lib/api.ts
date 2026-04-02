@@ -224,3 +224,61 @@ export async function postTicketComment(ticketId: string, authorId: string, auth
     body: JSON.stringify({ ticketId, authorId, authorName, body }),
   });
 }
+
+// ── Orders (create) ───────────────────────────────────────────────────────────
+export async function createOrder(data: object) {
+  return apiFetch("/api/orders", { method: "POST", body: JSON.stringify(data) });
+}
+
+// ── Inventory (create) ────────────────────────────────────────────────────────
+export async function createInventoryItem(data: object) {
+  return apiFetch("/api/inventory", { method: "POST", body: JSON.stringify(data) });
+}
+
+// ── Customers (create / update) ───────────────────────────────────────────────
+export async function createCustomer(data: object) {
+  return apiFetch("/api/customers", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateCustomer(id: string, fields: object) {
+  return apiFetch("/api/customers", { method: "PATCH", body: JSON.stringify({ id, ...fields }) });
+}
+
+// ── Suppliers (create / update) ───────────────────────────────────────────────
+export async function createSupplier(data: object) {
+  return apiFetch("/api/suppliers", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateSupplier(id: string, fields: object) {
+  return apiFetch("/api/suppliers", { method: "PATCH", body: JSON.stringify({ id, ...fields }) });
+}
+
+// ── Quotes (create) ───────────────────────────────────────────────────────────
+export async function createQuote(data: object) {
+  return apiFetch("/api/quotes", { method: "POST", body: JSON.stringify(data) });
+}
+
+// ── Returns (create) ──────────────────────────────────────────────────────────
+export async function createReturn(data: object) {
+  return apiFetch("/api/returns", { method: "POST", body: JSON.stringify(data) });
+}
+
+// ── Shipments (create) ────────────────────────────────────────────────────────
+export async function createShipment(data: object) {
+  return apiFetch("/api/shipments", { method: "POST", body: JSON.stringify(data) });
+}
+
+// ── Invoices (update status) ──────────────────────────────────────────────────
+export async function updateInvoiceStatus(id: string, status: string, amountPaid: number) {
+  return apiFetch("/api/invoices", { method: "PATCH", body: JSON.stringify({ id, status, amountPaid }) });
+}
+
+// ── Purchase Orders (create) ──────────────────────────────────────────────────
+export async function createPurchaseOrder(data: object) {
+  return apiFetch("/api/purchase-orders", { method: "POST", body: JSON.stringify(data) });
+}
+
+// ── Contracts (create) ────────────────────────────────────────────────────────
+export async function createContract(data: object) {
+  return apiFetch("/api/contracts", { method: "POST", body: JSON.stringify(data) });
+}

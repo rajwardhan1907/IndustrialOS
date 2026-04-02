@@ -1,14 +1,15 @@
 // mobile/src/screens/ShipmentsScreen.tsx
+// View shipments + advance status + Create Shipment
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, ActivityIndicator, Alert, Modal, Platform,
+  RefreshControl, ActivityIndicator, Alert, Modal, TextInput, Platform,
 } from "react-native";
 import { theme, s } from "../lib/theme";
 
 let Haptics: any = null;
 if (Platform.OS !== "web") Haptics = require("expo-haptics");
-import { fetchShipments, updateShipmentStatus, getSession } from "../lib/api";
+import { fetchShipments, updateShipmentStatus, createShipment, getSession } from "../lib/api";
 
 interface Shipment {
   id: string; shipmentNumber: string; customer: string; carrier: string;
@@ -17,13 +18,14 @@ interface Shipment {
 }
 
 const STATUS_FLOW = ["pending", "picked_up", "in_transit", "out_for_delivery", "delivered"];
+const CARRIERS = ["FedEx", "UPS", "DHL", "Other"];
 
 function statusBadge(status: string) {
-  if (status === "delivered")        return { label: "Delivered",       color: theme.green, bg: theme.greenBg, border: theme.greenBorder };
-  if (status === "out_for_delivery") return { label: "Out for Delivery", color: theme.blue, bg: theme.blueBg, border: theme.blueBorder };
-  if (status === "in_transit")       return { label: "In Transit",       color: theme.blue, bg: theme.blueBg, border: theme.blueBorder };
-  if (status === "picked_up")        return { label: "Picked Up",        color: theme.amber, bg: theme.amberBg, border: theme.amberBorder };
-  return                                    { label: "Pending",          color: theme.muted, bg: theme.bg, border: theme.border };
+  if (status === "delivered")        return { label: "Delivered",        color: theme.green, bg: theme.greenBg,  border: theme.greenBorder  };
+  if (status === "out_for_delivery") return { label: "Out for Delivery",  color: theme.blue,  bg: theme.blueBg,   border: theme.blueBorder   };
+  if (status === "in_transit")       return { label: "In Transit",        color: theme.blue,  bg: theme.blueBg,   border: theme.blueBorder   };
+  if (status === "picked_up")        return { label: "Picked Up",         color: theme.amber, bg: theme.amberBg,  border: theme.amberBorder  };
+  return                                    { label: "Pending",           color: theme.muted, bg: theme.bg,       border: theme.border       };
 }
 
 export default function ShipmentsScreen() {
@@ -32,6 +34,14 @@ export default function ShipmentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter,     setFilter]     = useState("All");
   const [selected,   setSelected]   = useState<Shipment | null>(null);
+  // New shipment state
+  const [showNew,    setShowNew]    = useState(false);
+  const [newCustomer,setNewCustomer]= useState("");
+  const [newCarrier, setNewCarrier] = useState("FedEx");
+  const [newOrigin,  setNewOrigin]  = useState("");
+  const [newDest,    setNewDest]    = useState("");
+  const [newEta,     setNewEta]     = useState("");
+  const [creating,   setCreating]   = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
@@ -53,11 +63,31 @@ export default function ShipmentsScreen() {
     try {
       await updateShipmentStatus(ship.id, newStatus);
       setShipments(prev => prev.map(s => s.id === ship.id ? { ...s, status: newStatus } : s));
-      setSelected(sel => sel && sel.id === ship.id ? { ...sel, status: newStatus } : sel);
+      setSelected(sel => (sel && sel.id === ship.id) ? { ...sel, status: newStatus } : sel);
       if (Haptics) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) {
       Alert.alert("Error", e.message);
     }
+  };
+
+  const submitNew = async () => {
+    if (!newCustomer.trim()) { Alert.alert("Required", "Customer is required."); return; }
+    setCreating(true);
+    try {
+      const { workspaceId } = await getSession();
+      if (!workspaceId) return;
+      const shipmentNumber = "SHP-" + Date.now();
+      const ship = await createShipment({
+        workspaceId, shipmentNumber, customer: newCustomer.trim(),
+        carrier: newCarrier, origin: newOrigin.trim(), destination: newDest.trim(),
+        estimatedDate: newEta.trim() || undefined, status: "pending",
+      });
+      setShipments(prev => [ship, ...prev]);
+      setShowNew(false);
+      setNewCustomer(""); setNewCarrier("FedEx"); setNewOrigin(""); setNewDest(""); setNewEta("");
+      Alert.alert("Created", `Shipment ${ship.shipmentNumber} created.`);
+    } catch (e: any) { Alert.alert("Error", e.message); }
+    finally { setCreating(false); }
   };
 
   const filterKeys = ["All", ...STATUS_FLOW];
@@ -119,7 +149,7 @@ export default function ShipmentsScreen() {
                   {ship.origin ? `${ship.origin} → ` : ""}{ship.destination}
                 </Text>
               ) : null}
-              {hasNext && (
+              {hasNext ? (
                 <TouchableOpacity
                   style={[styles.advBtn, { backgroundColor: badge.bg, borderColor: badge.border }]}
                   onPress={() => Alert.alert("Update Status", `Mark as "${statusBadge(STATUS_FLOW[idx + 1]).label}"?`, [
@@ -131,15 +161,21 @@ export default function ShipmentsScreen() {
                     → Mark as {statusBadge(STATUS_FLOW[idx + 1]).label}
                   </Text>
                 </TouchableOpacity>
-              )}
+              ) : null}
             </TouchableOpacity>
           );
         })}
       </ScrollView>
 
+      {/* FAB */}
+      <TouchableOpacity onPress={() => setShowNew(true)} style={styles.fab}>
+        <Text style={{ color: "#fff", fontSize: 24, fontWeight: "300" }}>+</Text>
+      </TouchableOpacity>
+
+      {/* Detail modal */}
       <Modal visible={!!selected} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          {selected && (
+          {selected ? (
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>{selected.shipmentNumber}</Text>
               <Text style={{ color: theme.muted, fontSize: 12, marginBottom: 12 }}>
@@ -172,7 +208,46 @@ export default function ShipmentsScreen() {
                 <Text style={{ color: theme.muted, fontWeight: "700", fontSize: 14 }}>Close</Text>
               </TouchableOpacity>
             </View>
-          )}
+          ) : null}
+        </View>
+      </Modal>
+
+      {/* Create Shipment Modal */}
+      <Modal visible={showNew} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <Text style={styles.modalTitle}>New Shipment</Text>
+              <TouchableOpacity onPress={() => setShowNew(false)}>
+                <Text style={{ fontSize: 20, color: theme.muted }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={s.label}>CUSTOMER *</Text>
+            <TextInput style={styles.input} value={newCustomer} onChangeText={setNewCustomer}
+              placeholder="Customer name" placeholderTextColor={theme.subtle} />
+            <Text style={s.label}>CARRIER</Text>
+            <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, marginTop: 4 }}>
+              {CARRIERS.map(c => (
+                <TouchableOpacity key={c} onPress={() => setNewCarrier(c)}
+                  style={[styles.chip, newCarrier === c && { backgroundColor: theme.blue, borderColor: theme.blue }]}>
+                  <Text style={[styles.chipText, newCarrier === c && { color: "#fff" }]}>{c}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={s.label}>ORIGIN</Text>
+            <TextInput style={styles.input} value={newOrigin} onChangeText={setNewOrigin}
+              placeholder="e.g. Chicago, IL" placeholderTextColor={theme.subtle} />
+            <Text style={s.label}>DESTINATION</Text>
+            <TextInput style={styles.input} value={newDest} onChangeText={setNewDest}
+              placeholder="e.g. New York, NY" placeholderTextColor={theme.subtle} />
+            <Text style={s.label}>ESTIMATED DATE (YYYY-MM-DD)</Text>
+            <TextInput style={styles.input} value={newEta} onChangeText={setNewEta}
+              placeholder="e.g. 2026-04-15" placeholderTextColor={theme.subtle} />
+            <TouchableOpacity onPress={submitNew} disabled={creating}
+              style={{ backgroundColor: theme.blue, borderRadius: 10, padding: 14, alignItems: "center", opacity: creating ? 0.6 : 1, marginTop: 4 }}>
+              <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{creating ? "Creating…" : "Create Shipment"}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </View>
@@ -184,9 +259,11 @@ const styles = StyleSheet.create({
   chip:        { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.bg, marginVertical: 8 },
   chipText:    { fontSize: 12, fontWeight: "600", color: theme.muted },
   advBtn:      { marginTop: 10, padding: 8, borderRadius: 8, borderWidth: 1, alignItems: "center" },
+  fab:         { position: "absolute", bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.blue, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.2, shadowOffset: { width: 0, height: 4 }, shadowRadius: 8, elevation: 6 },
   modalOverlay:{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   modalCard:   { backgroundColor: theme.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },
-  modalTitle:  { fontSize: 18, fontWeight: "800", color: theme.text, marginBottom: 2 },
+  modalTitle:  { fontSize: 18, fontWeight: "800", color: theme.text },
   stageBtn:    { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.bg },
   closeBtn:    { borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 14, alignItems: "center" },
+  input:       { borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 10, color: theme.text, fontSize: 13, backgroundColor: theme.bg, marginBottom: 12, marginTop: 4 },
 });
