@@ -217,11 +217,12 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string)
   };
 
   // ── Create invoice from order ────────────────────────────────────────────
-  const createInvoiceFromOrder = (order: Order) => {
+  const createInvoiceFromOrder = async (order: Order) => {
     const INVOICE_KEY = "industrialos_invoices";
+    const wid       = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
     const today     = new Date().toISOString().split("T")[0];
     const dueDate   = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
-    const unitPrice = order.value / order.items;
+    const unitPrice = order.value / Math.max(order.items, 1);
     const subtotal  = order.value;
     const tax       = parseFloat((subtotal * 0.08).toFixed(2));
     const total     = parseFloat((subtotal + tax).toFixed(2));
@@ -244,10 +245,20 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string)
       dueDate,
       status:       "unpaid",
       notes:        `Auto-generated from order ${order.id}`,
+      currency:     "USD",
       createdAt:    new Date().toISOString(),
     };
 
     try {
+      // Save to DB (source of truth) — this is what the Invoicing tab reads from
+      if (wid) {
+        await fetch("/api/invoices", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ ...newInvoice, workspaceId: wid }),
+        });
+      }
+      // Also mirror to localStorage so the Invoicing tab shows it instantly on mount
       const existing = JSON.parse(localStorage.getItem(INVOICE_KEY) || "[]");
       localStorage.setItem(INVOICE_KEY, JSON.stringify([newInvoice, ...existing]));
       setInvoiceMsg(`Invoice created for ${order.customer} — go to the Invoicing tab to view it.`);
