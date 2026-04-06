@@ -169,10 +169,11 @@ function NewTicketModal({ users, session, onSave, onClose }: {
 }
 
 // ── Ticket Detail Panel ───────────────────────────────────────────────────────
-function TicketDetail({ ticket, users, session, onUpdate, onBack }: {
+function TicketDetail({ ticket, users, session, onUpdate, onBack, onNavigate }: {
   ticket: Ticket; users: any[]; session: any;
   onUpdate: (t: Ticket) => void;
   onBack: () => void;
+  onNavigate?: (tab: string) => void;
 }) {
   const [commentBody, setCommentBody]   = useState("");
   const [submitting,  setSubmitting]    = useState(false);
@@ -446,6 +447,7 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
             ticket={selected} users={users} session={session}
             onUpdate={updateTicket}
             onBack={() => setSelected(null)}
+            onNavigate={onNavigate}
           />
         </div>
       )}
