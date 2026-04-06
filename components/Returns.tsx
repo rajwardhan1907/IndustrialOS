@@ -393,16 +393,19 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, margin: "16px 0" }}>
             {[
-              { label: "Customer",     value: selected.customer },
-              { label: "SKU",          value: selected.sku      },
-              { label: "Qty",          value: String(selected.qty) },
-              { label: "Reason",       value: REASON_LABELS[selected.reason] },
-              { label: "Refund Method",value: REFUND_METHOD_LABELS[selected.refundMethod] },
-              { label: "Refund Amount",value: fmtMoney(selected.refundAmount) },
-            ].map(({ label, value }) => (
+              { label: "Customer",     value: selected.customer, tab: "customers" as string | undefined },
+              { label: "SKU",          value: selected.sku,      tab: "inventory" as string | undefined },
+              { label: "Qty",          value: String(selected.qty), tab: undefined },
+              { label: "Reason",       value: REASON_LABELS[selected.reason], tab: undefined },
+              { label: "Refund Method",value: REFUND_METHOD_LABELS[selected.refundMethod], tab: undefined },
+              { label: "Refund Amount",value: fmtMoney(selected.refundAmount), tab: undefined },
+            ].map(({ label, value, tab }) => (
               <div key={label} style={{ background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, padding: "10px 14px" }}>
                 <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{value}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: tab ? C.blue : C.text, cursor: tab ? "pointer" : "default", textDecoration: tab ? "underline" : "none" }}
+                     onClick={() => tab && onNavigate?.(tab)}>
+                  {value}
+                </div>
               </div>
             ))}
           </div>

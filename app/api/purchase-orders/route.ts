@@ -107,6 +107,7 @@ export async function PATCH(req: Request) {
           ...(body.approvalStatus !== undefined && { approvalStatus: body.approvalStatus }),
           ...(body.approvedBy     !== undefined && { approvedBy:     body.approvedBy     }),
           ...(body.approvedAt     !== undefined && { approvedAt:     body.approvedAt     }),
+          ...(body.rejectionNote  !== undefined && { rejectionNote:  body.rejectionNote  }),
         },
       })
 

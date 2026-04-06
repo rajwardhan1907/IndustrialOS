@@ -89,7 +89,6 @@ export async function PATCH(req: Request) {
 
       // Automation 5 — reduce customer balanceDue when invoice is paid
       if (body.status === 'paid') {
-        const customerName = updated.customer.toLowerCase().trim()
         const customer = await tx.customer.findFirst({
           where: {
             workspaceId: updated.workspaceId,

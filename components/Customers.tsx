@@ -72,7 +72,7 @@ function dbToCustomer(d: any): Customer {
     status:      (["active","on_hold","inactive","pending"].includes(d.status) ? d.status : "active") as CustStatus,
     creditLimit: d.creditLimit  || 0,
     balance:     d.balanceDue   || 0,
-    totalSpend:  0,                // not in DB schema — defaults to 0
+    totalSpend:  d.totalSpend ?? 0, // API computes this from orders at query time
     contact: {
       name:  d.contactName || "",
       role:  "Contact",           // not in DB schema

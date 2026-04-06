@@ -459,18 +459,21 @@ export default function Shipping({ onNavigate }: { onNavigate?: (tab: string) =>
               {/* Shipment info */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 {[
-                  { label:"Customer",  val:selected.customer, tab:"customers" },
-                  { label:"Order",     val:selected.orderId         },
-                  { label:"Origin",    val:selected.origin          },
-                  { label:"Destination",val:selected.destination    },
-                  { label:"Weight",    val:selected.weight          },
-                  { label:"Dimensions",val:selected.dimensions      },
-                  { label:"Est. Date", val:fmtDate(selected.estimatedDate) },
-                  { label:"Delivered", val:fmtDate(selected.deliveredDate) },
+                  { label:"Customer",    val:selected.customer, tab:"customers" as string | undefined },
+                  { label:"Order",       val:selected.orderId,           tab: undefined },
+                  { label:"Origin",      val:selected.origin,            tab: undefined },
+                  { label:"Destination", val:selected.destination,       tab: undefined },
+                  { label:"Weight",      val:selected.weight,            tab: undefined },
+                  { label:"Dimensions",  val:selected.dimensions,        tab: undefined },
+                  { label:"Est. Date",   val:fmtDate(selected.estimatedDate), tab: undefined },
+                  { label:"Delivered",   val:fmtDate(selected.deliveredDate), tab: undefined },
                 ].map((r,i)=>(
                   <div key={i} style={{ padding:"10px 12px", background:C.bg, borderRadius:9, border:`1px solid ${C.border}` }}>
                     <div style={{ fontSize:10, color:C.subtle, textTransform:"uppercase" as const, letterSpacing:"0.05em", marginBottom:2 }}>{r.label}</div>
-                    <div style={{ fontSize:13, color:C.text, fontWeight:600 }}>{r.val || "—"}</div>
+                    <div style={{ fontSize:13, color: r.tab ? C.blue : C.text, fontWeight:600, cursor: r.tab ? "pointer" : "default", textDecoration: r.tab ? "underline" : "none" }}
+                         onClick={() => r.tab && onNavigate?.(r.tab)}>
+                      {r.val || "—"}
+                    </div>
                   </div>
                 ))}
               </div>

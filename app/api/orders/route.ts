@@ -124,7 +124,7 @@ export async function PATCH(req: Request) {
               origin:         '',
               destination:    '',
               estimatedDate:  '',
-              actualDate:     '',
+              deliveredDate:  '',
               notes:          '',
               workspaceId:    updated.workspaceId,
             },
