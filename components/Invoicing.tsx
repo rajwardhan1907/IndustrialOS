@@ -95,12 +95,14 @@ function getWorkspaceId(): string | null {
   return localStorage.getItem("workspaceDbId");
 }
 
-async function fetchInvoicesFromDb(): Promise<Invoice[]> {
+// Returns null on network/API error so callers can distinguish
+// "fetch failed" from "workspace genuinely has zero invoices".
+async function fetchInvoicesFromDb(): Promise<Invoice[] | null> {
   const wid = getWorkspaceId();
-  if (!wid) return [];
+  if (!wid) return null;
   try {
     const res = await fetch(`/api/invoices?workspaceId=${wid}`);
-    if (!res.ok) return [];
+    if (!res.ok) return null;
     const data = await res.json();
     return data.map((d: any) => ({
       id:            d.id,
@@ -119,7 +121,7 @@ async function fetchInvoicesFromDb(): Promise<Invoice[]> {
       currency:      d.currency ?? "USD",  // Phase 15
       createdAt:     typeof d.createdAt === "string" ? d.createdAt : new Date(d.createdAt).toISOString(),
     }));
-  } catch { return []; }
+  } catch { return null; }
 }
 
 async function createInvoiceInDb(inv: Invoice): Promise<void> {
@@ -216,11 +218,13 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
 
   useEffect(() => {
     fetchInvoicesFromDb().then(dbInvs => {
-      // Always use DB as source of truth — this fixes invoices created from
-      // other tabs (e.g. Orders) that were only in localStorage being wiped
-      // out when the DB fetch returned a subset of invoices.
-      setInvoices(dbInvs);
-      saveInvoices(dbInvs);
+      // null = network/API error — keep whatever is in localStorage.
+      // [] = workspace has no invoices — clear the list.
+      // [...] = invoices found — use DB as source of truth.
+      if (dbInvs !== null) {
+        setInvoices(dbInvs);
+        saveInvoices(dbInvs);
+      }
     });
     // Phase 12: load pricing rules
     const wid = getWorkspaceId();
