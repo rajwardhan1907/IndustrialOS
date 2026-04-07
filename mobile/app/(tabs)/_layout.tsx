@@ -11,11 +11,12 @@ const FEATURES_KEY = "mobile_features";
 
 const HIGH_PRIORITY = ["Dashboard","Orders","Inventory","Shipments","Notifications","Tickets"];
 
+// All tabs enabled by default — matches web app behaviour
 const DEFAULT_FEATURES: Record<string, boolean> = {
   Dashboard: true, Orders: true, Inventory: true, Shipments: true,
   Notifications: true, Tickets: true,
-  Quotes: false, Customers: false, Suppliers: false, Returns: false, "Purchase Orders": false,
-  Invoicing: false, Analytics: false, Contracts: false,
+  Quotes: true, Customers: true, Suppliers: true, Returns: true, "Purchase Orders": true,
+  Invoicing: true, Analytics: true, Contracts: true,
 };
 
 async function loadFeatures(): Promise<Record<string, boolean>> {

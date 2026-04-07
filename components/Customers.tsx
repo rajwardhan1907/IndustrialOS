@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { C } from "@/lib/utils";
 import { Card, SectionTitle } from "./Dashboard";
-import { Users, Plus, Search, Building2, Mail, Phone, TrendingUp, AlertCircle, Download } from "lucide-react";
+import { Users, Plus, Search, Building2, Mail, Phone, TrendingUp, AlertCircle, Download, Link2 } from "lucide-react";
 import { downloadCSV } from "@/lib/exportCSV";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -415,12 +415,23 @@ function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, isVie
 export default function Customers() {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [search,    setSearch]    = useState("");
-  const [filter,    setFilter]    = useState<CustStatus | "all">("all");
-  const [showNew,   setShowNew]   = useState(false);
-  const [selected,  setSelected]  = useState<Customer | null>(null);
+  const [customers,    setCustomers]    = useState<Customer[]>([]);
+  const [search,       setSearch]       = useState("");
+  const [filter,       setFilter]       = useState<CustStatus | "all">("all");
+  const [showNew,      setShowNew]      = useState(false);
+  const [selected,     setSelected]     = useState<Customer | null>(null);
   const [healthFilter, setHealthFilter] = useState<HealthGrade | "all">("all");
+  const [portalCopied, setPortalCopied] = useState(false);
+
+  const copyPortalLink = () => {
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+    if (!wid) return;
+    const url = `${window.location.origin}/portal/${wid}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setPortalCopied(true);
+      setTimeout(() => setPortalCopied(false), 2500);
+    });
+  };
 
   // Load localStorage immediately, then refresh from DB in background
   useEffect(() => {
@@ -563,6 +574,17 @@ export default function Customers() {
           style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
         >
           <Download size={13} /> Export CSV
+        </button>
+        {/* Customer Portal — single link shared with customers */}
+        <button onClick={copyPortalLink} style={{
+          display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
+          background: portalCopied ? C.greenBg : C.purpleBg,
+          border: `1px solid ${portalCopied ? C.greenBorder : C.purpleBorder}`,
+          borderRadius: 8, color: portalCopied ? C.green : C.purple,
+          fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all 0.2s",
+        }}>
+          <Link2 size={13} />
+          {portalCopied ? "Link Copied!" : "Customer Portal"}
         </button>
         {!isViewer && (
         <button onClick={() => setShowNew(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: C.blue, border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>

@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type AuthView  = "signin" | "signup";
+type AuthView  = "signin" | "signup" | "access_code";
 type PortalTab = "home" | "orders" | "quotes" | "invoices" | "returns" | "request";
 
 interface Account { id: string; email: string; name: string; workspaceId: string }
@@ -350,30 +350,42 @@ function AuthPage({ workspaceId, companyName, onAuth }: {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [confirm,  setConfirm]  = useState("");
+  const [code,     setCode]     = useState("");   // access code (existing customers)
   const [busy,     setBusy]     = useState(false);
   const [error,    setError]    = useState("");
+
+  const switchView = (v: AuthView) => { setView(v); setError(""); };
 
   const submit = async () => {
     setError("");
     if (!email.trim() || !email.includes("@")) { setError("Enter a valid email."); return; }
-    if (!password)                              { setError("Password is required."); return; }
     if (view === "signup") {
-      if (!name.trim())              { setError("Your name is required."); return; }
-      if (password !== confirm)      { setError("Passwords do not match."); return; }
-      if (password.length < 6)       { setError("Password must be at least 6 characters."); return; }
+      if (!name.trim())         { setError("Your name is required."); return; }
+      if (!password)            { setError("Password is required."); return; }
+      if (password !== confirm) { setError("Passwords do not match."); return; }
+      if (password.length < 6)  { setError("Password must be at least 6 characters."); return; }
     }
+    if (view === "signin"      && !password) { setError("Password is required."); return; }
+    if (view === "access_code" && !code.trim()) { setError("Access code is required."); return; }
+
     setBusy(true);
     try {
       const res = await fetch("/api/portal/auth", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ action: view, workspaceId, name, email, password }),
+        body:    JSON.stringify({ action: view, workspaceId, name, email, password, code }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Something went wrong."); return; }
       onAuth(data.token, data.account);
     } catch { setError("Network error. Please try again."); }
     finally  { setBusy(false); }
+  };
+
+  const viewLabel: Record<AuthView, string> = {
+    signin:      "Sign In",
+    signup:      "Create Account",
+    access_code: "Use Access Code",
   };
 
   return (
@@ -386,44 +398,67 @@ function AuthPage({ workspaceId, companyName, onAuth }: {
             {companyName || "Customer Portal"}
           </h1>
           <p style={{ color: T.muted, fontSize: 14 }}>
-            {view === "signin" ? "Sign in to view your orders, invoices, and more." : "Create an account to access your customer portal."}
+            {view === "signup" ? "Create an account to access your customer portal."
+             : view === "access_code" ? "Sign in using the access code provided by your supplier."
+             : "Sign in to view your orders, invoices, and more."}
           </p>
         </div>
 
         <div style={{ background: T.surface, borderRadius: 16, border: `1px solid ${T.border}`, padding: "28px 30px", boxShadow: "0 4px 24px rgba(0,0,0,0.07)" }}>
-          {/* Tab toggle */}
-          <div style={{ display: "flex", background: T.bg, borderRadius: 10, padding: 4, marginBottom: 22 }}>
-            {(["signin", "signup"] as const).map(v => (
-              <button key={v} onClick={() => { setView(v); setError(""); }} style={{
-                flex: 1, padding: "8px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700,
+          {/* Tab toggle — 3 options */}
+          <div style={{ display: "flex", background: T.bg, borderRadius: 10, padding: 4, marginBottom: 22, gap: 2 }}>
+            {(["signin", "signup", "access_code"] as const).map(v => (
+              <button key={v} onClick={() => switchView(v)} style={{
+                flex: 1, padding: "7px 4px", borderRadius: 8, border: "none", cursor: "pointer",
+                fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" as const,
                 background: view === v ? T.surface : "transparent",
                 color:      view === v ? T.text    : T.muted,
                 boxShadow:  view === v ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
               }}>
-                {v === "signin" ? "Sign In" : "Create Account"}
+                {viewLabel[v]}
               </button>
             ))}
           </div>
 
+          {/* Fields */}
           {view === "signup" && (
             <div style={{ marginBottom: 14 }}>
               <label style={lbl}>Full Name *</label>
               <input value={name} onChange={e => setName(e.target.value)} placeholder="Jane Smith" style={inp} />
             </div>
           )}
+
           <div style={{ marginBottom: 14 }}>
             <label style={lbl}>Email Address *</label>
             <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@company.com" style={inp} />
           </div>
-          <div style={{ marginBottom: view === "signup" ? 14 : 20 }}>
-            <label style={lbl}>Password *</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" style={inp}
-              onKeyDown={e => e.key === "Enter" && view === "signin" && submit()} />
-          </div>
+
+          {(view === "signin" || view === "signup") && (
+            <div style={{ marginBottom: view === "signup" ? 14 : 20 }}>
+              <label style={lbl}>Password *</label>
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" style={inp}
+                onKeyDown={e => e.key === "Enter" && submit()} />
+            </div>
+          )}
+
           {view === "signup" && (
             <div style={{ marginBottom: 20 }}>
               <label style={lbl}>Confirm Password *</label>
               <input type="password" value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="••••••••" style={inp} />
+            </div>
+          )}
+
+          {view === "access_code" && (
+            <div style={{ marginBottom: 20 }}>
+              <label style={lbl}>Access Code *</label>
+              <input
+                value={code} onChange={e => setCode(e.target.value.toUpperCase())}
+                placeholder="e.g. ABC123" style={{ ...inp, fontFamily: "monospace", letterSpacing: "0.1em" }}
+                onKeyDown={e => e.key === "Enter" && submit()}
+              />
+              <p style={{ fontSize: 11, color: T.faint, marginTop: 6 }}>
+                Your access code was provided by your supplier in a welcome email.
+              </p>
             </div>
           )}
 
@@ -439,12 +474,12 @@ function AuthPage({ workspaceId, companyName, onAuth }: {
             background: busy ? T.border : T.blue, border: "none",
             color: busy ? T.muted : "#fff",
           }}>
-            {busy ? (view === "signin" ? "Signing in…" : "Creating account…") : (view === "signin" ? "Sign In" : "Create Account")}
+            {busy ? "Please wait…" : viewLabel[view]}
           </button>
         </div>
 
         <p style={{ textAlign: "center", fontSize: 12, color: T.faint, marginTop: 16 }}>
-          Don't have an order yet? Contact us to get started.
+          Don't have an account? Ask your supplier for access.
         </p>
       </div>
     </div>

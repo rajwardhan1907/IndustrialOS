@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, X, ChevronLeft, RotateCcw, CheckCircle, XCircle, Package, RefreshCw, Link2 } from "lucide-react";
+import { Plus, X, ChevronLeft, RotateCcw, CheckCircle, XCircle, Package, RefreshCw } from "lucide-react";
 import { C } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -225,22 +225,11 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
 
-  const [returns,       setReturns]       = useState<ReturnRecord[]>([]);
-  const [loading,       setLoading]       = useState(true);
-  const [showNew,       setShowNew]       = useState(false);
-  const [selected,      setSelected]      = useState<ReturnRecord | null>(null);
-  const [filter,        setFilter]        = useState<ReturnStatus | "all">("all");
-  const [linkCopied,    setLinkCopied]    = useState(false);
-
-  const copyPortalLink = () => {
-    const wid = getWorkspaceId();
-    if (!wid) return;
-    const url = `${window.location.origin}/portal/${wid}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 2500);
-    });
-  };
+  const [returns,  setReturns]  = useState<ReturnRecord[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [showNew,  setShowNew]  = useState(false);
+  const [selected, setSelected] = useState<ReturnRecord | null>(null);
+  const [filter,   setFilter]   = useState<ReturnStatus | "all">("all");
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -308,29 +297,15 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Returns & RMA</h1>
           <p style={{ color: C.muted, fontSize: 13 }}>Manage customer return requests and refunds.</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          {/* Customer portal link — always visible so staff can share it */}
-          <button onClick={copyPortalLink} style={{
+        {!isViewer && (
+          <button onClick={() => setShowNew(true)} style={{
             display: "flex", alignItems: "center", gap: 7,
-            padding: "9px 16px", borderRadius: 10,
-            background: linkCopied ? C.greenBg : C.surface,
-            border: `1px solid ${linkCopied ? C.greenBorder : C.border}`,
-            color: linkCopied ? C.green : C.muted,
-            fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s",
+            padding: "9px 18px", borderRadius: 10, background: C.blue,
+            border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
           }}>
-            <Link2 size={14} />
-            {linkCopied ? "Link Copied!" : "Customer Portal Link"}
+            <Plus size={14} /> New Return
           </button>
-          {!isViewer && (
-            <button onClick={() => setShowNew(true)} style={{
-              display: "flex", alignItems: "center", gap: 7,
-              padding: "9px 18px", borderRadius: 10, background: C.blue,
-              border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            }}>
-              <Plus size={14} /> New Return
-            </button>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Stats */}
