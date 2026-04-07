@@ -14,7 +14,7 @@ interface Return {
 }
 
 const REASONS = ["defective", "wrong_item", "damaged", "other"];
-const STATUSES = ["requested", "approved", "received", "refunded"];
+const STATUSES = ["requested", "approved", "received", "refunded", "rejected"];
 
 function statusColor(st: string) {
   if (st === "requested") return { color: theme.blue,    bg: theme.blueBg,    border: theme.blueBorder    };
@@ -82,14 +82,23 @@ export default function ReturnsScreen() {
     const canAdvance = currentIdx >= 0 && currentIdx < STATUSES.length - 1;
     const nextStatus = canAdvance ? STATUSES[currentIdx + 1] : null;
 
-    const advanceStatus = async () => {
-      if (!nextStatus) return;
+    const changeStatus = async (newStatus: string) => {
       try {
-        await updateReturnStatus(selected.id, nextStatus);
-        setSelected(prev => prev ? { ...prev, status: nextStatus } : prev);
-        setReturns(prev => prev.map(r => r.id === selected.id ? { ...r, status: nextStatus } : r));
+        await updateReturnStatus(selected.id, newStatus);
+        const updated = { ...selected, status: newStatus };
+        setSelected(updated);
+        setReturns(prev => prev.map(r => r.id === selected.id ? { ...r, status: newStatus } : r));
       } catch (e: any) { Alert.alert("Error", e.message); }
     };
+
+    const confirmReject = () => {
+      Alert.alert("Reject Return", `Reject ${selected.rmaNumber}?`, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Reject", style: "destructive", onPress: () => changeStatus("rejected") },
+      ]);
+    };
+
+    const canReject = selected.status === "requested" || selected.status === "approved";
 
     return (
       <View style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -106,10 +115,15 @@ export default function ReturnsScreen() {
             <Text style={{ fontSize: 13, color: theme.muted, marginTop: 8 }}>Reason: {selected.reason.replace("_", " ")}</Text>
           </View>
           {canAdvance && nextStatus ? (
-            <TouchableOpacity onPress={advanceStatus} style={[s.card, { backgroundColor: theme.blueBg, borderColor: theme.blueBorder, borderWidth: 1, marginTop: 16 }]}>
+            <TouchableOpacity onPress={() => changeStatus(nextStatus)} style={[s.card, { backgroundColor: theme.blueBg, borderColor: theme.blueBorder, borderWidth: 1, marginTop: 16 }]}>
               <Text style={{ color: theme.blue, fontWeight: "700", fontSize: 14 }}>
-                → Move to {nextStatus.charAt(0).toUpperCase() + nextStatus.slice(1)}
+                ✓ Move to {nextStatus.charAt(0).toUpperCase() + nextStatus.slice(1)}
               </Text>
+            </TouchableOpacity>
+          ) : null}
+          {canReject ? (
+            <TouchableOpacity onPress={confirmReject} style={[s.card, { backgroundColor: theme.redBg, borderColor: theme.redBorder, borderWidth: 1, marginTop: 12 }]}>
+              <Text style={{ color: theme.red, fontWeight: "700", fontSize: 14 }}>✕ Reject Return</Text>
             </TouchableOpacity>
           ) : null}
         </ScrollView>

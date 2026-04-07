@@ -191,6 +191,14 @@ export async function fetchInvoices(workspaceId: string) {
   return apiFetch(`/api/invoices?workspaceId=${workspaceId}`);
 }
 
+export async function createInvoice(data: object) {
+  return apiFetch("/api/invoices", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateInvoice(id: string, fields: object) {
+  return apiFetch("/api/invoices", { method: "PATCH", body: JSON.stringify({ id, ...fields }) });
+}
+
 // ── Contracts ─────────────────────────────────────────────────────────────────
 export async function fetchContracts(workspaceId: string) {
   return apiFetch(`/api/contracts?workspaceId=${workspaceId}`);
