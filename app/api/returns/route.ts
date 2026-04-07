@@ -59,18 +59,19 @@ export async function POST(req: Request) {
 
     const ret = await prisma.return.create({
       data: {
-        rmaNumber:    body.rmaNumber    ?? makeRMANumber(),
-        orderId:      body.orderId      ?? '',
-        customer:     body.customer.trim(),
-        sku:          body.sku.trim(),
-        qty:          body.qty          ?? 1,
-        reason:       body.reason       ?? 'other',
-        description:  body.description  ?? '',
-        status:       'requested',
-        refundAmount: body.refundAmount ?? 0,
-        refundMethod: body.refundMethod ?? 'original',
-        notes:        body.notes        ?? '',
-        workspaceId:  body.workspaceId,
+        rmaNumber:     body.rmaNumber    ?? makeRMANumber(),
+        orderId:       body.orderId      ?? '',
+        customer:      body.customer.trim(),
+        customerEmail: body.customerEmail ?? '',
+        sku:           body.sku.trim(),
+        qty:           body.qty          ?? 1,
+        reason:        body.reason       ?? 'other',
+        description:   body.description  ?? '',
+        status:        'requested',
+        refundAmount:  body.refundAmount ?? 0,
+        refundMethod:  body.refundMethod ?? 'original',
+        notes:         body.notes        ?? '',
+        workspaceId:   body.workspaceId,
       },
     })
     return NextResponse.json(ret, { headers: CORS })

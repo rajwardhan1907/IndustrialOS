@@ -264,11 +264,12 @@ model Return {
   qty          Int       @default(1)
   reason       String    @default("other")
   description  String    @default("")
-  status       String    @default("requested")
-  refundAmount Float     @default(0)
-  refundMethod String    @default("original")
-  notes        String    @default("")
-  workspaceId  String
+  status        String    @default("requested")
+  refundAmount  Float     @default(0)
+  refundMethod  String    @default("original")
+  notes         String    @default("")
+  customerEmail String    @default("")           // set when customer submits via portal
+  workspaceId   String
   workspace    Workspace @relation(fields: [workspaceId], references: [id])
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt

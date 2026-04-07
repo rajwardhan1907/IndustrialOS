@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, X, ChevronLeft, RotateCcw, CheckCircle, XCircle, Package, Truck, RefreshCw } from "lucide-react";
+import { Plus, X, ChevronLeft, RotateCcw, CheckCircle, XCircle, Package, RefreshCw, Link2 } from "lucide-react";
 import { C } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -14,21 +14,22 @@ type ReturnReason  = "damaged" | "wrong_item" | "not_needed" | "defective" | "ot
 type RefundMethod  = "original" | "credit" | "exchange";
 
 interface ReturnRecord {
-  id:           string;
-  rmaNumber:    string;
-  orderId:      string;
-  customer:     string;
-  sku:          string;
-  qty:          number;
-  reason:       ReturnReason;
-  description:  string;
-  status:       ReturnStatus;
-  refundAmount: number;
-  refundMethod: RefundMethod;
-  notes:        string;
-  workspaceId:  string;
-  createdAt:    string;
-  updatedAt:    string;
+  id:            string;
+  rmaNumber:     string;
+  orderId:       string;
+  customer:      string;
+  customerEmail: string;
+  sku:           string;
+  qty:           number;
+  reason:        ReturnReason;
+  description:   string;
+  status:        ReturnStatus;
+  refundAmount:  number;
+  refundMethod:  RefundMethod;
+  notes:         string;
+  workspaceId:   string;
+  createdAt:     string;
+  updatedAt:     string;
 }
 
 // ── Status config ─────────────────────────────────────────────────────────────
@@ -224,11 +225,22 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
 
-  const [returns,   setReturns]   = useState<ReturnRecord[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [showNew,   setShowNew]   = useState(false);
-  const [selected,  setSelected]  = useState<ReturnRecord | null>(null);
-  const [filter,    setFilter]    = useState<ReturnStatus | "all">("all");
+  const [returns,       setReturns]       = useState<ReturnRecord[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [showNew,       setShowNew]       = useState(false);
+  const [selected,      setSelected]      = useState<ReturnRecord | null>(null);
+  const [filter,        setFilter]        = useState<ReturnStatus | "all">("all");
+  const [linkCopied,    setLinkCopied]    = useState(false);
+
+  const copyPortalLink = () => {
+    const wid = getWorkspaceId();
+    if (!wid) return;
+    const url = `${window.location.origin}/portal/returns?wid=${wid}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2500);
+    });
+  };
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -296,15 +308,29 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Returns & RMA</h1>
           <p style={{ color: C.muted, fontSize: 13 }}>Manage customer return requests and refunds.</p>
         </div>
-        {!isViewer && (
-          <button onClick={() => setShowNew(true)} style={{
+        <div style={{ display: "flex", gap: 8 }}>
+          {/* Customer portal link — always visible so staff can share it */}
+          <button onClick={copyPortalLink} style={{
             display: "flex", alignItems: "center", gap: 7,
-            padding: "9px 18px", borderRadius: 10, background: C.blue,
-            border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+            padding: "9px 16px", borderRadius: 10,
+            background: linkCopied ? C.greenBg : C.surface,
+            border: `1px solid ${linkCopied ? C.greenBorder : C.border}`,
+            color: linkCopied ? C.green : C.muted,
+            fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s",
           }}>
-            <Plus size={14} /> New Return
+            <Link2 size={14} />
+            {linkCopied ? "Link Copied!" : "Customer Portal Link"}
           </button>
-        )}
+          {!isViewer && (
+            <button onClick={() => setShowNew(true)} style={{
+              display: "flex", alignItems: "center", gap: 7,
+              padding: "9px 18px", borderRadius: 10, background: C.blue,
+              border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+            }}>
+              <Plus size={14} /> New Return
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
@@ -379,7 +405,14 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
             <div>
               <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>RMA Number</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: C.blue, fontFamily: "monospace" }}>{selected.rmaNumber}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 18, fontWeight: 800, color: C.blue, fontFamily: "monospace" }}>{selected.rmaNumber}</span>
+                {selected.customerEmail && (
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: C.purpleBg, color: C.purple, border: `1px solid ${C.purpleBorder}` }}>
+                    Submitted via Customer Portal
+                  </span>
+                )}
+              </div>
             </div>
             <div>
               <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>Status</div>
@@ -393,12 +426,13 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, margin: "16px 0" }}>
             {[
-              { label: "Customer",     value: selected.customer, tab: "customers" as string | undefined },
-              { label: "SKU",          value: selected.sku,      tab: "inventory" as string | undefined },
-              { label: "Qty",          value: String(selected.qty), tab: undefined },
-              { label: "Reason",       value: REASON_LABELS[selected.reason], tab: undefined },
-              { label: "Refund Method",value: REFUND_METHOD_LABELS[selected.refundMethod], tab: undefined },
-              { label: "Refund Amount",value: fmtMoney(selected.refundAmount), tab: undefined },
+              { label: "Customer",      value: selected.customer, tab: "customers" as string | undefined },
+              { label: "SKU",           value: selected.sku,      tab: "inventory" as string | undefined },
+              { label: "Qty",           value: String(selected.qty), tab: undefined },
+              { label: "Reason",        value: REASON_LABELS[selected.reason], tab: undefined },
+              { label: "Refund Method", value: REFUND_METHOD_LABELS[selected.refundMethod], tab: undefined },
+              { label: "Refund Amount", value: fmtMoney(selected.refundAmount), tab: undefined },
+              ...(selected.customerEmail ? [{ label: "Customer Email", value: selected.customerEmail, tab: undefined }] : []),
             ].map(({ label, value, tab }) => (
               <div key={label} style={{ background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, padding: "10px 14px" }}>
                 <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
@@ -461,7 +495,14 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
                     <tr key={ret.id} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
                       onClick={() => setSelected(ret)}>
                       <td style={{ padding: "13px 16px", fontWeight: 700, color: C.blue, fontFamily: "monospace" }}>{ret.rmaNumber}</td>
-                      <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{ret.customer}</span></td>
+                      <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}>
+                        <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{ret.customer}</span>
+                        {ret.customerEmail && (
+                          <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: C.purpleBg, color: C.purple, border: `1px solid ${C.purpleBorder}` }}>
+                            Via Portal
+                          </span>
+                        )}
+                      </td>
                       <td style={{ padding: "13px 16px", color: C.muted, fontFamily: "monospace" }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("inventory")}>{ret.sku}</span></td>
                       <td style={{ padding: "13px 16px", color: C.text }}>{ret.qty}</td>
                       <td style={{ padding: "13px 16px", color: C.muted }}>{REASON_LABELS[ret.reason]}</td>
