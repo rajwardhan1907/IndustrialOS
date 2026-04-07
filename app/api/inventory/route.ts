@@ -101,11 +101,11 @@ export async function PATCH(req: Request) {
           },
         })
         if (!openTicket) {
-          // Get next ticket number
+          // Fix 10: use sequential number format matching makeTicketNumber in tickets route
           const count = await tx.ticket.count({ where: { workspaceId: updated.workspaceId } })
           await tx.ticket.create({
             data: {
-              ticketNumber: `TKT-AUTO-${updated.sku}`,
+              ticketNumber: `TKT-${String(count + 1).padStart(3, '0')}`,
               title:        `Low stock: ${updated.name} (${updated.sku})`,
               description:  `Stock level ${updated.stockLevel} has reached or dropped below reorder point of ${updated.reorderPoint}. Current stock: ${updated.stockLevel}. Reorder qty: ${updated.reorderQty}.`,
               type:         'alert',

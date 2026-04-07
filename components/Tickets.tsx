@@ -97,7 +97,7 @@ function NewTicketModal({ users, session, onSave, onClose }: {
           workspaceId: getWorkspaceId(),
           title: title.trim(), description, type, priority,
           assignedTo, assignedName,
-          raisedBy:   session?.user?.id    ?? "",
+          raisedBy:   session?.user?.email  ?? "",
           raisedName: session?.user?.name  ?? "",
         }),
       });
@@ -189,7 +189,7 @@ function TicketDetail({ ticket, users, session, onUpdate, onBack, onNavigate }: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ticketId:   ticket.id,
-          authorId:   session?.user?.id   ?? "",
+          authorId:   session?.user?.email ?? "",
           authorName: session?.user?.name ?? "Unknown",
           body:       commentBody.trim(),
         }),

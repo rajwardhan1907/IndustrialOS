@@ -17,6 +17,8 @@ model Workspace {
   currency            String   @default("USD")   // Phase 15
   whatsappEnabled     Boolean  @default(false)   // Phase 11
   whatsappStages      String   @default("Confirmed,Shipped,Delivered") // Phase 11
+  quickbooksConnected Boolean  @default(false)   // Phase 17
+  xeroConnected       Boolean  @default(false)   // Phase 17
 
   users          User[]
   orders         Order[]
@@ -33,6 +35,7 @@ model Workspace {
   ediPartners    EdiPartner[]     // Phase 23
   ediTransactions EdiTransaction[] // Phase 23
   tickets        Ticket[]         // Phase 24
+  notifications  Notification[]   // Phase 25
 }
 
 // ── User ──────────────────────────────────────────────────────────────────────
@@ -346,4 +349,21 @@ model TicketComment {
   authorName String   @default("")
   body       String
   createdAt  DateTime @default(now())
+}
+
+// ── Notification ──────────────────────────────────────────────────────────────
+// Phase 25 — Persistent Notifications
+// Written by server-side routes (tickets, orders, inventory automations).
+// Read state is tracked per-record in the DB (not in localStorage).
+model Notification {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  type        String    @default("info")    // invoice | inventory | order | contract | ticket
+  severity    String    @default("info")    // info | warn | error
+  title       String
+  body        String    @default("")
+  tab         String    @default("")        // the app tab to navigate to
+  read        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
 }

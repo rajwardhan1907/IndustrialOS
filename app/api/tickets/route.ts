@@ -68,6 +68,19 @@ export async function POST(req: Request) {
       },
       include: { comments: true },
     })
+
+    // Fix 11: write a persistent notification when a new ticket is created
+    await prisma.notification.create({
+      data: {
+        workspaceId: body.workspaceId,
+        type:        'ticket',
+        severity:    body.priority === 'high' || body.priority === 'critical' ? 'warn' : 'info',
+        title:       `New Ticket — ${ticket.title}`,
+        body:        `${ticketNumber} · ${body.type ?? 'issue'} · Priority: ${body.priority ?? 'medium'}`,
+        tab:         'tickets',
+      },
+    })
+
     return NextResponse.json(ticket, { headers: CORS })
   } catch (err: any) {
     console.error('Tickets POST error:', err)

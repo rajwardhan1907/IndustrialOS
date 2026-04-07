@@ -827,6 +827,9 @@ function UsersSection({ workspaceId, currentUserId }: { workspaceId: string; cur
     if (!cpNew || !cpCurrent || !cpConfirm) { setCpError("All fields are required."); return; }
     if (cpNew !== cpConfirm) { setCpError("New passwords do not match."); return; }
     if (cpNew.length < 6) { setCpError("Password must be at least 6 characters."); return; }
+    // Guard: users list may still be loading — show a clear message instead of
+    // "Could not find your account" which would be confusing and misleading.
+    if (users.length === 0) { setCpError("Users are still loading — please wait a moment and try again."); return; }
     const me = users.find(u => u.email === currentUserId);
     if (!me) { setCpError("Could not find your account."); return; }
     setCpLoading(true);

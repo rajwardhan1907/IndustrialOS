@@ -1,7 +1,8 @@
 // app/api/notifications/route.ts
-// Queries the DB for real alerts — overdue invoices, low stock, new portal orders,
-// and expiring/expired contracts (Phase 12 roadmap).
-// No new DB table needed. Read state is tracked in localStorage on the client.
+// Phase 25: Persistent DB-backed notifications + derived alerts.
+// GET  ?workspaceId=  — returns DB notifications merged with derived alerts
+// POST { workspaceId, type, severity, title, body, tab } — create a notification
+// PATCH { id } — mark a notification as read
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -24,10 +25,28 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'workspaceId is required' }, { status: 400, headers: CORS })
     }
 
-    const today    = new Date()
+    const today     = new Date()
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
 
-    // ── 1. Overdue invoices ──────────────────────────────────────────────────
+    // ── 1. DB-stored notifications (from routes like orders, tickets) ─────────
+    const dbRows = await prisma.notification.findMany({
+      where:   { workspaceId },
+      orderBy: { createdAt: 'desc' },
+      take:    100,
+    })
+    const dbNotifications = dbRows.map(n => ({
+      id:        n.id,
+      type:      n.type,
+      severity:  n.severity,
+      title:     n.title,
+      body:      n.body,
+      tab:       n.tab,
+      read:      n.read,
+      createdAt: n.createdAt,
+      source:    'db' as const,
+    }))
+
+    // ── 2. Overdue invoices (derived) ────────────────────────────────────────
     const overdueInvoices = await prisma.invoice.findMany({
       where: {
         workspaceId,
@@ -38,14 +57,15 @@ export async function GET(req: Request) {
       orderBy: { dueDate: 'asc' },
     })
 
-    // ── 2. Low stock items ───────────────────────────────────────────────────
+    // ── 3. Low stock items (derived) — exclude items where reorderPoint = 0 ──
     const allInventory = await prisma.inventoryItem.findMany({
       where: { workspaceId },
       select: { id: true, sku: true, name: true, stockLevel: true, reorderPoint: true },
     })
-    const lowStock = allInventory.filter(i => i.stockLevel <= i.reorderPoint)
+    // Fix 4: items with reorderPoint = 0 are not monitored — they have no threshold
+    const lowStock = allInventory.filter(i => i.reorderPoint > 0 && i.stockLevel <= i.reorderPoint)
 
-    // ── 3. Expiring / expired contracts (Phase 12 roadmap) ───────────────────
+    // ── 4. Expiring / expired contracts (derived) ────────────────────────────
     const in30Days = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0]
     const expiringContracts = await prisma.contract.findMany({
       where: {
@@ -57,7 +77,7 @@ export async function GET(req: Request) {
       orderBy: { expiryDate: 'asc' },
     })
 
-    // ── 4. New portal orders (last 24 hours) ─────────────────────────────────
+    // ── 5. New portal orders (last 24 hours, derived) ─────────────────────────
     const portalOrders = await prisma.order.findMany({
       where: {
         workspaceId,
@@ -68,66 +88,75 @@ export async function GET(req: Request) {
       orderBy: { createdAt: 'desc' },
     })
 
-    // ── Shape into a flat notification list ──────────────────────────────────
-    const notifications: any[] = []
+    // ── Shape derived alerts ──────────────────────────────────────────────────
+    const derived: any[] = []
 
     overdueInvoices.forEach(inv => {
       const daysOverdue = Math.floor(
         (today.getTime() - new Date(inv.dueDate).getTime()) / 86400000
       )
-      notifications.push({
-        id:       `inv-${inv.id}`,
-        type:     'invoice',
-        severity: daysOverdue > 7 ? 'error' : 'warn',
-        title:    `Overdue Invoice — ${inv.customer}`,
-        body:     `${inv.invoiceNumber} · $${inv.total.toLocaleString()} · ${daysOverdue}d overdue`,
-        tab:      'invoicing',
+      derived.push({
+        id:        `inv-${inv.id}`,
+        type:      'invoice',
+        severity:  daysOverdue > 7 ? 'error' : 'warn',
+        title:     `Overdue Invoice — ${inv.customer}`,
+        body:      `${inv.invoiceNumber} · $${inv.total.toLocaleString()} · ${daysOverdue}d overdue`,
+        tab:       'invoicing',
+        read:      false,
         createdAt: inv.dueDate,
+        source:    'derived' as const,
       })
     })
 
     lowStock.forEach(item => {
       const isCritical = item.stockLevel === 0 || item.stockLevel <= item.reorderPoint * 0.5
-      notifications.push({
-        id:       `inv-stock-${item.id}`,
-        type:     'inventory',
-        severity: isCritical ? 'error' : 'warn',
-        title:    item.stockLevel === 0 ? `Out of Stock — ${item.sku}` : `Low Stock — ${item.sku}`,
-        body:     `${item.name} · ${item.stockLevel} units left (reorder at ${item.reorderPoint})`,
-        tab:      'inventory',
+      derived.push({
+        id:        `inv-stock-${item.id}`,
+        type:      'inventory',
+        severity:  isCritical ? 'error' : 'warn',
+        title:     item.stockLevel === 0 ? `Out of Stock — ${item.sku}` : `Low Stock — ${item.sku}`,
+        body:      `${item.name} · ${item.stockLevel} units left (reorder at ${item.reorderPoint})`,
+        tab:       'inventory',
+        read:      false,
         createdAt: new Date().toISOString(),
+        source:    'derived' as const,
       })
     })
 
     expiringContracts.forEach(c => {
       const daysLeft = Math.ceil((new Date(c.expiryDate).getTime() - today.getTime()) / 86400000)
       const expired  = daysLeft < 0
-      notifications.push({
-        id:       `contract-${c.id}`,
-        type:     'contract',
-        severity: expired ? 'error' : 'warn',
-        title:    expired
-          ? `Contract Expired — ${c.customer}`
-          : `Contract Expiring — ${c.customer}`,
-        body:     expired
+      derived.push({
+        id:        `contract-${c.id}`,
+        type:      'contract',
+        severity:  expired ? 'error' : 'warn',
+        title:     expired ? `Contract Expired — ${c.customer}` : `Contract Expiring — ${c.customer}`,
+        body:      expired
           ? `${c.contractNumber} · ${c.title} · expired ${Math.abs(daysLeft)}d ago`
           : `${c.contractNumber} · ${c.title} · expires in ${daysLeft}d`,
-        tab:      'contracts',
+        tab:       'contracts',
+        read:      false,
         createdAt: c.expiryDate,
+        source:    'derived' as const,
       })
     })
 
     portalOrders.forEach(order => {
-      notifications.push({
-        id:       `order-${order.id}`,
-        type:     'order',
-        severity: 'info',
-        title:    `New Portal Order — ${order.customer}`,
-        body:     `${order.sku} · Submitted via customer portal`,
-        tab:      'orders',
+      derived.push({
+        id:        `order-${order.id}`,
+        type:      'order',
+        severity:  'info',
+        title:     `New Portal Order — ${order.customer}`,
+        body:      `${order.sku} · Submitted via customer portal`,
+        tab:       'orders',
+        read:      false,
         createdAt: order.createdAt,
+        source:    'derived' as const,
       })
     })
+
+    // Merge: DB notifications first (most recent activity), then derived alerts
+    const notifications = [...dbNotifications, ...derived]
 
     return NextResponse.json({ notifications }, { headers: CORS })
   } catch (err: any) {
@@ -136,13 +165,45 @@ export async function GET(req: Request) {
   }
 }
 
-// PATCH — mark a notification as read (graceful no-op; read state is derived from source data)
+// POST — create a persistent notification (called by other routes)
+export async function POST(req: Request) {
+  try {
+    const body = await req.json()
+    if (!body.workspaceId || !body.title) {
+      return NextResponse.json({ error: 'workspaceId and title are required' }, { status: 400, headers: CORS })
+    }
+    const notif = await prisma.notification.create({
+      data: {
+        workspaceId: body.workspaceId,
+        type:        body.type     ?? 'info',
+        severity:    body.severity ?? 'info',
+        title:       body.title,
+        body:        body.body     ?? '',
+        tab:         body.tab      ?? '',
+      },
+    })
+    return NextResponse.json(notif, { headers: CORS })
+  } catch (err: any) {
+    console.error('Notifications POST error:', err)
+    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
+  }
+}
+
+// PATCH — mark a DB notification as read
 export async function PATCH(req: Request) {
   try {
-    // Notification read state is derived at query time from source records.
-    // We accept the call so the mobile app doesn't get a 405, and return success.
+    const body = await req.json()
+    if (!body.id) {
+      // Graceful: mobile app may call PATCH without id; return success
+      return NextResponse.json({ success: true }, { headers: CORS })
+    }
+    await prisma.notification.update({
+      where: { id: body.id },
+      data:  { read: true },
+    })
     return NextResponse.json({ success: true }, { headers: CORS })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
+    // If the id is a derived notification (not in DB), ignore gracefully
+    return NextResponse.json({ success: true }, { headers: CORS })
   }
 }

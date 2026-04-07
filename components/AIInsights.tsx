@@ -71,7 +71,8 @@ function ForecastTab({ workspaceId }: { workspaceId: string }) {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Request failed"); return; }
-      setResult(data.result ?? data.forecast ?? JSON.stringify(data, null, 2));
+      // API returns { forecasts: [...] } — was "forecast" (wrong key), now "forecasts"
+      setResult(data.result ?? (data.forecasts ? JSON.stringify(data.forecasts, null, 2) : null) ?? JSON.stringify(data, null, 2));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   };
@@ -106,7 +107,8 @@ function ReorderTab({ workspaceId }: { workspaceId: string }) {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Request failed"); return; }
-      setResult(data.result ?? data.suggestions ?? JSON.stringify(data, null, 2));
+      // API returns { suggestions: [...] } — stringify the array so ResultBlock renders it
+      setResult(data.result ?? (data.suggestions ? JSON.stringify(data.suggestions, null, 2) : null) ?? JSON.stringify(data, null, 2));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   };
@@ -155,7 +157,8 @@ function NegotiateTab({ workspaceId }: { workspaceId: string }) {
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Request failed"); return; }
-      setResult(data.result ?? data.strategy ?? JSON.stringify(data, null, 2));
+      // API returns { suggestion: string } — was "strategy" (wrong key), now "suggestion"
+      setResult(data.result ?? data.suggestion ?? JSON.stringify(data, null, 2));
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }
   };
@@ -212,7 +215,8 @@ function PriceCompareTab({ workspaceId }: { workspaceId: string }) {
       const res = await fetch(`/api/ai/price-compare?workspaceId=${workspaceId}&sku=${encodeURIComponent(sku.trim())}`);
       const data = await res.json();
       if (!res.ok) { setError(data.error ?? "Request failed"); return; }
-      setResults(data.results ?? []);
+      // API returns { sku, comparisons: [...] } — was "results" (wrong key), now "comparisons"
+      setResults(data.comparisons ?? []);
       setSearched(true);
     } catch (e: any) { setError(e.message); }
     finally { setLoading(false); }

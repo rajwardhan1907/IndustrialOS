@@ -93,6 +93,9 @@ export async function PATCH(req: Request) {
     }
 
     const order = await prisma.$transaction(async (tx) => {
+      // Read current stage BEFORE the update so we can guard double-triggers
+      const prev = await tx.order.findUnique({ where: { id: body.id }, select: { stage: true } })
+
       const updated = await tx.order.update({
         where: { id: body.id },
         data: {
@@ -102,13 +105,37 @@ export async function PATCH(req: Request) {
         },
       })
 
-      // Automation 1 — subtract inventory when stage moves to Confirmed
-      if (body.stage === 'Confirmed') {
+      // Automation 1 — subtract inventory only when stage TRANSITIONS to Confirmed.
+      // Guard prevents double-subtract if the order is patched again while already Confirmed.
+      if (body.stage === 'Confirmed' && prev?.stage !== 'Confirmed') {
         await subtractInventory(tx, updated.sku, updated.items, updated.workspaceId)
+
+        // Fix 8 — increase customer balanceDue when order is confirmed
+        const cust = await tx.customer.findFirst({
+          where: { workspaceId: updated.workspaceId, name: { mode: 'insensitive', equals: updated.customer } },
+        })
+        if (cust) {
+          await tx.customer.update({
+            where: { id: cust.id },
+            data:  { balanceDue: cust.balanceDue + updated.value },
+          })
+        }
+
+        // Fix 11 — write a notification
+        await tx.notification.create({
+          data: {
+            workspaceId: updated.workspaceId,
+            type:        'order',
+            severity:    'info',
+            title:       `Order Confirmed — ${updated.customer}`,
+            body:        `${updated.sku} · ${updated.items} units · $${updated.value.toLocaleString()}`,
+            tab:         'orders',
+          },
+        })
       }
 
       // Automation 7 — auto-create shipment when stage moves to Shipped
-      if (body.stage === 'Shipped') {
+      if (body.stage === 'Shipped' && prev?.stage !== 'Shipped') {
         const existing = await tx.shipment.findFirst({
           where: { orderId: updated.id },
         })
@@ -130,10 +157,20 @@ export async function PATCH(req: Request) {
             },
           })
         }
+        await tx.notification.create({
+          data: {
+            workspaceId: updated.workspaceId,
+            type:        'order',
+            severity:    'info',
+            title:       `Order Shipped — ${updated.customer}`,
+            body:        `${updated.sku} · shipment created`,
+            tab:         'shipping',
+          },
+        })
       }
 
       // Automation 6 — auto-create invoice when stage moves to Delivered
-      if (body.stage === 'Delivered') {
+      if (body.stage === 'Delivered' && prev?.stage !== 'Delivered') {
         const existingInv = await tx.invoice.findFirst({
           where: {
             customer:    updated.customer,
@@ -165,6 +202,16 @@ export async function PATCH(req: Request) {
             },
           })
         }
+        await tx.notification.create({
+          data: {
+            workspaceId: updated.workspaceId,
+            type:        'order',
+            severity:    'info',
+            title:       `Order Delivered — ${updated.customer}`,
+            body:        `${updated.sku} · invoice auto-created`,
+            tab:         'invoicing',
+          },
+        })
       }
 
       return updated

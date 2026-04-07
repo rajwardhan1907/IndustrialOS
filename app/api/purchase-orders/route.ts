@@ -89,6 +89,9 @@ export async function PATCH(req: Request) {
     }
 
     const po = await prisma.$transaction(async (tx) => {
+      // Read current status BEFORE update to guard against double-adding stock
+      const prev = await tx.purchaseOrder.findUnique({ where: { id: body.id }, select: { status: true } })
+
       const updated = await tx.purchaseOrder.update({
         where: { id: body.id },
         data: {
@@ -111,9 +114,11 @@ export async function PATCH(req: Request) {
         },
       })
 
-      // Automation 3 — add stock when PO is approved or received
-      const shouldAddStock =
-        body.approvalStatus === 'approved' || body.status === 'received'
+      // Automation 3 — add stock only when status TRANSITIONS to "received"
+      // (goods physically arrived). Removed the "approvalStatus === approved"
+      // trigger that was causing stock to be double-added when the PO was
+      // later marked received.
+      const shouldAddStock = body.status === 'received' && prev?.status !== 'received'
 
       if (shouldAddStock) {
         const itemsArr = Array.isArray(updated.items) ? updated.items as any[] : []

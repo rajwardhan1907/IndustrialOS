@@ -24,14 +24,15 @@ export async function GET(req: Request) {
   // ── Status ────────────────────────────────────────────────────────────────
   if (action === "status") {
     if (!workspaceId) return NextResponse.json({ error: "workspaceId required" }, { status: 400 });
-    const ws = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { config: true } });
+    const ws = await prisma.workspace.findUnique({
+      where:  { id: workspaceId },
+      select: { quickbooksConnected: true, xeroConnected: true },
+    });
     if (!ws) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
 
-    interface WsConfig { quickbooksConnected?: boolean; xeroConnected?: boolean }
-    const cfg = (ws.config ?? {}) as WsConfig;
     return NextResponse.json({
-      quickbooks: { connected: cfg.quickbooksConnected ?? false, available: !!(process.env.QUICKBOOKS_CLIENT_ID) },
-      xero:       { connected: cfg.xeroConnected       ?? false, available: !!(process.env.XERO_CLIENT_ID)       },
+      quickbooks: { connected: ws.quickbooksConnected, available: !!(process.env.QUICKBOOKS_CLIENT_ID) },
+      xero:       { connected: ws.xeroConnected,       available: !!(process.env.XERO_CLIENT_ID)       },
     });
   }
 
@@ -67,27 +68,26 @@ export async function POST(req: Request) {
 
     if (!workspaceId || !provider) return NextResponse.json({ error: "workspaceId and provider required" }, { status: 400 });
 
-    const ws = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { config: true } });
+    const ws = await prisma.workspace.findUnique({
+      where:  { id: workspaceId },
+      select: { quickbooksConnected: true, xeroConnected: true },
+    });
     if (!ws) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-
-    interface WsConfig {
-      quickbooksConnected?: boolean;
-      xeroConnected?: boolean;
-      [key: string]: unknown;
-    }
-    const cfg = (ws.config ?? {}) as WsConfig;
 
     // ── Disconnect ────────────────────────────────────────────────────────────
     if (action === "disconnect") {
-      if (provider === "quickbooks") cfg.quickbooksConnected = false;
-      if (provider === "xero")       cfg.xeroConnected       = false;
-      await prisma.workspace.update({ where: { id: workspaceId }, data: { config: cfg } });
+      await prisma.workspace.update({
+        where: { id: workspaceId },
+        data:  provider === "quickbooks"
+          ? { quickbooksConnected: false }
+          : { xeroConnected: false },
+      });
       return NextResponse.json({ ok: true, message: `${provider} disconnected.` });
     }
 
     // ── Sync invoices ─────────────────────────────────────────────────────────
     if (action === "sync") {
-      const isConnected = provider === "quickbooks" ? cfg.quickbooksConnected : cfg.xeroConnected;
+      const isConnected = provider === "quickbooks" ? ws.quickbooksConnected : ws.xeroConnected;
       if (!isConnected) return NextResponse.json({ error: `${provider} is not connected` }, { status: 400 });
 
       // In production: call the accounting API with stored access token.
