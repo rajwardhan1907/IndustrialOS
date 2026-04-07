@@ -34,8 +34,9 @@ model Workspace {
   contracts      Contract[]       // Phase 12
   ediPartners    EdiPartner[]     // Phase 23
   ediTransactions EdiTransaction[] // Phase 23
-  tickets        Ticket[]         // Phase 24
-  notifications  Notification[]   // Phase 25
+  tickets          Ticket[]           // Phase 24
+  notifications    Notification[]     // Phase 25
+  customerAccounts CustomerAccount[]  // Customer Portal
 }
 
 // ── User ──────────────────────────────────────────────────────────────────────
@@ -367,4 +368,29 @@ model Notification {
   tab         String    @default("")        // the app tab to navigate to
   read        Boolean   @default(false)
   createdAt   DateTime  @default(now())
+}
+
+// ── Customer Portal ───────────────────────────────────────────────────────────
+// Customer-facing portal accounts (separate from internal User accounts).
+// Customers sign up at /portal/[workspaceId] with email + password.
+model CustomerAccount {
+  id          String            @id @default(cuid())
+  email       String
+  name        String            @default("")
+  password    String            @default("")  // bcrypt hash
+  workspaceId String
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id])
+  sessions    CustomerSession[]
+  createdAt   DateTime          @default(now())
+
+  @@unique([email, workspaceId])
+}
+
+model CustomerSession {
+  id        String          @id @default(cuid())
+  token     String          @unique @default(cuid())
+  accountId String
+  account   CustomerAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime        @default(now())
 }

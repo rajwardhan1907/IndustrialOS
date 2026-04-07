@@ -1,9 +1,10 @@
 // app/api/portal/returns/route.ts
-// PUBLIC endpoint — no auth required (excluded via middleware matcher)
-// Customers use this to submit return requests from the portal page.
+// PUBLIC endpoint — no auth required for GET (workspace branding) + POST (submit)
+// Token auth required for GET with Authorization header (list customer's returns)
 //
-// GET  /api/portal/returns?wid=xxx  → returns workspace name for branding
-// POST /api/portal/returns          → creates a return with status "requested"
+// GET  /api/portal/returns?wid=xxx              → workspace name (for branding, no token)
+// GET  (Authorization: Bearer <token>)          → list signed-in customer's returns
+// POST /api/portal/returns                      → creates a return (token auth or anonymous)
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -11,7 +12,7 @@ import { prisma } from '@/lib/prisma'
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
 }
 
 export async function OPTIONS() {
@@ -24,9 +25,34 @@ function makeRMANumber(): string {
   return `RMA-${year}-${num}`
 }
 
-// GET — fetch workspace name so the portal can show the company name
+// GET — if token present: list customer's returns; otherwise return workspace name for branding
 export async function GET(req: Request) {
   try {
+    const token = req.headers.get('authorization')?.replace('Bearer ', '')
+
+    // Authenticated: return this customer's returns
+    if (token) {
+      const session = await prisma.customerSession.findUnique({
+        where: { token }, include: { account: true },
+      })
+      if (!session || session.expiresAt < new Date()) {
+        return NextResponse.json({ error: 'Session expired' }, { status: 401, headers: CORS })
+      }
+      const acct = session.account
+      const returns = await prisma.return.findMany({
+        where: {
+          workspaceId: acct.workspaceId,
+          OR: [
+            { customerEmail: { mode: 'insensitive', equals: acct.email } },
+            { customer:      { mode: 'insensitive', equals: acct.name  } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      return NextResponse.json(returns, { headers: CORS })
+    }
+
+    // Anonymous: return workspace name for portal branding
     const { searchParams } = new URL(req.url)
     const wid = searchParams.get('wid')
     if (!wid) {

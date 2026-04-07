@@ -235,7 +235,7 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
   const copyPortalLink = () => {
     const wid = getWorkspaceId();
     if (!wid) return;
-    const url = `${window.location.origin}/portal/returns?wid=${wid}`;
+    const url = `${window.location.origin}/portal/${wid}`;
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2500);

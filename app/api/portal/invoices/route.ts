@@ -1,4 +1,5 @@
-// app/api/portal/orders/route.ts
+// app/api/portal/invoices/route.ts
+// GET → customer's invoices
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
@@ -25,11 +26,11 @@ export async function GET(req: Request) {
     if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS })
     const acct = await resolveAccount(token)
     if (!acct) return NextResponse.json({ error: 'Session expired' }, { status: 401, headers: CORS })
-    const orders = await prisma.order.findMany({
+    const invoices = await prisma.invoice.findMany({
       where: { workspaceId: acct.workspaceId, customer: { mode: 'insensitive', equals: acct.name } },
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(orders, { headers: CORS })
+    return NextResponse.json(invoices, { headers: CORS })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500, headers: CORS })
   }
