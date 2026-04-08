@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchInvoices, createInvoice, updateInvoiceStatus, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface InvoiceItem { id: string; desc: string; qty: number; unitPrice: number; total: number; }
 interface Invoice {
@@ -45,6 +46,7 @@ export default function InvoicingScreen() {
   const [invoices,    setInvoices]    = useState<Invoice[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [selected,    setSelected]    = useState<Invoice | null>(null);
   const [marking,     setMarking]     = useState(false);
   const [showNew,     setShowNew]     = useState(false);
@@ -63,7 +65,7 @@ export default function InvoicingScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchInvoices(workspaceId);
       setInvoices(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -71,6 +73,8 @@ export default function InvoicingScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   // ── Line item helpers ──────────────────────────────────────────────────────
   const updateItem = (idx: number, field: keyof InvoiceItem, val: string) => {
@@ -101,7 +105,7 @@ export default function InvoicingScreen() {
     setCreating(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const issueDate = new Date().toISOString().split("T")[0];
       const dueDate   = calcDueDate(issueDate, newTerms);
       const inv = await createInvoice({

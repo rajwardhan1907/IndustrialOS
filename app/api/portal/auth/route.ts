@@ -28,6 +28,18 @@ function expiresAt() {
   return d
 }
 
+// Helper: create a session token for an account and return the JSON response.
+// Defined at module level (not inside a block) to satisfy strict-mode rules.
+const issueSession = async (account: { id: string; email: string; name: string }) => {
+  const session = await prisma.customerSession.create({
+    data: { accountId: account.id, token: crypto.randomUUID(), expiresAt: expiresAt() },
+  })
+  return NextResponse.json({
+    token:   session.token,
+    account: { id: account.id, email: account.email, name: account.name },
+  }, { headers: CORS })
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -41,17 +53,6 @@ export async function POST(req: Request) {
     const ws = await prisma.workspace.findUnique({ where: { id: workspaceId }, select: { id: true } })
     if (!ws) {
       return NextResponse.json({ error: 'Invalid portal link' }, { status: 404, headers: CORS })
-    }
-
-    // Helper: create session for an account and return response
-    async function issueSession(account: { id: string; email: string; name: string }) {
-      const session = await prisma.customerSession.create({
-        data: { accountId: account.id, token: crypto.randomUUID(), expiresAt: expiresAt() },
-      })
-      return NextResponse.json({
-        token:   session.token,
-        account: { id: account.id, email: account.email, name: account.name },
-      }, { headers: CORS })
     }
 
     // ── Sign Up ──────────────────────────────────────────────────────────────
@@ -105,7 +106,6 @@ export async function POST(req: Request) {
         where: { email_workspaceId: { email: customer.email.toLowerCase(), workspaceId } },
       })
       if (!account) {
-        // Create account with empty password (they must set one via future sign-up if they want password login)
         account = await prisma.customerAccount.create({
           data: { email: customer.email.toLowerCase(), name: customer.name, password: '', workspaceId },
         })

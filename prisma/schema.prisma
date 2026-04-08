@@ -108,6 +108,8 @@ model Customer {
   workspaceId     String
   workspace       Workspace @relation(fields: [workspaceId], references: [id])
   createdAt       DateTime  @default(now())
+
+  @@unique([portalCode, workspaceId])
 }
 
 // ── Quote ─────────────────────────────────────────────────────────────────────

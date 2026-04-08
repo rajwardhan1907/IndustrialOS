@@ -24,6 +24,12 @@ const ALL_MODULES: { id: ModuleId; label: string; icon: string; desc: string }[]
   { id: "crm",       icon: "🔌", label: "CRM Integrations",     desc: "Salesforce, HubSpot, Zoho sync" },
   { id: "pipeline",  icon: "⚡", label: "SKU Pipeline",         desc: "Bulk import up to 1M SKUs" },
   { id: "health",    icon: "🩺", label: "System Health",        desc: "Monitor all services and uptime" },
+  { id: "returns",   icon: "↩️", label: "Returns & RMA",        desc: "Customer returns, approvals, refunds" },
+  { id: "contracts", icon: "📄", label: "Contracts",            desc: "Manage supplier and customer contracts" },
+  { id: "reports",   icon: "📈", label: "Reports",              desc: "Custom report builder and exports" },
+  { id: "edi",       icon: "🔄", label: "EDI Integration",      desc: "Electronic data interchange with partners" },
+  { id: "tickets",   icon: "🎫", label: "Support Tickets",      desc: "Internal and customer issue tracking" },
+  { id: "ai",        icon: "✨", label: "AI Insights",          desc: "Demand forecasts, reorder suggestions, negotiation assistant" },
 ];
 
 const INDUSTRIES: { id: Industry; icon: string; label: string }[] = [

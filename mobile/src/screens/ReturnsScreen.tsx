@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchReturns, updateReturnStatus, createReturn, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Return {
   id: string; rmaNumber: string; customer: string; sku: string;
@@ -29,6 +30,7 @@ export default function ReturnsScreen() {
   const [returns,    setReturns]    = useState<Return[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [selected,   setSelected]   = useState<Return | null>(null);
   // New return state
   const [showNew,    setShowNew]    = useState(false);
@@ -43,7 +45,7 @@ export default function ReturnsScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchReturns(workspaceId);
       setReturns(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -52,6 +54,8 @@ export default function ReturnsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  if (sessionExpired) return <SessionExpiredView />;
+
   const submitNew = async () => {
     if (!newCustomer.trim()) { Alert.alert("Required", "Customer is required."); return; }
     if (!newSku.trim())      { Alert.alert("Required", "SKU is required."); return; }
@@ -59,7 +63,7 @@ export default function ReturnsScreen() {
     setCreating(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const rmaNumber = "RMA-" + Date.now();
       const r = await createReturn({
         workspaceId, rmaNumber, customer: newCustomer.trim(),

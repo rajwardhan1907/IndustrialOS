@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchNotifications, markNotificationRead, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Notification {
   id: string; title: string; body: string; type: string; severity?: string;
@@ -23,12 +24,13 @@ export default function NotificationsScreen() {
   const [notifs,     setNotifs]     = useState<Notification[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchNotifications(workspaceId);
       setNotifs(Array.isArray(data) ? data : (data.notifications ?? []));
     } catch (e: any) {
@@ -39,6 +41,8 @@ export default function NotificationsScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   const markRead = async (id: string) => {
     try {

@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchDashboard, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Metric { label: string; value: string | number; sub?: string }
 interface Alert  { id: string | number; title?: string; msg?: string; type?: string; sev?: string; time: string }
@@ -15,6 +16,7 @@ export default function DashboardScreen() {
   const [alerts,      setAlerts]      = useState<Alert[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [error,       setError]       = useState("");
   const [companyName, setCompanyName] = useState("IndustrialOS");
 
@@ -23,7 +25,7 @@ export default function DashboardScreen() {
     setError("");
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) { setError("Not logged in"); return; }
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchDashboard(workspaceId);
       const met = data.met ?? data; // API returns { met, chart, alerts }
       setMetrics([
@@ -43,6 +45,8 @@ export default function DashboardScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   const alertColor = (sev: string) => {
     if (sev === "critical" || sev === "error" || sev === "err") return theme.red;

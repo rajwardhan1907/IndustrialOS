@@ -58,7 +58,7 @@ const lbl: React.CSSProperties = {
   display: "block", fontSize: 12, fontWeight: 700, color: T.muted,
   marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em",
 };
-const card: React.CSSProperties = {
+const panelCard: React.CSSProperties = {
   background: T.surface, border: `1px solid ${T.border}`,
   borderRadius: 12, padding: "16px 20px",
 };
@@ -135,7 +135,7 @@ function PaymentModal({ invoice, token, onClose, onPaid }: {
         <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 4 }}>Pay Invoice</h2>
         <p style={{ fontSize: 13, color: T.muted, marginBottom: 20 }}>{invoice.invoiceNumber}</p>
 
-        <div style={{ ...card, background: T.blueBg, border: `1px solid ${T.blueBorder}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ ...panelCard, background: T.blueBg, border: `1px solid ${T.blueBorder}`, marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: 13, color: T.blue, fontWeight: 600 }}>Amount due</span>
           <span style={{ fontSize: 20, fontWeight: 800, color: T.blue }}>{fmt$(due, invoice.currency)}</span>
         </div>
@@ -655,22 +655,22 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
 
             {/* Quick actions */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <button onClick={() => setShowRequest(true)} style={{ ...card, textAlign: "left", cursor: "pointer", border: `1px solid ${T.blueBorder}`, background: T.blueBg }}>
+              <button onClick={() => setShowRequest(true)} style={{ ...panelCard, textAlign: "left", cursor: "pointer", border: `1px solid ${T.blueBorder}`, background: T.blueBg }}>
                 <div style={{ fontSize: 20, marginBottom: 6 }}>✏️</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: T.blue }}>Request a Quote</div>
                 <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>Tell us what you need and we'll get back to you.</div>
               </button>
-              <button onClick={() => setShowReturn(true)} style={{ ...card, textAlign: "left", cursor: "pointer" }}>
+              <button onClick={() => setShowReturn(true)} style={{ ...panelCard, textAlign: "left", cursor: "pointer" }}>
                 <div style={{ fontSize: 20, marginBottom: 6 }}>↩️</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Submit a Return</div>
                 <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>Request an RMA for a product return.</div>
               </button>
-              <button onClick={() => setTab("invoices")} style={{ ...card, textAlign: "left", cursor: "pointer" }}>
+              <button onClick={() => setTab("invoices")} style={{ ...panelCard, textAlign: "left", cursor: "pointer" }}>
                 <div style={{ fontSize: 20, marginBottom: 6 }}>💳</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Pay an Invoice</div>
                 <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>View and pay outstanding invoices.</div>
               </button>
-              <button onClick={() => setTab("orders")} style={{ ...card, textAlign: "left", cursor: "pointer" }}>
+              <button onClick={() => setTab("orders")} style={{ ...panelCard, textAlign: "left", cursor: "pointer" }}>
                 <div style={{ fontSize: 20, marginBottom: 6 }}>📦</div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>Track Orders</div>
                 <div style={{ fontSize: 12, color: T.muted, marginTop: 3 }}>View the status of your orders.</div>
@@ -684,7 +684,7 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 20 }}>Your Orders</h2>
             {loading.orders ? <p style={{ color: T.muted }}>Loading…</p> : orders.length === 0 ? (
-              <div style={{ ...card, textAlign: "center", padding: "40px 24px" }}>
+              <div style={{ ...panelCard, textAlign: "center", padding: "40px 24px" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
                 <p style={{ color: T.muted }}>No orders found.</p>
               </div>
@@ -725,7 +725,7 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
               </button>
             </div>
             {loading.quotes ? <p style={{ color: T.muted }}>Loading…</p> : quotes.length === 0 ? (
-              <div style={{ ...card, textAlign: "center", padding: "40px 24px" }}>
+              <div style={{ ...panelCard, textAlign: "center", padding: "40px 24px" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>📋</div>
                 <p style={{ color: T.muted, marginBottom: 16 }}>No quotes yet.</p>
                 <button onClick={() => setShowRequest(true)} style={{ padding: "10px 22px", borderRadius: 9, background: T.blue, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
@@ -775,7 +775,7 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
           <div>
             <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 20 }}>Your Invoices</h2>
             {loading.invoices ? <p style={{ color: T.muted }}>Loading…</p> : invoices.length === 0 ? (
-              <div style={{ ...card, textAlign: "center", padding: "40px 24px" }}>
+              <div style={{ ...panelCard, textAlign: "center", padding: "40px 24px" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>💳</div>
                 <p style={{ color: T.muted }}>No invoices found.</p>
               </div>
@@ -827,7 +827,7 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
               </button>
             </div>
             {loading.returns ? <p style={{ color: T.muted }}>Loading…</p> : returns.length === 0 ? (
-              <div style={{ ...card, textAlign: "center", padding: "40px 24px" }}>
+              <div style={{ ...panelCard, textAlign: "center", padding: "40px 24px" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>↩️</div>
                 <p style={{ color: T.muted, marginBottom: 16 }}>No returns submitted yet.</p>
                 <button onClick={() => setShowReturn(true)} style={{ padding: "10px 22px", borderRadius: 9, background: T.blue, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
@@ -891,25 +891,25 @@ export default function CustomerPortal() {
   // Check for saved session
   useEffect(() => {
     if (!workspaceId) { setState("auth"); return; }
-    const saved = localStorage.getItem(storageKey);
+    const saved = sessionStorage.getItem(storageKey);
     if (!saved) { setState("auth"); return; }
     fetch("/api/portal/me", { headers: { Authorization: `Bearer ${saved}` } })
       .then(r => r.json())
       .then(d => {
         if (d.id) { setToken(saved); setAccount(d); setState("dashboard"); }
-        else { localStorage.removeItem(storageKey); setState("auth"); }
+        else { sessionStorage.removeItem(storageKey); setState("auth"); }
       })
       .catch(() => setState("auth"));
   }, [workspaceId]);
 
   const handleAuth = (t: string, acct: Account) => {
-    localStorage.setItem(storageKey, t);
+    sessionStorage.setItem(storageKey, t);
     setToken(t); setAccount(acct); setState("dashboard");
   };
 
   const handleSignOut = () => {
     fetch("/api/portal/auth", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
-    localStorage.removeItem(storageKey);
+    sessionStorage.removeItem(storageKey);
     setToken(""); setAccount(null); setState("auth");
   };
 

@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchAnalytics, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface MetricCard {
   label: string;
@@ -18,12 +19,13 @@ export default function AnalyticsScreen() {
   const [metrics, setMetrics] = useState<MetricCard[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchAnalytics(workspaceId);
       const m = data.met || {};
       const cards: MetricCard[] = [
@@ -40,6 +42,8 @@ export default function AnalyticsScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   if (loading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}><ActivityIndicator size="large" color={theme.blue} /></View>;
 

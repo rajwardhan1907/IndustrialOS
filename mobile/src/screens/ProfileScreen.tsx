@@ -1,5 +1,6 @@
 // mobile/src/screens/ProfileScreen.tsx
 // FIX 2: async feature load/save via SecureStore (native) / localStorage (web)
+// FIX 7: emit "featuresChanged" after saving so _layout.tsx reloads immediately
 import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
@@ -9,6 +10,7 @@ import * as SecureStore from "expo-secure-store";
 import { theme, s } from "../lib/theme";
 import { getSession, clearSession } from "../lib/api";
 import ChangePasswordScreen from "./ChangePasswordScreen";
+import featureEmitter from "../lib/featureEvents";
 
 const FEATURES_KEY = "mobile_features";
 
@@ -63,7 +65,9 @@ export default function ProfileScreen({ onLogout }: Props) {
     if (HIGH_PRIORITY.includes(name)) return;
     setFeatures(prev => {
       const next = { ...prev, [name]: !prev[name] };
-      saveFeatures(next); // fire-and-forget async save
+      saveFeatures(next).then(() => {
+        featureEmitter.emit("featuresChanged");
+      });
       return next;
     });
   };

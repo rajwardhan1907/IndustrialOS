@@ -110,18 +110,18 @@ export async function PATCH(req: Request) {
       if (body.stage === 'Confirmed' && prev?.stage !== 'Confirmed') {
         await subtractInventory(tx, updated.sku, updated.items, updated.workspaceId)
 
-        // Fix 8 — increase customer balanceDue when order is confirmed
-        const cust = await tx.customer.findFirst({
+        // Fix 9 — update customer totalSpend when order is confirmed
+        const custConfirmed = await tx.customer.findFirst({
           where: { workspaceId: updated.workspaceId, name: { mode: 'insensitive', equals: updated.customer } },
         })
-        if (cust) {
+        if (custConfirmed) {
           await tx.customer.update({
-            where: { id: cust.id },
-            data:  { balanceDue: cust.balanceDue + updated.value },
+            where: { id: custConfirmed.id },
+            data:  { totalSpend: custConfirmed.totalSpend + updated.value },
           })
         }
 
-        // Fix 11 — write a notification
+        // notification
         await tx.notification.create({
           data: {
             workspaceId: updated.workspaceId,
@@ -170,6 +170,7 @@ export async function PATCH(req: Request) {
       }
 
       // Automation 6 — auto-create invoice when stage moves to Delivered
+      // Fix 8 — balanceDue increases here (when invoice is created), not at Confirmed
       if (body.stage === 'Delivered' && prev?.stage !== 'Delivered') {
         const existingInv = await tx.invoice.findFirst({
           where: {
@@ -201,6 +202,17 @@ export async function PATCH(req: Request) {
               workspaceId:   updated.workspaceId,
             },
           })
+
+          // Fix 8 — increase balanceDue alongside invoice creation
+          const custDelivered = await tx.customer.findFirst({
+            where: { workspaceId: updated.workspaceId, name: { mode: 'insensitive', equals: updated.customer } },
+          })
+          if (custDelivered) {
+            await tx.customer.update({
+              where: { id: custDelivered.id },
+              data:  { balanceDue: custDelivered.balanceDue + updated.value },
+            })
+          }
         }
         await tx.notification.create({
           data: {

@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchSuppliers, createSupplier, updateSupplier, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Supplier {
   id: string; name: string; contactName?: string; email?: string;
@@ -26,6 +27,7 @@ export default function SuppliersScreen() {
   const [suppliers,  setSuppliers]  = useState<Supplier[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [selected,   setSelected]   = useState<Supplier | null>(null);
   const [showNew,    setShowNew]    = useState(false);
   const [showEdit,   setShowEdit]   = useState(false);
@@ -36,7 +38,7 @@ export default function SuppliersScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchSuppliers(workspaceId);
       setSuppliers(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -44,6 +46,8 @@ export default function SuppliersScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   const openEdit = (sup: Supplier) => {
     setForm({
@@ -63,7 +67,7 @@ export default function SuppliersScreen() {
     setSubmitting(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const sup = await createSupplier({
         workspaceId, name: form.name.trim(), contactName: form.contactName.trim(),
         email: form.email.trim(), phone: form.phone.trim(), country: form.country.trim(),

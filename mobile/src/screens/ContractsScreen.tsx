@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchContracts, createContract, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Contract {
   id: string; contractNumber: string; title: string;
@@ -25,6 +26,7 @@ export default function ContractsScreen() {
   const [contracts,  setContracts]  = useState<Contract[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [selected,   setSelected]   = useState<Contract | null>(null);
   // New contract state
   const [showNew,    setShowNew]    = useState(false);
@@ -41,7 +43,7 @@ export default function ContractsScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchContracts(workspaceId);
       setContracts(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -50,13 +52,15 @@ export default function ContractsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  if (sessionExpired) return <SessionExpiredView />;
+
   const submitNew = async () => {
     if (!newTitle.trim())    { Alert.alert("Required", "Title is required."); return; }
     if (!newCustomer.trim()) { Alert.alert("Required", "Customer is required."); return; }
     setCreating(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const contractNumber = "CTR-" + Date.now();
       const c = await createContract({
         workspaceId, contractNumber, title: newTitle.trim(), customer: newCustomer.trim(),

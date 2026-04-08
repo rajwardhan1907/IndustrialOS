@@ -10,6 +10,7 @@ import { theme, s } from "../lib/theme";
 let Haptics: any = null;
 if (Platform.OS !== "web") Haptics = require("expo-haptics");
 import { fetchShipments, updateShipmentStatus, createShipment, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Shipment {
   id: string; shipmentNumber: string; customer: string; carrier: string;
@@ -32,6 +33,7 @@ export default function ShipmentsScreen() {
   const [shipments,  setShipments]  = useState<Shipment[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [filter,     setFilter]     = useState("All");
   const [selected,   setSelected]   = useState<Shipment | null>(null);
   // New shipment state
@@ -47,7 +49,7 @@ export default function ShipmentsScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchShipments(workspaceId);
       setShipments(data);
     } catch (e: any) {
@@ -58,6 +60,8 @@ export default function ShipmentsScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   const advanceStatus = async (ship: Shipment, newStatus: string) => {
     try {
@@ -75,7 +79,7 @@ export default function ShipmentsScreen() {
     setCreating(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const shipmentNumber = "SHP-" + Date.now();
       const ship = await createShipment({
         workspaceId, shipmentNumber, customer: newCustomer.trim(),

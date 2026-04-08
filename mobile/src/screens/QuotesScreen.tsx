@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchQuotes, updateQuoteStatus, createQuote, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Quote {
   id: string; quoteNumber: string; customer: string; total: number;
@@ -25,6 +26,7 @@ export default function QuotesScreen() {
   const [quotes,     setQuotes]     = useState<Quote[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [selected,   setSelected]   = useState<Quote | null>(null);
   // New quote state
   const [showNew,    setShowNew]    = useState(false);
@@ -40,7 +42,7 @@ export default function QuotesScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchQuotes(workspaceId);
       setQuotes(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -48,6 +50,8 @@ export default function QuotesScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   const submitNew = async () => {
     if (!newCustomer.trim()) { Alert.alert("Required", "Customer name is required."); return; }
@@ -58,7 +62,7 @@ export default function QuotesScreen() {
     setCreating(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const quoteNumber = "Q-" + Date.now();
       const q = await createQuote({
         workspaceId, quoteNumber, customer: newCustomer.trim(),

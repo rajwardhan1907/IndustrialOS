@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchTickets, createTicket, postTicketComment, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Comment { id: string; authorName: string; body: string; createdAt: string; }
 interface Ticket {
@@ -32,6 +33,7 @@ export default function TicketsScreen() {
   const [tickets,    setTickets]    = useState<Ticket[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [selected,   setSelected]   = useState<Ticket | null>(null);
   const [showNew,    setShowNew]    = useState(false);
   const [newTitle,   setNewTitle]   = useState("");
@@ -49,7 +51,7 @@ export default function TicketsScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchTickets(workspaceId);
       setTickets(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -58,12 +60,14 @@ export default function TicketsScreen() {
 
   useEffect(() => { load(); }, [load]);
 
+  if (sessionExpired) return <SessionExpiredView />;
+
   const submitNew = async () => {
     if (!newTitle.trim()) { Alert.alert("Required", "Title is required."); return; }
     setCreating(true);
     try {
       const { workspaceId, userId, name } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const t = await createTicket({
         workspaceId, title: newTitle.trim(), description: newDesc,
         type: newType, priority: newPri,

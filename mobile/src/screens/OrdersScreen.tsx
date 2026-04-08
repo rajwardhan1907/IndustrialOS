@@ -10,6 +10,7 @@ import { theme, s } from "../lib/theme";
 let Haptics: any = null;
 if (Platform.OS !== "web") Haptics = require("expo-haptics");
 import { fetchOrders, updateOrderStage, createOrder, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Order {
   id: string; customer: string; sku: string; items: number;
@@ -33,6 +34,7 @@ export default function OrdersScreen() {
   const [orders,      setOrders]      = useState<Order[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [filter,      setFilter]      = useState("All");
   const [selected,    setSelected]    = useState<Order | null>(null);
   // Create Order state
@@ -47,7 +49,7 @@ export default function OrdersScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchOrders(workspaceId);
       setOrders(data);
     } catch (e: any) {
@@ -58,6 +60,8 @@ export default function OrdersScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   const advanceStage = async (order: Order, newStage: string) => {
     try {
@@ -88,7 +92,7 @@ export default function OrdersScreen() {
     setCreating(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const order = await createOrder({
         workspaceId, customer: newCustomer.trim(), sku: newSku.trim(),
         items: qty, priority: newPriority, stage: "Placed",

@@ -17,6 +17,7 @@ if (Platform.OS !== "web") {
   Haptics              = require("expo-haptics");
 }
 import { fetchInventory, updateInventoryItem, createInventoryItem, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Item {
   id: string; sku: string; name: string; category: string;
@@ -36,6 +37,7 @@ export default function InventoryScreen() {
   const [filtered,   setFiltered]   = useState<Item[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [search,     setSearch]     = useState("");
   const [scanning,   setScanning]   = useState(false);
   const [scanned,    setScanned]    = useState(false);
@@ -61,7 +63,7 @@ export default function InventoryScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchInventory(workspaceId);
       setItems(data);
       setFiltered(data);
@@ -73,6 +75,8 @@ export default function InventoryScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   useEffect(() => {
     const q = search.toLowerCase().trim();
@@ -141,7 +145,7 @@ export default function InventoryScreen() {
     setCreating(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const item = await createInventoryItem({
         workspaceId, sku: newSku.trim(), name: newName.trim(),
         category: newCategory.trim(), stockLevel: parseInt(newStock, 10) || 0,

@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchPurchaseOrders, updatePOApproval, createPurchaseOrder, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface PurchaseOrder {
   id: string; poNumber: string; supplierName: string; total: number;
@@ -24,6 +25,7 @@ export default function PurchaseOrdersScreen() {
   const [orders,     setOrders]     = useState<PurchaseOrder[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [selected,   setSelected]   = useState<PurchaseOrder | null>(null);
   // New PO state
   const [showNew,    setShowNew]    = useState(false);
@@ -39,7 +41,7 @@ export default function PurchaseOrdersScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchPurchaseOrders(workspaceId);
       setOrders(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -47,6 +49,8 @@ export default function PurchaseOrdersScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   const submitNew = async () => {
     if (!newSupplier.trim()) { Alert.alert("Required", "Supplier name is required."); return; }
@@ -57,7 +61,7 @@ export default function PurchaseOrdersScreen() {
     setCreating(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const poNumber = "PO-" + Date.now();
       const po = await createPurchaseOrder({
         workspaceId, poNumber, supplierName: newSupplier.trim(), supplierId: "",

@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { theme, s } from "../lib/theme";
 import { fetchCustomers, createCustomer, updateCustomer, getSession } from "../lib/api";
+import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Customer {
   id: string; name: string; contactName?: string; email?: string; phone?: string;
@@ -20,6 +21,7 @@ export default function CustomersScreen() {
   const [customers,  setCustomers]  = useState<Customer[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const [selected,   setSelected]   = useState<Customer | null>(null);
   const [showNew,    setShowNew]    = useState(false);
   const [showEdit,   setShowEdit]   = useState(false);
@@ -30,7 +32,7 @@ export default function CustomersScreen() {
     if (refresh) setRefreshing(true); else setLoading(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchCustomers(workspaceId);
       setCustomers(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -38,6 +40,8 @@ export default function CustomersScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   const openEdit = (c: Customer) => {
     setForm({
@@ -56,7 +60,7 @@ export default function CustomersScreen() {
     setSubmitting(true);
     try {
       const { workspaceId } = await getSession();
-      if (!workspaceId) return;
+      if (!workspaceId) { setSessionExpired(true); return; }
       const c = await createCustomer({
         workspaceId, name: form.name.trim(), contactName: form.contactName.trim(),
         email: form.email.trim(), phone: form.phone.trim(), country: form.country.trim(),

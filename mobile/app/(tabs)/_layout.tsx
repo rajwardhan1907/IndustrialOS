@@ -1,15 +1,15 @@
 // mobile/app/(tabs)/_layout.tsx — Dynamic bottom tab bar
 // FIX 2: async feature load via SecureStore (native) / localStorage (web)
-// FIX 3: AppState listener so toggling features in Profile refreshes tabs immediately
+// FIX 3: AppState listener so toggling features in Profile refreshes tabs when foregrounded
+// FIX 7: featureEmitter listener for immediate refresh when Profile saves toggles
 import React, { useEffect, useState } from "react";
 import { Tabs } from "expo-router";
 import { Text, Platform, AppState } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { theme } from "../../src/lib/theme";
+import featureEmitter from "../../src/lib/featureEvents";
 
 const FEATURES_KEY = "mobile_features";
-
-const HIGH_PRIORITY = ["Dashboard","Orders","Inventory","Shipments","Notifications","Tickets"];
 
 // All tabs enabled by default — matches web app behaviour
 const DEFAULT_FEATURES: Record<string, boolean> = {
@@ -62,12 +62,20 @@ export default function TabLayout() {
     loadFeatures().then(setFeatures);
 
     // Reload whenever the app comes back to the foreground
-    const sub = AppState.addEventListener("change", (state) => {
+    const appStateSub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         loadFeatures().then(setFeatures);
       }
     });
-    return () => sub.remove();
+
+    // Reload immediately when ProfileScreen saves feature toggles
+    const onFeaturesChanged = () => { loadFeatures().then(setFeatures); };
+    featureEmitter.on("featuresChanged", onFeaturesChanged);
+
+    return () => {
+      appStateSub.remove();
+      featureEmitter.off("featuresChanged", onFeaturesChanged);
+    };
   }, []);
 
   return (

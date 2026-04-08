@@ -11,6 +11,26 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
+// ── Helper: make a portalCode unique within a workspace ────────────────────────
+// If the proposed code is empty, return it as-is (no index entry for empty codes).
+// If it collides, append a random 3-digit suffix until unique.
+async function uniquePortalCode(code: string, workspaceId: string, excludeId?: string): Promise<string> {
+  if (!code) return code;
+  let candidate = code.toUpperCase();
+  for (let attempts = 0; attempts < 10; attempts++) {
+    const existing = await prisma.customer.findFirst({
+      where: {
+        workspaceId,
+        portalCode: { equals: candidate, mode: 'insensitive' },
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (!existing) return candidate;
+    candidate = code.toUpperCase() + Math.floor(100 + Math.random() * 900);
+  }
+  return candidate;
+}
 
 // GET customers — workspaceId is required (prevents cross-tenant data leaks)
 export async function GET(req: Request) {
@@ -26,27 +46,7 @@ export async function GET(req: Request) {
       orderBy: { createdAt: 'desc' },
     })
 
-    // FIX: calculate totalSpend for each customer from the orders table
-    // The Customer model has no totalSpend column — we derive it at query time
-    const allOrders = await prisma.order.findMany({
-      where: { workspaceId },
-      select: { customer: true, value: true },
-    })
-
-    // Build a map: customerName (lowercase) → total spend
-    const spendMap: Record<string, number> = {}
-    for (const order of allOrders) {
-      const key = order.customer.toLowerCase().trim()
-      spendMap[key] = (spendMap[key] || 0) + (order.value || 0)
-    }
-
-    // Attach totalSpend to each customer response
-    const customersWithSpend = customers.map(c => ({
-      ...c,
-      totalSpend: spendMap[c.name.toLowerCase().trim()] || 0,
-    }))
-
-    return NextResponse.json(customersWithSpend, { headers: CORS })
+    return NextResponse.json(customers, { headers: CORS })
   } catch (err: any) {
     console.error('Customers GET error:', err)
     return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
@@ -60,6 +60,7 @@ export async function POST(req: Request) {
     if (!body.workspaceId) {
       return NextResponse.json({ error: 'workspaceId is required' }, { status: 400, headers: CORS })
     }
+    const portalCode = await uniquePortalCode(body.portalCode ?? '', body.workspaceId);
     const customer = await prisma.customer.create({
       data: {
         name:        body.name        ?? 'Unknown',
@@ -71,7 +72,7 @@ export async function POST(req: Request) {
         creditLimit: body.creditLimit ?? 0,
         balanceDue:  body.balanceDue  ?? 0,
         status:      body.status      ?? 'active',
-        portalCode:  body.portalCode  ?? '',
+        portalCode,
         notes:       body.notes       ?? '',
         orders:      body.orders      ?? [],
         workspaceId: body.workspaceId,
@@ -91,6 +92,16 @@ export async function PATCH(req: Request) {
     if (!body.id) {
       return NextResponse.json({ error: 'id is required' }, { status: 400, headers: CORS })
     }
+
+    // If a portalCode is being set, ensure it's unique within this workspace
+    let portalCode: string | undefined;
+    if (body.portalCode !== undefined) {
+      const existing = await prisma.customer.findUnique({ where: { id: body.id }, select: { workspaceId: true } });
+      if (existing) {
+        portalCode = await uniquePortalCode(body.portalCode, existing.workspaceId, body.id);
+      }
+    }
+
     const customer = await prisma.customer.update({
       where: { id: body.id },
       data: {
@@ -103,10 +114,11 @@ export async function PATCH(req: Request) {
         ...(body.creditLimit !== undefined && { creditLimit: body.creditLimit }),
         ...(body.balanceDue  !== undefined && { balanceDue:  body.balanceDue  }),
         ...(body.status      !== undefined && { status:      body.status      }),
-        ...(body.portalCode  !== undefined && { portalCode:  body.portalCode  }),
+        ...(portalCode       !== undefined && { portalCode }),
         ...(body.notes           !== undefined && { notes:           body.notes           }),
         ...(body.orders          !== undefined && { orders:          body.orders          }),
-        ...(body.whatsappPaused  !== undefined && { whatsappPaused:  body.whatsappPaused  }),  // Phase 11
+        ...(body.whatsappPaused  !== undefined && { whatsappPaused:  body.whatsappPaused  }),
+        ...(body.totalSpend      !== undefined && { totalSpend:      body.totalSpend      }),
       },
     })
     return NextResponse.json(customer, { headers: CORS })

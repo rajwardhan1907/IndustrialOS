@@ -1,25 +1,12 @@
 "use client";
 // components/NotificationBell.tsx
 // Phase 8 — Live notification bell.
+// read state comes from the API response (Notification.read field).
+// Marking a notification read calls PATCH /api/notifications with its id.
 
 import React, { useState, useEffect, useRef } from "react";
 import { Bell, X, AlertTriangle, XCircle, CheckCircle } from "lucide-react";
 import { C } from "@/lib/utils";
-
-const READ_KEY = "industrialos_read_notifications";
-
-function loadReadIds(): Set<string> {
-  if (typeof window === "undefined") return new Set<string>();
-  try {
-    const raw = localStorage.getItem(READ_KEY);
-    return raw ? new Set<string>(JSON.parse(raw) as string[]) : new Set<string>();
-  } catch { return new Set<string>(); }
-}
-
-function saveReadIds(ids: Set<string>) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(READ_KEY, JSON.stringify(Array.from(ids)));
-}
 
 interface Notification {
   id:        string;
@@ -28,6 +15,7 @@ interface Notification {
   title:     string;
   body:      string;
   tab:       string;
+  read:      boolean;
   createdAt: string;
 }
 
@@ -42,12 +30,9 @@ export default function NotificationBell({ onNavigate, workspaceId }: {
   workspaceId?: string | null;
 }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [readIds,       setReadIds]       = useState<Set<string>>(new Set<string>());
   const [open,          setOpen]          = useState(false);
   const [loading,       setLoading]       = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => { setReadIds(loadReadIds()); }, []);
 
   const fetchNotifications = async () => {
     const wid = workspaceId || (typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null);
@@ -75,19 +60,26 @@ export default function NotificationBell({ onNavigate, workspaceId }: {
     return () => document.removeEventListener("mousedown", handler);
   }, [open]);
 
-  const unreadCount = notifications.filter((n: Notification) => !readIds.has(n.id)).length;
+  const unreadCount = notifications.filter((n: Notification) => !n.read).length;
+
+  const patchRead = async (id: string) => {
+    // Fire-and-forget — optimistic update handles UI immediately
+    fetch("/api/notifications", {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ id }),
+    }).catch(() => {});
+  };
 
   const markAllRead = () => {
-    const allIds = new Set<string>(notifications.map((n: Notification) => n.id));
-    setReadIds(allIds);
-    saveReadIds(allIds);
+    const ids = notifications.filter(n => !n.read).map(n => n.id);
+    ids.forEach(patchRead);
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
   const markOneRead = (id: string) => {
-    const updated = new Set<string>(readIds);
-    updated.add(id);
-    setReadIds(updated);
-    saveReadIds(updated);
+    patchRead(id);
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
   const handleClick = (n: Notification) => {
@@ -197,7 +189,7 @@ export default function NotificationBell({ onNavigate, workspaceId }: {
                   {groupLabels[type]}
                 </div>
                 {items.map((n: Notification) => {
-                  const isRead = readIds.has(n.id);
+                  const isRead = n.read;
                   const s      = SEV_STYLE[n.severity] ?? SEV_STYLE.info;
                   const Icon   = s.Icon;
                   return (
