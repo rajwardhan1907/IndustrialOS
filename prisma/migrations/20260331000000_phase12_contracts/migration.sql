@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS "Contract" (
   CONSTRAINT "Contract_pkey" PRIMARY KEY ("id")
 );
 
-ALTER TABLE "Contract"
-  ADD CONSTRAINT IF NOT EXISTS "Contract_workspaceId_fkey"
-  FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
-  ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "Contract"
+    ADD CONSTRAINT "Contract_workspaceId_fkey"
+    FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
+    ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
