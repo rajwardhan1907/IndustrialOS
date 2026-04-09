@@ -48,7 +48,9 @@ export default function NotificationsScreen() {
     try {
       await markNotificationRead(id);
       setNotifs(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    } catch {}
+    } catch (e: any) {
+      Alert.alert("Error", `Failed to mark notification as read: ${e.message}`);
+    }
   };
 
   const unreadCount = notifs.filter(n => !n.read).length;

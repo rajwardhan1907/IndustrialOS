@@ -1,5 +1,5 @@
 -- Phase 12: Pricing Rules Engine
-CREATE TABLE "PricingRule" (
+CREATE TABLE IF NOT EXISTS "PricingRule" (
   "id"           TEXT      NOT NULL,
   "name"         TEXT      NOT NULL,
   "type"         TEXT      NOT NULL,
@@ -12,7 +12,11 @@ CREATE TABLE "PricingRule" (
   CONSTRAINT "PricingRule_pkey" PRIMARY KEY ("id")
 );
 
-ALTER TABLE "PricingRule"
-  ADD CONSTRAINT "PricingRule_workspaceId_fkey"
-  FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
-  ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "PricingRule"
+    ADD CONSTRAINT "PricingRule_workspaceId_fkey"
+    FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
+    ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

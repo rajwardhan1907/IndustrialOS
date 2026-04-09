@@ -1,6 +1,6 @@
 -- Phase 23: EDI Support — EdiPartner and EdiTransaction tables
 
-CREATE TABLE "EdiPartner" (
+CREATE TABLE IF NOT EXISTS "EdiPartner" (
     "id"             TEXT NOT NULL,
     "name"           TEXT NOT NULL,
     "standard"       TEXT NOT NULL DEFAULT 'X12',
@@ -19,7 +19,7 @@ CREATE TABLE "EdiPartner" (
     CONSTRAINT "EdiPartner_pkey" PRIMARY KEY ("id")
 );
 
-CREATE TABLE "EdiTransaction" (
+CREATE TABLE IF NOT EXISTS "EdiTransaction" (
     "id"            TEXT NOT NULL,
     "direction"     TEXT NOT NULL,
     "standard"      TEXT NOT NULL DEFAULT 'X12',
@@ -37,12 +37,26 @@ CREATE TABLE "EdiTransaction" (
 );
 
 -- Foreign keys
-ALTER TABLE "EdiPartner"     ADD CONSTRAINT "EdiPartner_workspaceId_fkey"     FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "EdiTransaction" ADD CONSTRAINT "EdiTransaction_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE "EdiTransaction" ADD CONSTRAINT "EdiTransaction_partnerId_fkey"   FOREIGN KEY ("partnerId")   REFERENCES "EdiPartner"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "EdiPartner"     ADD CONSTRAINT "EdiPartner_workspaceId_fkey"     FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "EdiTransaction" ADD CONSTRAINT "EdiTransaction_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "EdiTransaction" ADD CONSTRAINT "EdiTransaction_partnerId_fkey"   FOREIGN KEY ("partnerId")   REFERENCES "EdiPartner"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Indexes for fast lookups
-CREATE INDEX "EdiPartner_workspaceId_idx"     ON "EdiPartner"("workspaceId");
-CREATE INDEX "EdiTransaction_workspaceId_idx" ON "EdiTransaction"("workspaceId");
-CREATE INDEX "EdiTransaction_partnerId_idx"   ON "EdiTransaction"("partnerId");
-CREATE INDEX "EdiTransaction_direction_idx"   ON "EdiTransaction"("direction");
+CREATE INDEX IF NOT EXISTS "EdiPartner_workspaceId_idx"     ON "EdiPartner"("workspaceId");
+CREATE INDEX IF NOT EXISTS "EdiTransaction_workspaceId_idx" ON "EdiTransaction"("workspaceId");
+CREATE INDEX IF NOT EXISTS "EdiTransaction_partnerId_idx"   ON "EdiTransaction"("partnerId");
+CREATE INDEX IF NOT EXISTS "EdiTransaction_direction_idx"   ON "EdiTransaction"("direction");

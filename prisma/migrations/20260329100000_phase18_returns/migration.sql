@@ -1,7 +1,7 @@
 -- Phase 18: Returns & RMA
 -- Creates the Return table for tracking customer return requests.
 
-CREATE TABLE "Return" (
+CREATE TABLE IF NOT EXISTS "Return" (
   "id"           TEXT NOT NULL,
   "rmaNumber"    TEXT NOT NULL,
   "orderId"      TEXT NOT NULL DEFAULT '',
@@ -21,8 +21,12 @@ CREATE TABLE "Return" (
   CONSTRAINT "Return_pkey" PRIMARY KEY ("id")
 );
 
-ALTER TABLE "Return"
-  ADD CONSTRAINT "Return_workspaceId_fkey"
-  FOREIGN KEY ("workspaceId")
-  REFERENCES "Workspace"("id")
-  ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "Return"
+    ADD CONSTRAINT "Return_workspaceId_fkey"
+    FOREIGN KEY ("workspaceId")
+    REFERENCES "Workspace"("id")
+    ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

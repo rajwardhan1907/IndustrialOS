@@ -8,16 +8,7 @@ import { Text, Platform, AppState } from "react-native";
 import * as SecureStore from "expo-secure-store";
 import { theme } from "../../src/lib/theme";
 import featureEmitter from "../../src/lib/featureEvents";
-
-const FEATURES_KEY = "mobile_features";
-
-// All tabs enabled by default — matches web app behaviour
-const DEFAULT_FEATURES: Record<string, boolean> = {
-  Dashboard: true, Orders: true, Inventory: true, Shipments: true,
-  Notifications: true, Tickets: true,
-  Quotes: true, Customers: true, Suppliers: true, Returns: true, "Purchase Orders": true,
-  Invoicing: true, Analytics: true, Contracts: true,
-};
+import { FEATURES_KEY, DEFAULT_FEATURES } from "../../src/lib/constants";
 
 async function loadFeatures(): Promise<Record<string, boolean>> {
   try {

@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE "Ticket" (
+CREATE TABLE IF NOT EXISTS "Ticket" (
     "id" TEXT NOT NULL,
     "ticketNumber" TEXT NOT NULL,
     "title" TEXT NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE "Ticket" (
 );
 
 -- CreateTable
-CREATE TABLE "TicketComment" (
+CREATE TABLE IF NOT EXISTS "TicketComment" (
     "id" TEXT NOT NULL,
     "ticketId" TEXT NOT NULL,
     "authorId" TEXT NOT NULL DEFAULT '',
@@ -34,7 +34,15 @@ CREATE TABLE "TicketComment" (
 );
 
 -- AddForeignKey
-ALTER TABLE "Ticket" ADD CONSTRAINT "Ticket_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "Ticket" ADD CONSTRAINT "Ticket_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- AddForeignKey
-ALTER TABLE "TicketComment" ADD CONSTRAINT "TicketComment_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "Ticket"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "TicketComment" ADD CONSTRAINT "TicketComment_ticketId_fkey" FOREIGN KEY ("ticketId") REFERENCES "Ticket"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

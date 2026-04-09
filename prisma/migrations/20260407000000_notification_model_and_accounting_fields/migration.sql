@@ -5,7 +5,7 @@ ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "quickbooksConnected" BOOLEAN N
 ALTER TABLE "Workspace" ADD COLUMN IF NOT EXISTS "xeroConnected" BOOLEAN NOT NULL DEFAULT false;
 
 -- Create Notification table
-CREATE TABLE "Notification" (
+CREATE TABLE IF NOT EXISTS "Notification" (
     "id"          TEXT NOT NULL,
     "workspaceId" TEXT NOT NULL,
     "type"        TEXT NOT NULL DEFAULT 'info',
@@ -20,8 +20,12 @@ CREATE TABLE "Notification" (
 );
 
 -- Index for fast per-workspace lookups
-CREATE INDEX "Notification_workspaceId_idx" ON "Notification"("workspaceId");
+CREATE INDEX IF NOT EXISTS "Notification_workspaceId_idx" ON "Notification"("workspaceId");
 
 -- Foreign key
-ALTER TABLE "Notification" ADD CONSTRAINT "Notification_workspaceId_fkey"
-    FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "Notification" ADD CONSTRAINT "Notification_workspaceId_fkey"
+      FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

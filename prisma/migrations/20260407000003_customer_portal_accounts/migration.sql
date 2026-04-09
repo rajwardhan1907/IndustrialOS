@@ -1,5 +1,5 @@
 -- Customer portal: accounts and sessions tables
-CREATE TABLE "CustomerAccount" (
+CREATE TABLE IF NOT EXISTS "CustomerAccount" (
     "id"          TEXT NOT NULL,
     "email"       TEXT NOT NULL,
     "name"        TEXT NOT NULL DEFAULT '',
@@ -9,18 +9,22 @@ CREATE TABLE "CustomerAccount" (
     CONSTRAINT "CustomerAccount_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "CustomerAccount_email_workspaceId_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "CustomerAccount_email_workspaceId_key"
     ON "CustomerAccount"("email", "workspaceId");
 
-CREATE INDEX "CustomerAccount_workspaceId_idx"
+CREATE INDEX IF NOT EXISTS "CustomerAccount_workspaceId_idx"
     ON "CustomerAccount"("workspaceId");
 
-ALTER TABLE "CustomerAccount"
-    ADD CONSTRAINT "CustomerAccount_workspaceId_fkey"
-    FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
-    ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "CustomerAccount"
+      ADD CONSTRAINT "CustomerAccount_workspaceId_fkey"
+      FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
+      ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE TABLE "CustomerSession" (
+CREATE TABLE IF NOT EXISTS "CustomerSession" (
     "id"        TEXT NOT NULL,
     "token"     TEXT NOT NULL,
     "accountId" TEXT NOT NULL,
@@ -29,10 +33,14 @@ CREATE TABLE "CustomerSession" (
     CONSTRAINT "CustomerSession_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "CustomerSession_token_key"
+CREATE UNIQUE INDEX IF NOT EXISTS "CustomerSession_token_key"
     ON "CustomerSession"("token");
 
-ALTER TABLE "CustomerSession"
-    ADD CONSTRAINT "CustomerSession_accountId_fkey"
-    FOREIGN KEY ("accountId") REFERENCES "CustomerAccount"("id")
-    ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$
+BEGIN
+  ALTER TABLE "CustomerSession"
+      ADD CONSTRAINT "CustomerSession_accountId_fkey"
+      FOREIGN KEY ("accountId") REFERENCES "CustomerAccount"("id")
+      ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
