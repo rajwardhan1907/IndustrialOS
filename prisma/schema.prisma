@@ -20,6 +20,8 @@ model Workspace {
   whatsappStages      String   @default("Confirmed,Shipped,Delivered") // Phase 11
   quickbooksConnected Boolean  @default(false)   // Phase 17
   xeroConnected       Boolean  @default(false)   // Phase 17
+  returnAddress       String   @default("")      // Portal returns: ship-to address shown after approval
+  returnInstructions  String   @default("")      // Portal returns: instructions shown after approval
 
   users          User[]
   orders         Order[]

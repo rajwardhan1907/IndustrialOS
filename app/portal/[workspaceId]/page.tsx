@@ -496,12 +496,25 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
   const [quotes,   setQuotes]   = useState<Quote[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [returns,  setReturns]  = useState<Return[]>([]);
+  const [returnAddress,      setReturnAddress]      = useState("");
+  const [returnInstructions, setReturnInstructions] = useState("");
   const [loading,  setLoading]  = useState<Record<string, boolean>>({});
   const [payInv,   setPayInv]   = useState<Invoice | null>(null);
   const [showReturn, setShowReturn] = useState(false);
   const [showRequest, setShowRequest] = useState(false);
 
   const authHdr = { Authorization: `Bearer ${token}` };
+
+  // Normalize portal returns response — new shape is {returns, returnAddress, returnInstructions}, legacy was just an array
+  const applyReturnsResponse = (d: any) => {
+    if (Array.isArray(d)) {
+      setReturns(d);
+    } else if (d && Array.isArray(d.returns)) {
+      setReturns(d.returns);
+      setReturnAddress(d.returnAddress || "");
+      setReturnInstructions(d.returnInstructions || "");
+    }
+  };
 
   const load = useCallback(async (t: PortalTab) => {
     if (t === "home") {
@@ -516,7 +529,7 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
       if (Array.isArray(o)) setOrders(o);
       if (Array.isArray(q)) setQuotes(q);
       if (Array.isArray(i)) setInvoices(i);
-      if (Array.isArray(r)) setReturns(r);
+      applyReturnsResponse(r);
       setLoading(p => ({ ...p, home: false }));
     } else if (t === "orders") {
       setLoading(p => ({ ...p, orders: true }));
@@ -536,7 +549,7 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
     } else if (t === "returns") {
       setLoading(p => ({ ...p, returns: true }));
       const d = await fetch("/api/portal/returns", { headers: authHdr }).then(x => x.json());
-      if (Array.isArray(d)) setReturns(d);
+      applyReturnsResponse(d);
       setLoading(p => ({ ...p, returns: false }));
     }
   }, [token]);
@@ -826,6 +839,86 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
                 + New Return
               </button>
             </div>
+
+            {/* Approved returns: show ship-to address + instructions prominently */}
+            {returns.filter(r => r.status === "approved").map(r => (
+              <div key={`approved-${r.id}`} style={{
+                background: "#f0fdf4",
+                border: "2px solid #86efac",
+                borderRadius: 14,
+                padding: "20px 22px",
+                marginBottom: 16,
+                boxShadow: "0 2px 8px rgba(34,197,94,0.08)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                  <span style={{
+                    display: "inline-block", padding: "4px 10px", borderRadius: 6,
+                    background: "#16a34a", color: "#fff", fontSize: 11, fontWeight: 800,
+                    textTransform: "uppercase", letterSpacing: "0.05em",
+                  }}>
+                    ✓ Approved
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: "#15803d" }}>
+                    {r.rmaNumber}
+                  </span>
+                  <span style={{ fontSize: 12, color: "#16a34a" }}>
+                    • Please ship your return now
+                  </span>
+                </div>
+
+                <div style={{ fontSize: 13, color: "#14532d", lineHeight: 1.6, marginBottom: 14 }}>
+                  Your return request for <strong>{r.sku}</strong> (qty {r.qty}) has been approved.
+                  Please ship the product back to the address below. Make sure to write the RMA number{" "}
+                  <strong style={{ fontFamily: "monospace" }}>{r.rmaNumber}</strong> on the outside of the package.
+                </div>
+
+                {returnAddress ? (
+                  <div style={{
+                    background: "#fff",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: 10,
+                    padding: "14px 16px",
+                    marginBottom: returnInstructions ? 12 : 0,
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                      Ship to this address
+                    </div>
+                    <div style={{ fontSize: 13, color: "#14532d", whiteSpace: "pre-wrap", lineHeight: 1.5, fontWeight: 600 }}>
+                      {returnAddress}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{
+                    background: "#fef3c7",
+                    border: "1px solid #fde68a",
+                    borderRadius: 10,
+                    padding: "12px 14px",
+                    marginBottom: returnInstructions ? 12 : 0,
+                    fontSize: 12,
+                    color: "#92400e",
+                  }}>
+                    The return address has not been set up yet. Please contact the supplier to find out where to ship your return.
+                  </div>
+                )}
+
+                {returnInstructions && (
+                  <div style={{
+                    background: "#fff",
+                    border: "1px solid #bbf7d0",
+                    borderRadius: 10,
+                    padding: "14px 16px",
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+                      Instructions
+                    </div>
+                    <div style={{ fontSize: 13, color: "#14532d", whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+                      {returnInstructions}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+
             {loading.returns ? <p style={{ color: T.muted }}>Loading…</p> : returns.length === 0 ? (
               <div style={{ ...panelCard, textAlign: "center", padding: "40px 24px" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>↩️</div>

@@ -30,7 +30,7 @@ export async function GET(req: Request) {
   try {
     const token = req.headers.get('authorization')?.replace('Bearer ', '')
 
-    // Authenticated: return this customer's returns
+    // Authenticated: return this customer's returns + workspace return info
     if (token) {
       const session = await prisma.customerSession.findUnique({
         where: { token }, include: { account: true },
@@ -39,17 +39,27 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: 'Session expired' }, { status: 401, headers: CORS })
       }
       const acct = session.account
-      const returns = await prisma.return.findMany({
-        where: {
-          workspaceId: acct.workspaceId,
-          OR: [
-            { customerEmail: { mode: 'insensitive', equals: acct.email } },
-            { customer:      { mode: 'insensitive', equals: acct.name  } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
-      })
-      return NextResponse.json(returns, { headers: CORS })
+      const [returns, ws] = await Promise.all([
+        prisma.return.findMany({
+          where: {
+            workspaceId: acct.workspaceId,
+            OR: [
+              { customerEmail: { mode: 'insensitive', equals: acct.email } },
+              { customer:      { mode: 'insensitive', equals: acct.name  } },
+            ],
+          },
+          orderBy: { createdAt: 'desc' },
+        }),
+        prisma.workspace.findUnique({
+          where:  { id: acct.workspaceId },
+          select: { returnAddress: true, returnInstructions: true },
+        }),
+      ])
+      return NextResponse.json({
+        returns,
+        returnAddress:      ws?.returnAddress      || '',
+        returnInstructions: ws?.returnInstructions || '',
+      }, { headers: CORS })
     }
 
     // Anonymous: return workspace name for portal branding

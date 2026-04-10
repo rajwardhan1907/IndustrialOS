@@ -36,6 +36,8 @@ export async function PATCH(req: Request) {
         ...(body.currency            !== undefined && { currency:            body.currency            }),  // Phase 15
         ...(body.whatsappEnabled     !== undefined && { whatsappEnabled:     body.whatsappEnabled     }),  // Phase 11
         ...(body.whatsappStages      !== undefined && { whatsappStages:      body.whatsappStages      }),  // Phase 11
+        ...(body.returnAddress       !== undefined && { returnAddress:       body.returnAddress       }),  // Portal returns
+        ...(body.returnInstructions  !== undefined && { returnInstructions:  body.returnInstructions  }),  // Portal returns
       },
     })
     return NextResponse.json(workspace)

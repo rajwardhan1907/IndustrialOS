@@ -79,6 +79,26 @@ export default function Settings({ workspace, onUpdate }: {
   // ── Phase 15 — Currency ────────────────────────────────────────────────────
   const [currency, setCurrency] = useState(workspace.currency ?? "USD");
 
+  // ── Portal Returns — ship-to address + instructions ────────────────────────
+  const [returnAddress,      setReturnAddress]      = useState((workspace as any).returnAddress      ?? "");
+  const [returnInstructions, setReturnInstructions] = useState((workspace as any).returnInstructions ?? "");
+
+  // Load return address from DB on mount (since it lives in DB, not localStorage)
+  useEffect(() => {
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+    if (!wid) return;
+    fetch("/api/workspaces")
+      .then(r => r.json())
+      .then((list: any[]) => {
+        const w = list.find(x => x.id === wid);
+        if (w) {
+          if (w.returnAddress      !== undefined) setReturnAddress(w.returnAddress      || "");
+          if (w.returnInstructions !== undefined) setReturnInstructions(w.returnInstructions || "");
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // ── Phase 13 — AI feature toggles ────────────────────────────────────────
   const [aiNegotiation, setAiNegotiation] = useState(workspace.aiNegotiation  ?? false);
   const [aiReorder,     setAiReorder]     = useState(workspace.aiReorder       ?? false);
@@ -178,6 +198,8 @@ export default function Settings({ workspace, onUpdate }: {
           poApprovalThreshold: cleanThreshold,
           whatsappEnabled: waEnabled,        // Phase 11
           whatsappStages:  waStages.join(","),// Phase 11
+          returnAddress,                     // Portal returns
+          returnInstructions,                // Portal returns
         }),
       }).catch(() => {/* non-blocking */});
     }
@@ -364,6 +386,33 @@ export default function Settings({ workspace, onUpdate }: {
             💡 When a PO exceeds the threshold, it will show as <strong>Pending Approval</strong>. Admins will see Approve / Reject buttons. Rejected POs are cancelled with an optional note.
           </div>
         )}
+      </Section>
+
+      {/* ── Portal Returns ── */}
+      <Section title="↩️ Return Logistics (Customer Portal)">
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          When you approve a return request from the customer portal, the customer will see this address and instructions so they know where to ship the product back.
+        </p>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Return Ship-to Address</label>
+          <textarea
+            value={returnAddress}
+            onChange={e => setReturnAddress(e.target.value)}
+            placeholder="ACME Returns Dept&#10;123 Warehouse Rd&#10;Springfield, IL 62701&#10;United States"
+            rows={4}
+            style={{ width: "100%", padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
+          />
+        </div>
+        <div style={{ marginBottom: 4 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Return Instructions (optional)</label>
+          <textarea
+            value={returnInstructions}
+            onChange={e => setReturnInstructions(e.target.value)}
+            placeholder="Include the RMA number on the outside of the box. Use the carrier of your choice. Keep proof of shipment until refund is processed."
+            rows={3}
+            style={{ width: "100%", padding: "9px 11px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
+          />
+        </div>
       </Section>
 
       {/* ── Custom tabs ── */}
