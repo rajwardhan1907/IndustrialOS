@@ -77,22 +77,36 @@ async function fetchQuotesFromDb(): Promise<Quote[]> {
     const res = await fetch(`/api/quotes?workspaceId=${wid}`);
     if (!res.ok) return [];
     const data = await res.json();
-    return data.map((d: any) => ({
-      id:           d.id,
-      quoteNumber:  d.quoteNumber,
-      customer:     d.customer,
-      items:        Array.isArray(d.items) ? d.items : JSON.parse(d.items || "[]"),
-      subtotal:     d.subtotal,
-      discountAmt:  d.discountAmt,
-      tax:          d.tax,
-      total:        d.total,
-      validUntil:   d.validUntil,
-      paymentTerms: d.paymentTerms,
-      notes:        d.notes,
-      status:       d.status as Quote["status"],
-      prompt:       d.prompt,
-      createdAt:    typeof d.createdAt === "string" ? d.createdAt : new Date(d.createdAt).toISOString(),
-    }));
+    return data.map((d: any) => {
+      const rawItems = Array.isArray(d.items) ? d.items : JSON.parse(d.items || "[]");
+      // Recompute each item total = qty × unitPrice × (1 – discount%)
+      const items = rawItems.map((it: any) => ({
+        ...it,
+        qty:       Number(it.qty)       || 1,
+        unitPrice: Number(it.unitPrice) || 0,
+        discount:  Number(it.discount)  || 0,
+        total:     parseFloat(((Number(it.qty) || 1) * (Number(it.unitPrice) || 0) * (1 - (Number(it.discount) || 0) / 100)).toFixed(2)),
+      }));
+      // Recompute quote totals from items
+      const subtotal    = items.reduce((s: number, i: any) => s + i.qty * i.unitPrice, 0);
+      const discountAmt = items.reduce((s: number, i: any) => s + (i.qty * i.unitPrice * i.discount / 100), 0);
+      return {
+        id:           d.id,
+        quoteNumber:  d.quoteNumber,
+        customer:     d.customer,
+        items,
+        subtotal:     parseFloat(subtotal.toFixed(2)),
+        discountAmt:  parseFloat(discountAmt.toFixed(2)),
+        tax:          parseFloat(((subtotal - discountAmt) * 0.08).toFixed(2)),
+        total:        parseFloat((subtotal - discountAmt + (subtotal - discountAmt) * 0.08).toFixed(2)),
+        validUntil:   d.validUntil,
+        paymentTerms: d.paymentTerms,
+        notes:        d.notes,
+        status:       d.status as Quote["status"],
+        prompt:       d.prompt,
+        createdAt:    typeof d.createdAt === "string" ? d.createdAt : new Date(d.createdAt).toISOString(),
+      };
+    });
   } catch { return []; }
 }
 
@@ -221,15 +235,20 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string) => v
         return;
       }
       const q = data.quote;
-      let items: LineItem[] = (q.items || []).map((it: any, i: number) => ({
-        id:        it.id || `item-${i}`,
-        sku:       it.sku       || "SKU-TBD",
-        desc:      it.desc      || "Product",
-        qty:       Number(it.qty)       || 1,
-        unitPrice: Number(it.unitPrice) || 0,
-        discount:  Number(it.discount)  || 0,
-        total:     Number(it.total)     || 0,
-      }));
+      let items: LineItem[] = (q.items || []).map((it: any, i: number) => {
+        const qty       = Number(it.qty)       || 1;
+        const unitPrice = Number(it.unitPrice) || 0;
+        const discount  = Number(it.discount)  || 0;
+        return {
+          id:        it.id || `item-${i}`,
+          sku:       it.sku       || "SKU-TBD",
+          desc:      it.desc      || "Product",
+          qty,
+          unitPrice,
+          discount,
+          total:     parseFloat((qty * unitPrice * (1 - discount / 100)).toFixed(2)),
+        };
+      });
 
       // Phase 12: auto-apply pricing rules
       if (priceRules.length > 0) {
@@ -237,11 +256,15 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string) => v
         items = applyPricingRules(priceRules, customer, items);
         const summary = getRulesSummary(priceRules, customer, items);
         setRulesBanner(summary);
-        // Recalculate totals after rules
+      }
+
+      // Always recalculate each item's total and quote-level totals
+      items = items.map(i => ({ ...i, total: parseFloat((i.qty * i.unitPrice * (1 - i.discount / 100)).toFixed(2)) }));
+      {
         const subtotal    = items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
         const discountAmt = items.reduce((s, i) => s + (i.qty * i.unitPrice * i.discount / 100), 0);
-        q.subtotal    = subtotal;
-        q.discountAmt = discountAmt;
+        q.subtotal    = parseFloat(subtotal.toFixed(2));
+        q.discountAmt = parseFloat(discountAmt.toFixed(2));
         q.tax         = parseFloat(((subtotal - discountAmt) * 0.08).toFixed(2));
         q.total       = parseFloat((subtotal - discountAmt + q.tax).toFixed(2));
       }

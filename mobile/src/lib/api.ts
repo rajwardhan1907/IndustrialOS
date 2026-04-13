@@ -1,13 +1,14 @@
 // mobile/src/lib/api.ts
 // All API calls go through here. BASE_URL points to the deployed web app.
 // On dev: set EXPO_PUBLIC_API_URL=http://localhost:3000 in .env.local
-// On prod: set EXPO_PUBLIC_API_URL=https://industrial-os.vercel.app
+// On prod: set EXPO_PUBLIC_API_URL=https://industrial-os-ort3.vercel.app
 
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
-export const BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? "https://industrial-os.vercel.app";
+const _raw = process.env.EXPO_PUBLIC_API_URL ?? "https://industrial-os-ort3.vercel.app";
+// Strip trailing slash to avoid double-slash URLs like .app//api/orders
+export const BASE_URL = _raw.endsWith("/") ? _raw.slice(0, -1) : _raw;
 
 // ── Storage abstraction (SecureStore on native, localStorage on web) ──────────
 const storage = {

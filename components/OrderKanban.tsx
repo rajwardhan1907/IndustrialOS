@@ -165,11 +165,15 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string)
   const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null);
 
   // Load from localStorage immediately (fast), then refresh from DB
+  // Also poll every 30s so portal orders appear without manual reload
   useEffect(() => {
     setOrders(loadOrders()); // instant — from cache
-    fetchOrdersFromDb().then(dbOrders => {
-      if (dbOrders.length > 0) setOrders(dbOrders); // update with real DB data
+    const refresh = () => fetchOrdersFromDb().then(dbOrders => {
+      if (dbOrders.length > 0) setOrders(dbOrders);
     });
+    refresh();
+    const interval = setInterval(refresh, 30_000);
+    return () => clearInterval(interval);
   }, []);
 
   // ── Advance order to next stage ──────────────────────────────────────────
