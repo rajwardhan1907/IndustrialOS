@@ -36,7 +36,7 @@ export async function POST(req: Request) {
     const token   = Buffer.from(payload).toString("base64");
 
     return NextResponse.json(
-      { token, userId: user.id, workspaceId: user.workspaceId, role: user.role, name: user.name },
+      { token, userId: user.id, workspaceId: user.workspaceId, role: user.role, name: user.name, email: user.email },
       { headers: CORS }
     );
   } catch (err: any) {

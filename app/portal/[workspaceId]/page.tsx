@@ -262,8 +262,8 @@ function NewReturnModal({ workspaceId, account, token, onClose, onSaved }: {
 }
 
 // ── New Request (Quote Request) Modal ─────────────────────────────────────────
-function NewRequestModal({ workspaceId, account, onClose, onSaved }: {
-  workspaceId: string; account: Account;
+function NewRequestModal({ workspaceId, account, token, onClose, onSaved }: {
+  workspaceId: string; account: Account; token: string;
   onClose: () => void; onSaved: () => void;
 }) {
   const [sku,   setSku]   = useState("");
@@ -277,17 +277,13 @@ function NewRequestModal({ workspaceId, account, onClose, onSaved }: {
     if (!sku.trim()) { setErr("Please describe what you need."); return; }
     setBusy(true); setErr("");
     try {
-      const res = await fetch("/api/quotes", {
+      const res = await fetch("/api/portal/orders", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body: JSON.stringify({
-          workspaceId, customer: account.name,
-          items: [{ sku: sku.trim(), qty: parseInt(qty)||1, description: notes }],
-          subtotal: 0, discountAmt: 0, tax: 0, total: 0,
-          validUntil: "", paymentTerms: "Net 30",
-          notes: `Customer portal request — ${notes}`.trim(),
-          status: "draft",
-          prompt: `Requested by customer ${account.name} (${account.email}) via portal`,
+          sku: sku.trim(),
+          qty: parseInt(qty) || 1,
+          notes: notes.trim() || `Portal request from ${account.name}`,
         }),
       });
       if (!res.ok) { const d = await res.json(); setErr(d.error || "Failed."); return; }
@@ -605,9 +601,9 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
           onSaved={r => { setReturns(prev => [r, ...prev]); setShowReturn(false); }} />
       )}
       {showRequest && (
-        <NewRequestModal workspaceId={workspaceId} account={account}
+        <NewRequestModal workspaceId={workspaceId} account={account} token={token}
           onClose={() => setShowRequest(false)}
-          onSaved={() => load("quotes")} />
+          onSaved={() => load("orders")} />
       )}
 
       {/* Top bar */}

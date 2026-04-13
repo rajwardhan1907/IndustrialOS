@@ -46,7 +46,24 @@ export async function GET(req: Request) {
       orderBy: { createdAt: 'desc' },
     })
 
-    return NextResponse.json(customers, { headers: CORS })
+    // Compute live totalSpend from the Orders table (sum of all order values per customer)
+    const spendAgg = await prisma.order.groupBy({
+      by: ['customer'],
+      where: { workspaceId },
+      _sum: { value: true },
+    })
+    // Build a lookup: lowercased customer name → total spend
+    const spendMap: Record<string, number> = {}
+    for (const row of spendAgg) {
+      spendMap[row.customer.toLowerCase()] = row._sum.value ?? 0
+    }
+
+    const enriched = customers.map(c => ({
+      ...c,
+      totalSpend: spendMap[c.name.toLowerCase()] ?? c.totalSpend,
+    }))
+
+    return NextResponse.json(enriched, { headers: CORS })
   } catch (err: any) {
     console.error('Customers GET error:', err)
     return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
