@@ -58,6 +58,7 @@ interface SectionUploaderProps {
   entityName:       string;
   requiredFields:   string[];
   fieldAliases:     Record<string, string>;
+  numericFields:    string[];           // fields that must be coerced to numbers before POST
   batchSize:        number;
   apiEndpoint:      string;
   templateCsv:      string;
@@ -246,7 +247,7 @@ const SUPPLIER_TEMPLATE =
 
 // ── SectionUploader ───────────────────────────────────────────────────────────
 function SectionUploader({
-  entityName, requiredFields, fieldAliases, batchSize,
+  entityName, requiredFields, fieldAliases, numericFields, batchSize,
   apiEndpoint, templateCsv, templateFileName, onSuccess,
 }: SectionUploaderProps) {
   const [state,    setState]    = useState<GenericUploadState | null>(null);
@@ -322,10 +323,18 @@ function SectionUploader({
       await Promise.all(chunk.map(async (row, idx) => {
         const rowNum = offset + idx + 2; // +2: 1-indexed + header row
         try {
+          // Coerce numeric fields from CSV strings to JS numbers
+          const payload: Record<string, any> = { ...row, workspaceId };
+          for (const field of numericFields) {
+            if (payload[field] !== undefined && payload[field] !== "") {
+              const n = Number(payload[field]);
+              payload[field] = isNaN(n) ? 0 : n;
+            }
+          }
           const res = await fetch(apiEndpoint, {
             method:  "POST",
             headers: { "Content-Type": "application/json" },
-            body:    JSON.stringify({ ...row, workspaceId }),
+            body:    JSON.stringify(payload),
           });
           if (res.ok) {
             inserted++;
@@ -942,6 +951,7 @@ export default function Pipeline() {
               entityName="Customers"
               requiredFields={["name"]}
               fieldAliases={CUSTOMER_ALIASES}
+              numericFields={["creditLimit", "balanceDue", "totalSpend"]}
               batchSize={50}
               apiEndpoint="/api/customers"
               templateCsv={CUSTOMER_TEMPLATE}
@@ -961,6 +971,7 @@ export default function Pipeline() {
               entityName="Suppliers"
               requiredFields={["name"]}
               fieldAliases={SUPPLIER_ALIASES}
+              numericFields={["leadTimeDays", "rating"]}
               batchSize={50}
               apiEndpoint="/api/suppliers"
               templateCsv={SUPPLIER_TEMPLATE}
