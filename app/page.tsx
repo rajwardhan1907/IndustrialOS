@@ -48,7 +48,7 @@ const MODULE_TABS: Record<ModuleId, { label: string; icon: any }> = {
   suppliers: { label: "Suppliers",     icon: Factory         },
   analytics: { label: "Analytics",     icon: BarChart2       },
   crm:       { label: "CRM",           icon: GitMerge        },
-  pipeline:  { label: "SKU Pipeline",  icon: Upload          },
+  pipeline:  { label: "Data Import",   icon: Upload          },
   health:    { label: "System Health", icon: Heart           },
   returns:   { label: "Returns & RMA", icon: RotateCcw       },
   contracts: { label: "Contracts",     icon: ClipboardList   },
