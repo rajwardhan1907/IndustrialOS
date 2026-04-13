@@ -17,7 +17,7 @@ interface Order {
   value: number; stage: string; priority: string; createdAt: string;
 }
 
-const STAGES = ["Placed", "Confirmed", "Picking", "Packed", "Shipped", "Delivered"];
+const STAGES = ["Placed", "Confirmed", "Picked", "Shipped", "Delivered"];
 const PRIORITIES = ["LOW", "MED", "HIGH"];
 
 const priorityColor = (p: string) =>

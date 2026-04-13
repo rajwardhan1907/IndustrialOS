@@ -102,6 +102,10 @@ export async function PATCH(req: Request) {
           ...(body.stage    !== undefined && { stage:    body.stage    }),
           ...(body.priority !== undefined && { priority: body.priority }),
           ...(body.notes    !== undefined && { notes:    body.notes    }),
+          ...(body.value    !== undefined && { value:    Number(body.value) }),
+          ...(body.sku      !== undefined && { sku:      body.sku      }),
+          ...(body.items    !== undefined && { items:    Number(body.items) }),
+          ...(body.customer !== undefined && { customer: body.customer }),
         },
       })
 

@@ -369,8 +369,32 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string)
                       <div style={{ fontSize: 11, color: C.subtle, marginBottom: 4 }}>
                         {o.items} unit{o.items !== 1 ? "s" : ""} · {o.sku}
                       </div>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: C.green, marginBottom: 6 }}>
-                        {fmtMoney(o.value)}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: C.green }}>
+                          {fmtMoney(o.value)}
+                        </span>
+                        {!isViewer && (
+                          <button
+                            title="Set order value / price"
+                            onClick={() => {
+                              const raw = window.prompt("Set order value ($):", String(o.value));
+                              if (raw === null) return;
+                              const v = parseFloat(raw.replace(/[^0-9.]/g, ""));
+                              if (isNaN(v)) return;
+                              setOrders(prev => {
+                                const updated = prev.map(x => x.id === o.id ? { ...x, value: v } : x);
+                                saveOrders(updated);
+                                return updated;
+                              });
+                              updateOrderInDb(o.id, { value: v } as any);
+                            }}
+                            style={{
+                              padding: "2px 6px", fontSize: 10, fontWeight: 700, borderRadius: 5,
+                              border: `1px solid ${C.border}`, background: C.bg,
+                              color: C.muted, cursor: "pointer",
+                            }}
+                          >✏️</button>
+                        )}
                       </div>
                       <div style={{ fontSize: 10, color: C.subtle, marginBottom: 8 }}>
                         {src.emoji} {src.label} · {o.time}
