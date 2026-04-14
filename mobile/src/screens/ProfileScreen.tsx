@@ -62,10 +62,24 @@ export default function ProfileScreen({ onLogout }: Props) {
     });
   };
 
+  const doLogout = async () => {
+    try { await clearSession(); } catch {}
+    onLogout();
+  };
+
   const handleLogout = () => {
+    // Alert.alert buttons don't fire on web — use window.confirm as fallback
+    if (Platform.OS === "web") {
+      // eslint-disable-next-line no-alert
+      const ok = typeof window !== "undefined" && window.confirm
+        ? window.confirm("Are you sure you want to log out?")
+        : true;
+      if (ok) doLogout();
+      return;
+    }
     Alert.alert("Log Out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Log Out", style: "destructive", onPress: () => { clearSession(); onLogout(); } },
+      { text: "Log Out", style: "destructive", onPress: doLogout },
     ]);
   };
 
