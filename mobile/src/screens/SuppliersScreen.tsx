@@ -17,10 +17,60 @@ interface Supplier {
 
 const EMPTY_FORM = { name: "", contactName: "", email: "", phone: "", country: "", leadTime: "", rating: "3" };
 
+type FormState = typeof EMPTY_FORM;
+
 function renderStars(rating: number | undefined) {
   if (!rating) return "—";
   const stars = Math.round(rating);
   return "★".repeat(stars) + "☆".repeat(5 - stars);
+}
+
+// Keep this OUTSIDE SuppliersScreen — defining it inside re-mounts TextInputs
+// on every keystroke and the user loses focus after each character.
+function SupplierForm({
+  form, setForm, submitting, onSubmit, submitLabel,
+}: {
+  form: FormState;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  submitting: boolean;
+  onSubmit: () => void;
+  submitLabel: string;
+}) {
+  return (
+    <>
+      <Text style={s.label}>NAME *</Text>
+      <TextInput style={styles.input} value={form.name} onChangeText={v => setForm(p => ({ ...p, name: v }))}
+        placeholder="Supplier company name" placeholderTextColor={theme.subtle} />
+      <Text style={s.label}>CONTACT NAME</Text>
+      <TextInput style={styles.input} value={form.contactName} onChangeText={v => setForm(p => ({ ...p, contactName: v }))}
+        placeholder="Account manager" placeholderTextColor={theme.subtle} />
+      <Text style={s.label}>EMAIL</Text>
+      <TextInput style={styles.input} value={form.email} onChangeText={v => setForm(p => ({ ...p, email: v }))}
+        placeholder="email@supplier.com" placeholderTextColor={theme.subtle} keyboardType="email-address" />
+      <Text style={s.label}>PHONE</Text>
+      <TextInput style={styles.input} value={form.phone} onChangeText={v => setForm(p => ({ ...p, phone: v }))}
+        placeholder="+1 555 000 0000" placeholderTextColor={theme.subtle} keyboardType="phone-pad" />
+      <Text style={s.label}>COUNTRY</Text>
+      <TextInput style={styles.input} value={form.country} onChangeText={v => setForm(p => ({ ...p, country: v }))}
+        placeholder="e.g. Germany" placeholderTextColor={theme.subtle} />
+      <Text style={s.label}>LEAD TIME (DAYS)</Text>
+      <TextInput style={styles.input} value={form.leadTime} onChangeText={v => setForm(p => ({ ...p, leadTime: v }))}
+        placeholder="e.g. 14" placeholderTextColor={theme.subtle} keyboardType="number-pad" />
+      <Text style={s.label}>RATING (1–5)</Text>
+      <View style={{ flexDirection: "row", gap: 8, marginBottom: 20, marginTop: 4 }}>
+        {["1","2","3","4","5"].map(r => (
+          <TouchableOpacity key={r} onPress={() => setForm(p => ({ ...p, rating: r }))}
+            style={[styles.ratingBtn, form.rating === r && { backgroundColor: theme.amber, borderColor: theme.amber }]}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: form.rating === r ? "#fff" : theme.muted }}>{"★".repeat(parseInt(r, 10))}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <TouchableOpacity onPress={onSubmit} disabled={submitting}
+        style={{ backgroundColor: theme.blue, borderRadius: 10, padding: 14, alignItems: "center", opacity: submitting ? 0.6 : 1 }}>
+        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{submitting ? "Saving…" : submitLabel}</Text>
+      </TouchableOpacity>
+    </>
+  );
 }
 
 export default function SuppliersScreen() {
@@ -102,41 +152,6 @@ export default function SuppliersScreen() {
     finally { setSubmitting(false); }
   };
 
-  const SupplierForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
-    <>
-      <Text style={s.label}>NAME *</Text>
-      <TextInput style={styles.input} value={form.name} onChangeText={v => setForm(p => ({ ...p, name: v }))}
-        placeholder="Supplier company name" placeholderTextColor={theme.subtle} />
-      <Text style={s.label}>CONTACT NAME</Text>
-      <TextInput style={styles.input} value={form.contactName} onChangeText={v => setForm(p => ({ ...p, contactName: v }))}
-        placeholder="Account manager" placeholderTextColor={theme.subtle} />
-      <Text style={s.label}>EMAIL</Text>
-      <TextInput style={styles.input} value={form.email} onChangeText={v => setForm(p => ({ ...p, email: v }))}
-        placeholder="email@supplier.com" placeholderTextColor={theme.subtle} keyboardType="email-address" />
-      <Text style={s.label}>PHONE</Text>
-      <TextInput style={styles.input} value={form.phone} onChangeText={v => setForm(p => ({ ...p, phone: v }))}
-        placeholder="+1 555 000 0000" placeholderTextColor={theme.subtle} keyboardType="phone-pad" />
-      <Text style={s.label}>COUNTRY</Text>
-      <TextInput style={styles.input} value={form.country} onChangeText={v => setForm(p => ({ ...p, country: v }))}
-        placeholder="e.g. Germany" placeholderTextColor={theme.subtle} />
-      <Text style={s.label}>LEAD TIME (DAYS)</Text>
-      <TextInput style={styles.input} value={form.leadTime} onChangeText={v => setForm(p => ({ ...p, leadTime: v }))}
-        placeholder="e.g. 14" placeholderTextColor={theme.subtle} keyboardType="number-pad" />
-      <Text style={s.label}>RATING (1–5)</Text>
-      <View style={{ flexDirection: "row", gap: 8, marginBottom: 20, marginTop: 4 }}>
-        {["1","2","3","4","5"].map(r => (
-          <TouchableOpacity key={r} onPress={() => setForm(p => ({ ...p, rating: r }))}
-            style={[styles.ratingBtn, form.rating === r && { backgroundColor: theme.amber, borderColor: theme.amber }]}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: form.rating === r ? "#fff" : theme.muted }}>{"★".repeat(parseInt(r, 10))}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <TouchableOpacity onPress={onSubmit} disabled={submitting}
-        style={{ backgroundColor: theme.blue, borderRadius: 10, padding: 14, alignItems: "center", opacity: submitting ? 0.6 : 1 }}>
-        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{submitting ? "Saving…" : submitLabel}</Text>
-      </TouchableOpacity>
-    </>
-  );
 
   if (loading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}><ActivityIndicator size="large" color={theme.blue} /></View>;
 
@@ -184,7 +199,7 @@ export default function SuppliersScreen() {
                     <Text style={{ fontSize: 20, color: theme.muted }}>✕</Text>
                   </TouchableOpacity>
                 </View>
-                <SupplierForm onSubmit={submitEdit} submitLabel="Save Changes" />
+                <SupplierForm form={form} setForm={setForm} submitting={submitting} onSubmit={submitEdit} submitLabel="Save Changes" />
               </View>
             </ScrollView>
           </View>
@@ -230,7 +245,7 @@ export default function SuppliersScreen() {
                   <Text style={{ fontSize: 20, color: theme.muted }}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <SupplierForm onSubmit={submitCreate} submitLabel="Add Supplier" />
+              <SupplierForm form={form} setForm={setForm} submitting={submitting} onSubmit={submitCreate} submitLabel="Add Supplier" />
             </View>
           </ScrollView>
         </View>

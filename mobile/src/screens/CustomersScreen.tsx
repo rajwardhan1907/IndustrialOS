@@ -17,6 +17,48 @@ interface Customer {
 
 const EMPTY_FORM = { name: "", contactName: "", email: "", phone: "", country: "", creditLimit: "" };
 
+type FormState = typeof EMPTY_FORM;
+
+// IMPORTANT: keep this component OUTSIDE CustomersScreen. If it's defined inside
+// the parent, every keystroke re-creates the component, unmounts TextInputs and
+// focus is lost after each character.
+function CustomerForm({
+  form, setForm, submitting, onSubmit, submitLabel,
+}: {
+  form: FormState;
+  setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  submitting: boolean;
+  onSubmit: () => void;
+  submitLabel: string;
+}) {
+  return (
+    <>
+      <Text style={s.label}>NAME *</Text>
+      <TextInput style={styles.input} value={form.name} onChangeText={v => setForm(p => ({ ...p, name: v }))}
+        placeholder="Company or person name" placeholderTextColor={theme.subtle} />
+      <Text style={s.label}>CONTACT NAME</Text>
+      <TextInput style={styles.input} value={form.contactName} onChangeText={v => setForm(p => ({ ...p, contactName: v }))}
+        placeholder="Primary contact" placeholderTextColor={theme.subtle} />
+      <Text style={s.label}>EMAIL</Text>
+      <TextInput style={styles.input} value={form.email} onChangeText={v => setForm(p => ({ ...p, email: v }))}
+        placeholder="email@example.com" placeholderTextColor={theme.subtle} keyboardType="email-address" />
+      <Text style={s.label}>PHONE</Text>
+      <TextInput style={styles.input} value={form.phone} onChangeText={v => setForm(p => ({ ...p, phone: v }))}
+        placeholder="+1 555 000 0000" placeholderTextColor={theme.subtle} keyboardType="phone-pad" />
+      <Text style={s.label}>COUNTRY</Text>
+      <TextInput style={styles.input} value={form.country} onChangeText={v => setForm(p => ({ ...p, country: v }))}
+        placeholder="e.g. United States" placeholderTextColor={theme.subtle} />
+      <Text style={s.label}>CREDIT LIMIT ($)</Text>
+      <TextInput style={styles.input} value={form.creditLimit} onChangeText={v => setForm(p => ({ ...p, creditLimit: v }))}
+        placeholder="0" placeholderTextColor={theme.subtle} keyboardType="numeric" />
+      <TouchableOpacity onPress={onSubmit} disabled={submitting}
+        style={{ backgroundColor: theme.blue, borderRadius: 10, padding: 14, alignItems: "center", opacity: submitting ? 0.6 : 1 }}>
+        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{submitting ? "Saving…" : submitLabel}</Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+
 export default function CustomersScreen() {
   const [customers,  setCustomers]  = useState<Customer[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -93,33 +135,6 @@ export default function CustomersScreen() {
     finally { setSubmitting(false); }
   };
 
-  const CustomerForm = ({ onSubmit, submitLabel }: { onSubmit: () => void; submitLabel: string }) => (
-    <>
-      <Text style={s.label}>NAME *</Text>
-      <TextInput style={styles.input} value={form.name} onChangeText={v => setForm(p => ({ ...p, name: v }))}
-        placeholder="Company or person name" placeholderTextColor={theme.subtle} />
-      <Text style={s.label}>CONTACT NAME</Text>
-      <TextInput style={styles.input} value={form.contactName} onChangeText={v => setForm(p => ({ ...p, contactName: v }))}
-        placeholder="Primary contact" placeholderTextColor={theme.subtle} />
-      <Text style={s.label}>EMAIL</Text>
-      <TextInput style={styles.input} value={form.email} onChangeText={v => setForm(p => ({ ...p, email: v }))}
-        placeholder="email@example.com" placeholderTextColor={theme.subtle} keyboardType="email-address" />
-      <Text style={s.label}>PHONE</Text>
-      <TextInput style={styles.input} value={form.phone} onChangeText={v => setForm(p => ({ ...p, phone: v }))}
-        placeholder="+1 555 000 0000" placeholderTextColor={theme.subtle} keyboardType="phone-pad" />
-      <Text style={s.label}>COUNTRY</Text>
-      <TextInput style={styles.input} value={form.country} onChangeText={v => setForm(p => ({ ...p, country: v }))}
-        placeholder="e.g. United States" placeholderTextColor={theme.subtle} />
-      <Text style={s.label}>CREDIT LIMIT ($)</Text>
-      <TextInput style={styles.input} value={form.creditLimit} onChangeText={v => setForm(p => ({ ...p, creditLimit: v }))}
-        placeholder="0" placeholderTextColor={theme.subtle} keyboardType="numeric" />
-      <TouchableOpacity onPress={onSubmit} disabled={submitting}
-        style={{ backgroundColor: theme.blue, borderRadius: 10, padding: 14, alignItems: "center", opacity: submitting ? 0.6 : 1 }}>
-        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{submitting ? "Saving…" : submitLabel}</Text>
-      </TouchableOpacity>
-    </>
-  );
-
   if (loading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}><ActivityIndicator size="large" color={theme.blue} /></View>;
 
   if (selected) {
@@ -176,7 +191,7 @@ export default function CustomersScreen() {
                     <Text style={{ fontSize: 20, color: theme.muted }}>✕</Text>
                   </TouchableOpacity>
                 </View>
-                <CustomerForm onSubmit={submitEdit} submitLabel="Save Changes" />
+                <CustomerForm form={form} setForm={setForm} submitting={submitting} onSubmit={submitEdit} submitLabel="Save Changes" />
               </View>
             </ScrollView>
           </View>
@@ -228,7 +243,7 @@ export default function CustomersScreen() {
                   <Text style={{ fontSize: 20, color: theme.muted }}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <CustomerForm onSubmit={submitCreate} submitLabel="Add Customer" />
+              <CustomerForm form={form} setForm={setForm} submitting={submitting} onSubmit={submitCreate} submitLabel="Add Customer" />
             </View>
           </ScrollView>
         </View>
