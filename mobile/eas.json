@@ -18,4 +18,9 @@
   "submit": {
     "production": {}
   }
+  "preview": {
+  "distribution": "internal",
+  "env": {
+    "EXPO_PUBLIC_API_URL": "https://industrial-os-ort3.vercel.app"
+  }
 }
