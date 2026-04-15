@@ -1,13 +1,8 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
-const getAllowedOrigins = () => {
-  const allowed = process.env.ALLOWED_ORIGINS || "https://industrial-os.vercel.app";
-  return allowed;
-};
-
 const CORS = {
-  "Access-Control-Allow-Origin":  getAllowedOrigins(),
+  "Access-Control-Allow-Origin":  "*",
   "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };

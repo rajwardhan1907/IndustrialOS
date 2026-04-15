@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+const CORS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS })
+}
+
 export interface BulkRow {
   sku:          string;
   name:         string;
@@ -28,10 +38,10 @@ export async function POST(req: Request) {
     };
 
     if (!workspaceId) {
-      return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
+      return NextResponse.json({ error: "workspaceId is required" }, { status: 400, headers: CORS });
     }
     if (!Array.isArray(rows) || rows.length === 0) {
-      return NextResponse.json({ error: "rows array is required" }, { status: 400 });
+      return NextResponse.json({ error: "rows array is required" }, { status: 400, headers: CORS });
     }
 
     let inserted = 0;
@@ -96,9 +106,9 @@ export async function POST(req: Request) {
       updated,
       errors:       errorDetails.length,
       errorDetails: errorDetails.slice(0, 50), // cap to 50
-    });
+    }, { headers: CORS });
   } catch (err: any) {
     console.error("Bulk inventory POST error:", err);
-    return NextResponse.json({ error: err.message ?? "Unknown error" }, { status: 500 });
+    return NextResponse.json({ error: err.message ?? "Unknown error" }, { status: 500, headers: CORS });
   }
 }

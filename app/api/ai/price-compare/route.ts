@@ -4,13 +4,23 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+const CORS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS })
+}
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const workspaceId = searchParams.get("workspaceId");
     const sku         = searchParams.get("sku");
     if (!workspaceId || !sku) {
-      return NextResponse.json({ error: "workspaceId and sku are required" }, { status: 400 });
+      return NextResponse.json({ error: "workspaceId and sku are required" }, { status: 400, headers: CORS });
     }
 
     // Fetch all POs for this workspace that contain the given SKU
@@ -57,8 +67,8 @@ export async function GET(req: Request) {
       return { supplier, latestPrice: latest.unitPrice, avgPrice: parseFloat(avgPrice.toFixed(2)), lowestPrice, lastOrderDate: latest.date, orderCount: entries.length };
     }).sort((a, b) => a.latestPrice - b.latestPrice);
 
-    return NextResponse.json({ sku, comparisons: summary });
+    return NextResponse.json({ sku, comparisons: summary }, { headers: CORS });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message ?? "Unknown error" }, { status: 500 });
+    return NextResponse.json({ error: err.message ?? "Unknown error" }, { status: 500, headers: CORS });
   }
 }

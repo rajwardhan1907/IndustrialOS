@@ -1,12 +1,22 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+const CORS = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS })
+}
+
 // GET all workspaces
 export async function GET() {
   const workspaces = await prisma.workspace.findMany({
     orderBy: { createdAt: 'desc' },
   })
-  return NextResponse.json(workspaces)
+  return NextResponse.json(workspaces, { headers: CORS })
 }
 
 // CREATE a new workspace
@@ -18,7 +28,7 @@ export async function POST(req: Request) {
       industry: body.industry,
     },
   })
-  return NextResponse.json(workspace)
+  return NextResponse.json(workspace, { headers: CORS })
 }
 
 // Phase 16 + 15: UPDATE workspace settings
@@ -26,7 +36,7 @@ export async function PATCH(req: Request) {
   try {
     const body = await req.json()
     if (!body.id) {
-      return NextResponse.json({ error: 'id is required' }, { status: 400 })
+      return NextResponse.json({ error: 'id is required' }, { status: 400, headers: CORS })
     }
     const workspace = await prisma.workspace.update({
       where: { id: body.id },
@@ -40,9 +50,9 @@ export async function PATCH(req: Request) {
         ...(body.returnInstructions  !== undefined && { returnInstructions:  body.returnInstructions  }),  // Portal returns
       },
     })
-    return NextResponse.json(workspace)
+    return NextResponse.json(workspace, { headers: CORS })
   } catch (err: any) {
     console.error('Workspaces PATCH error:', err)
-    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500 })
+    return NextResponse.json({ error: err.message ?? 'Unknown error' }, { status: 500, headers: CORS })
   }
 }
