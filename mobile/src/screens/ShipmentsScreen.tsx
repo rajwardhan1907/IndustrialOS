@@ -197,11 +197,14 @@ export default function ShipmentsScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   {STATUS_FLOW.map(st => {
-                    const b      = statusBadge(st);
-                    const active = selected.status === st;
+                    const b       = statusBadge(st);
+                    const curIdx  = STATUS_FLOW.indexOf(selected.status);
+                    const stIdx   = STATUS_FLOW.indexOf(st);
+                    const active  = selected.status === st;
+                    const canMove = stIdx > curIdx;
                     return (
-                      <TouchableOpacity key={st} onPress={() => !active && advanceStatus(selected, st)}
-                        style={[styles.stageBtn, active && { backgroundColor: theme.blue, borderColor: theme.blue }]}>
+                      <TouchableOpacity key={st} onPress={() => canMove && advanceStatus(selected, st)}
+                        style={[styles.stageBtn, active && { backgroundColor: theme.blue, borderColor: theme.blue }, !canMove && !active && { opacity: 0.35 }]}>
                         <Text style={[{ fontSize: 11, fontWeight: "700", color: theme.muted }, active && { color: "#fff" }]}>{b.label}</Text>
                       </TouchableOpacity>
                     );

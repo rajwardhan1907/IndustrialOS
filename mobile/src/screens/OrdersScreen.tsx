@@ -42,6 +42,7 @@ export default function OrdersScreen() {
   const [newCustomer, setNewCustomer] = useState("");
   const [newSku,      setNewSku]      = useState("");
   const [newQty,      setNewQty]      = useState("");
+  const [newValue,    setNewValue]    = useState("");
   const [newPriority, setNewPriority] = useState("MED");
   const [creating,    setCreating]    = useState(false);
 
@@ -95,11 +96,12 @@ export default function OrdersScreen() {
       if (!workspaceId) { setSessionExpired(true); return; }
       const order = await createOrder({
         workspaceId, customer: newCustomer.trim(), sku: newSku.trim(),
-        items: qty, priority: newPriority, stage: "Placed",
+        items: qty, value: parseFloat(newValue) || 0,
+        priority: newPriority, stage: "Placed",
       });
       setOrders(prev => [order, ...prev]);
       setShowNew(false);
-      setNewCustomer(""); setNewSku(""); setNewQty(""); setNewPriority("MED");
+      setNewCustomer(""); setNewSku(""); setNewQty(""); setNewValue(""); setNewPriority("MED");
       Alert.alert("Created", `Order for ${order.customer} created.`);
     } catch (e: any) { Alert.alert("Error", e.message); }
     finally { setCreating(false); }
@@ -193,10 +195,13 @@ export default function OrdersScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   {STAGES.map(st => {
-                    const active = selected.stage === st;
+                    const curIdx = STAGES.indexOf(selected.stage);
+                    const stIdx  = STAGES.indexOf(st);
+                    const active  = selected.stage === st;
+                    const canMove = stIdx > curIdx;
                     return (
-                      <TouchableOpacity key={st} onPress={() => !active && advanceStage(selected, st)}
-                        style={[styles.stageBtn, active && { backgroundColor: theme.blue, borderColor: theme.blue }]}>
+                      <TouchableOpacity key={st} onPress={() => canMove && advanceStage(selected, st)}
+                        style={[styles.stageBtn, active && { backgroundColor: theme.blue, borderColor: theme.blue }, !canMove && !active && { opacity: 0.35 }]}>
                         <Text style={[{ fontSize: 12, fontWeight: "700", color: theme.muted }, active && { color: "#fff" }]}>{st}</Text>
                       </TouchableOpacity>
                     );
@@ -233,6 +238,10 @@ export default function OrdersScreen() {
             <TextInput value={newQty} onChangeText={setNewQty}
               placeholder="0" placeholderTextColor={theme.subtle}
               keyboardType="number-pad" style={styles.input} />
+            <Text style={s.label}>ORDER VALUE ($)</Text>
+            <TextInput value={newValue} onChangeText={setNewValue}
+              placeholder="0.00" placeholderTextColor={theme.subtle}
+              keyboardType="decimal-pad" style={styles.input} />
             <Text style={s.label}>PRIORITY</Text>
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 20, marginTop: 4 }}>
               {PRIORITIES.map(p => (

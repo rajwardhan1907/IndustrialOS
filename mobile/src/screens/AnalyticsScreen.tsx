@@ -34,7 +34,7 @@ export default function AnalyticsScreen() {
         { label: "Total SKUs",     value: m.skus ?? 0,              color: theme.amber,  emoji: "📦" },
         { label: "Processing Queue", value: m.queue ?? 0,           color: theme.purple, emoji: "⏳" },
         { label: "Orders/Month",   value: m.opm ?? 0,               color: theme.blue,   emoji: "📊" },
-        { label: "Sync Status",    value: m.sync === "ok" ? "✓ OK" : "⚠ Error", color: m.sync === "ok" ? theme.green : theme.red, emoji: "🔄" },
+        { label: "Sync Status",    value: typeof m.sync === "number" ? (m.sync >= 90 ? `✓ ${m.sync}%` : `⚠ ${m.sync}%`) : "—", color: typeof m.sync === "number" && m.sync >= 90 ? theme.green : theme.red, emoji: "🔄" },
       ];
       setMetrics(cards);
     } catch (e: any) { Alert.alert("Error", e.message); }

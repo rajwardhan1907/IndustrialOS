@@ -5,7 +5,7 @@ import {
   RefreshControl, ActivityIndicator, Alert, Modal, TextInput, Platform,
 } from "react-native";
 import { theme, s } from "../lib/theme";
-import { fetchTickets, createTicket, postTicketComment, getSession } from "../lib/api";
+import { fetchTickets, createTicket, updateTicket, postTicketComment, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Comment { id: string; authorName: string; body: string; createdAt: string; }
@@ -43,6 +43,7 @@ export default function TicketsScreen() {
   const [creating,   setCreating]   = useState(false);
   const [commentBody, setCommentBody] = useState("");
   const [posting,    setPosting]    = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   const [session,    setSession]    = useState<any>({});
 
   useEffect(() => { getSession().then(setSession); }, []);
@@ -91,6 +92,18 @@ export default function TicketsScreen() {
     finally { setPosting(false); }
   };
 
+  const changeTicketStatus = async (newStatus: string) => {
+    if (!selected) return;
+    setUpdatingStatus(true);
+    try {
+      await updateTicket(selected.id, { status: newStatus });
+      const updated = { ...selected, status: newStatus };
+      setSelected(updated);
+      setTickets(prev => prev.map(t => t.id === selected.id ? { ...t, status: newStatus } : t));
+    } catch (e: any) { Alert.alert("Error", e.message); }
+    finally { setUpdatingStatus(false); }
+  };
+
   if (loading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}><ActivityIndicator size="large" color={theme.blue} /></View>;
 
   // ── Detail view ──
@@ -115,6 +128,31 @@ export default function TicketsScreen() {
               {selected.assignedName ? `Assigned to: ${selected.assignedName}` : "Unassigned"} · {new Date(selected.createdAt).toLocaleDateString()}
             </Text>
           </View>
+
+          {/* Status actions */}
+          {selected.status !== "resolved" && (
+            <View style={{ marginBottom: 16 }}>
+              <Text style={[s.heading, { marginBottom: 10 }]}>Update Status</Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {selected.status === "open" && (
+                  <TouchableOpacity
+                    onPress={() => changeTicketStatus("in_progress")}
+                    disabled={updatingStatus}
+                    style={{ flex: 1, backgroundColor: theme.amberBg, borderWidth: 1, borderColor: theme.amberBorder, borderRadius: 10, padding: 12, alignItems: "center", opacity: updatingStatus ? 0.6 : 1 }}
+                  >
+                    <Text style={{ color: theme.amber, fontWeight: "700", fontSize: 13 }}>▶ In Progress</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={() => changeTicketStatus("resolved")}
+                  disabled={updatingStatus}
+                  style={{ flex: 1, backgroundColor: theme.greenBg, borderWidth: 1, borderColor: theme.greenBorder, borderRadius: 10, padding: 12, alignItems: "center", opacity: updatingStatus ? 0.6 : 1 }}
+                >
+                  <Text style={{ color: theme.green, fontWeight: "700", fontSize: 13 }}>✓ Resolve</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           <Text style={[s.heading, { marginBottom: 10 }]}>Comments ({(selected.comments ?? []).length})</Text>
           {(selected.comments ?? []).map(c => (

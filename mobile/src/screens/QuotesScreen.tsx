@@ -107,6 +107,11 @@ export default function QuotesScreen() {
             ) : null}
           </View>
           <Text style={[s.heading, { marginTop: 16, marginBottom: 10 }]}>Actions</Text>
+          {selected.status === "draft" ? (
+            <TouchableOpacity onPress={() => updateStatus("sent")} style={[s.card, { backgroundColor: theme.blueBg, borderColor: theme.blueBorder, borderWidth: 1, marginBottom: 8 }]}>
+              <Text style={{ color: theme.blue, fontWeight: "700", fontSize: 14 }}>→ Send Quote to Customer</Text>
+            </TouchableOpacity>
+          ) : null}
           {selected.status === "sent" ? (
             <>
               <TouchableOpacity onPress={() => updateStatus("accepted")} style={[s.card, { backgroundColor: theme.greenBg, borderColor: theme.greenBorder, borderWidth: 1, marginBottom: 8 }]}>

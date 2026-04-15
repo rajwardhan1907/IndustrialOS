@@ -76,8 +76,7 @@ export default function InventoryScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (sessionExpired) return <SessionExpiredView />;
-
+  // Keep search filter effect BEFORE any conditional returns to satisfy React hooks rules
   useEffect(() => {
     const q = search.toLowerCase().trim();
     setFiltered(q ? items.filter(i =>
@@ -86,6 +85,8 @@ export default function InventoryScreen() {
       i.binLocation.toLowerCase().includes(q)
     ) : items);
   }, [search, items]);
+
+  if (sessionExpired) return <SessionExpiredView />;
 
   const openEdit = (item: Item) => {
     setEditItem(item);
