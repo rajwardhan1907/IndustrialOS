@@ -6,7 +6,7 @@
 import { Platform } from "react-native";
 import * as SecureStore from "expo-secure-store";
 
-const _raw = process.env.EXPO_PUBLIC_API_URL ?? "https://industrial-os-ort3.vercel.app";
+const _raw = process.env.EXPO_PUBLIC_API_URL ?? "process.env.EXPO_PUBLIC_API_URL ?? "https://industrial-os.vercel.app"";
 // Strip trailing slash to avoid double-slash URLs like .app//api/orders
 export const BASE_URL = _raw.endsWith("/") ? _raw.slice(0, -1) : _raw;
 

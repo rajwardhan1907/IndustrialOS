@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name":        "IndustrialOS",
-    "slug":        "industrialos",
-    "version":     "1.0.0",
+    "name": "IndustrialOS",
+    "slug": "industrialos",
+    "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -10,7 +10,8 @@
       "bundleIdentifier": "com.industrialos.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Used for barcode scanning in the warehouse",
-        "NSLocationWhenInUseUsageDescription": "Used for warehouse zone detection"
+        "NSLocationWhenInUseUsageDescription": "Used for warehouse zone detection",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -19,22 +20,40 @@
         "CAMERA",
         "VIBRATE",
         "RECEIVE_BOOT_COMPLETED",
-        "SCHEDULE_EXACT_ALARM"
+        "SCHEDULE_EXACT_ALARM",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      ["expo-camera", { "cameraPermission": "Allow IndustrialOS to access your camera for barcode scanning." }],
-      ["expo-notifications", { "color": "#2C4A8F" }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow IndustrialOS to access your camera for barcode scanning."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#2C4A8F"
+        }
+      ]
     ],
     "scheme": "industrialos",
     "web": {
       "bundler": "metro",
-      "output":  "static"
+      "output": "static"
     },
     "extra": {
-      "eas": { "projectId": "industrialos" }
-    }
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "b243d56f-bb82-4349-9d17-12e37a5b6105"
+      }
+    },
+    "owner": "human0"
   }
 }
