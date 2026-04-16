@@ -13,6 +13,7 @@ import {
   loadOrders, saveOrders, addOrder, makeOrderId, timeAgo,
   fetchOrdersFromDb, updateOrderInDb,
 } from "@/lib/orders";
+import { loadInventory } from "@/lib/inventory";
 
 // ── Stage config ──────────────────────────────────────────────────────────────
 const STAGES: OrderStage[] = ["Placed", "Confirmed", "Picked", "Shipped", "Delivered"];
@@ -45,13 +46,35 @@ function NewOrderModal({ onSave, onClose }: {
   onSave: (o: Order) => void;
   onClose: () => void;
 }) {
-  const [customer, setCustomer] = useState("");
-  const [sku,      setSku]      = useState("");
-  const [items,    setItems]    = useState("1");
-  const [value,    setValue]    = useState("");
-  const [priority, setPriority] = useState<OrderPriority>("MED");
-  const [notes,    setNotes]    = useState("");
-  const [error,    setError]    = useState("");
+  const [customer,   setCustomer]   = useState("");
+  const [sku,        setSku]        = useState("");
+  const [items,      setItems]      = useState("1");
+  const [value,      setValue]      = useState("");
+  const [priority,   setPriority]   = useState<OrderPriority>("MED");
+  const [notes,      setNotes]      = useState("");
+  const [error,      setError]      = useState("");
+  const [unitHint,   setUnitHint]   = useState<{ unitCost: number; name: string } | null>(null);
+
+  const handleSkuChange = (val: string) => {
+    setSku(val);
+    const inv = loadInventory();
+    const found = inv.find(i => i.sku.toLowerCase() === val.trim().toLowerCase());
+    if (found) {
+      setUnitHint({ unitCost: found.unitCost, name: found.name });
+      const qty = parseInt(items) || 1;
+      setValue(parseFloat((found.unitCost * qty).toFixed(2)).toString());
+    } else {
+      setUnitHint(null);
+    }
+  };
+
+  const handleItemsChange = (val: string) => {
+    setItems(val);
+    if (unitHint) {
+      const qty = parseInt(val) || 1;
+      setValue(parseFloat((unitHint.unitCost * qty).toFixed(2)).toString());
+    }
+  };
 
   const submit = () => {
     if (!customer.trim()) { setError("Customer name is required."); return; }
@@ -113,14 +136,19 @@ function NewOrderModal({ onSave, onClose }: {
           </div>
           <div style={{ marginBottom: 14, gridColumn: "1 / -1" }}>
             <label style={labelStyle}>SKU / Product *</label>
-            <input value={sku} onChange={e => setSku(e.target.value)} placeholder="e.g. SKU-4821 — Valve Assembly" style={inputStyle} />
+            <input value={sku} onChange={e => handleSkuChange(e.target.value)} placeholder="e.g. SKU-4821 — Valve Assembly" style={inputStyle} />
+            {unitHint && (
+              <div style={{ fontSize: 11, color: C.green, marginTop: 4, fontWeight: 600 }}>
+                ✓ {unitHint.name} · Unit cost: ${unitHint.unitCost.toFixed(2)}
+              </div>
+            )}
           </div>
           <div style={{ marginBottom: 14 }}>
             <label style={labelStyle}>Quantity</label>
-            <input type="number" min="1" value={items} onChange={e => setItems(e.target.value)} style={inputStyle} />
+            <input type="number" min="1" value={items} onChange={e => handleItemsChange(e.target.value)} style={inputStyle} />
           </div>
           <div style={{ marginBottom: 14 }}>
-            <label style={labelStyle}>Order Value ($) *</label>
+            <label style={labelStyle}>Order Value ($) *{unitHint ? " — auto-calculated" : ""}</label>
             <input type="number" min="0" value={value} onChange={e => setValue(e.target.value)} placeholder="e.g. 12500" style={inputStyle} />
           </div>
           <div style={{ marginBottom: 14, gridColumn: "1 / -1" }}>
@@ -157,7 +185,7 @@ function NewOrderModal({ onSave, onClose }: {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string, id?: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
   const [orders,     setOrders]     = useState<Order[]>([]);
@@ -368,7 +396,7 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string)
                         }}>{o.priority}</span>
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{o.customer}</span>
+                        <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers", o.customer)}>{o.customer}</span>
                       </div>
                       <div style={{ fontSize: 11, color: C.subtle, marginBottom: 4 }}>
                         {o.items} unit{o.items !== 1 ? "s" : ""} · {o.sku}

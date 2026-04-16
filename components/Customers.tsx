@@ -412,7 +412,7 @@ function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, isVie
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export default function Customers() {
+export default function Customers({ focusId }: { focusId?: string }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
   const [customers,    setCustomers]    = useState<Customer[]>([]);
@@ -443,6 +443,13 @@ export default function Customers() {
       }
     });
   }, []);
+
+  // Auto-open the customer detail panel when navigated here with a focusId (customer name)
+  useEffect(() => {
+    if (!focusId || customers.length === 0) return;
+    const found = customers.find(c => c.company.toLowerCase() === focusId.toLowerCase());
+    if (found) setSelected(found);
+  }, [focusId, customers]);
 
   const save = (list: Customer[]) => { setCustomers(list); saveCustomers(list); };
 

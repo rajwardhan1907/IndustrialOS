@@ -158,6 +158,7 @@ export default function App() {
   const [tab,        setTab]        = useState("dashboard");
   const [loading,    setLoading]    = useState(true);
   const [showAddTab, setShowAddTab] = useState(false);
+  const [navFocus,   setNavFocus]   = useState<string | undefined>(undefined);
 
   const [met, setMet] = useState({
     opm: 0, skus: 0, sync: 0, activeOrders: 0,
@@ -266,7 +267,10 @@ export default function App() {
 
   const allTabs = [...moduleTabs, ...customTabList];
 
-  const goTo = (moduleId: string) => setTab(moduleId);
+  const goTo = (moduleId: string, focusId?: string) => {
+    setTab(moduleId);
+    setNavFocus(focusId);
+  };
 
   const renderContent = () => {
     if (tab === "settings") {
@@ -319,7 +323,7 @@ export default function App() {
       );
       case "customers": return (
         <ErrorBoundary label="Customers failed to load">
-          <Customers />
+          <Customers focusId={navFocus} />
         </ErrorBoundary>
       );
       case "analytics": return (
@@ -329,7 +333,7 @@ export default function App() {
       );
       case "suppliers": return (
         <ErrorBoundary label="Suppliers failed to load">
-          <Suppliers />
+          <Suppliers focusId={navFocus} />
         </ErrorBoundary>
       );
       case "shipping":  return (

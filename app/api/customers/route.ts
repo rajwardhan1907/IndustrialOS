@@ -58,9 +58,21 @@ export async function GET(req: Request) {
       spendMap[row.customer.toLowerCase()] = row._sum.value ?? 0
     }
 
+    // Compute live balanceDue from open invoices (total - amountPaid for non-paid invoices)
+    const openInvoices = await prisma.invoice.findMany({
+      where: { workspaceId, status: { not: 'paid' } },
+      select: { customer: true, total: true, amountPaid: true },
+    })
+    const balanceMap: Record<string, number> = {}
+    for (const inv of openInvoices) {
+      const k = inv.customer.toLowerCase()
+      balanceMap[k] = (balanceMap[k] || 0) + Math.max(0, inv.total - inv.amountPaid)
+    }
+
     const enriched = customers.map(c => ({
       ...c,
       totalSpend: spendMap[c.name.toLowerCase()] ?? c.totalSpend,
+      balanceDue: balanceMap[c.name.toLowerCase()] ?? c.balanceDue,
     }))
 
     return NextResponse.json(enriched, { headers: CORS })

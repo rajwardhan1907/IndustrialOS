@@ -322,7 +322,7 @@ function NewPOModal({ suppliers, onSave, onClose, approvalThreshold, aiPriceComp
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function Suppliers() {
+export default function Suppliers({ focusId }: { focusId?: string }) {
   const { data: session } = useSession()
   const isViewer  = session?.user?.role === "viewer"
   const isAdmin   = !session?.user?.role || session?.user?.role === "admin"
@@ -368,6 +368,13 @@ export default function Suppliers() {
         .catch(() => {})
     }
   }, [])
+
+  // Auto-open the supplier detail panel when navigated here with a focusId (supplier name)
+  useEffect(() => {
+    if (!focusId || suppliers.length === 0) return;
+    const found = suppliers.find(s => s.name.toLowerCase() === focusId.toLowerCase());
+    if (found) { setSelected(found); setView("list"); }
+  }, [focusId, suppliers]);
 
   // Phase 16: save threshold to DB
   const saveThreshold = async () => {

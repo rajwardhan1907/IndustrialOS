@@ -7,6 +7,7 @@ import { fmt, C } from "@/lib/utils";
 import { PricingRule, applyPricingRules, getRulesSummary } from "@/lib/pricingRules";
 import { downloadCSV } from "@/lib/exportCSV";
 import { loadWorkspace } from "@/lib/workspace";
+import { loadInventory } from "@/lib/inventory";
 import {
   Plus, Sparkles, ChevronLeft, FileText,
   Clock, CheckCircle, XCircle, Send, Trash2,
@@ -152,7 +153,7 @@ const Badge = ({ status }: { status: Quote["status"] }) => {
   );
 };
 
-export default function Quotes({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
   const [view,      setView]     = useState<"list"|"new"|"detail">("list");
@@ -250,12 +251,27 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string) => v
         };
       });
 
-      // Phase 12: auto-apply pricing rules
+      // Seed unit prices from actual inventory (overrides AI-guessed prices)
+      const inv = loadInventory();
+      let invPriceNote = 0;
+      items = items.map(item => {
+        const found = inv.find(i => i.sku.toLowerCase() === item.sku.toLowerCase());
+        if (found && found.unitCost > 0) {
+          invPriceNote++;
+          return { ...item, unitPrice: found.unitCost };
+        }
+        return item;
+      });
+      if (invPriceNote > 0) {
+        setRulesBanner(`Unit prices seeded from inventory for ${invPriceNote} item(s).`);
+      }
+
+      // Phase 12: auto-apply pricing rules (discounts on top of inventory price)
       if (priceRules.length > 0) {
         const customer = q.customer || "";
         items = applyPricingRules(priceRules, customer, items);
         const summary = getRulesSummary(priceRules, customer, items);
-        setRulesBanner(summary);
+        if (summary) setRulesBanner(prev => prev ? `${prev} ${summary}` : summary);
       }
 
       // Always recalculate each item's total and quote-level totals
@@ -427,7 +443,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string) => v
                   onMouseEnter={e => (e.currentTarget.style.background=C.bg)}
                   onMouseLeave={e => (e.currentTarget.style.background="transparent")}>
                   <td style={{ padding:"12px 16px", fontWeight:700, color:C.blue, fontFamily:"monospace" }}>{q.quoteNumber}</td>
-                  <td style={{ padding:"12px 16px", color:C.text, fontWeight:600 }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{q.customer}</span></td>
+                  <td style={{ padding:"12px 16px", color:C.text, fontWeight:600 }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={e => { e.stopPropagation(); onNavigate?.("customers", q.customer); }}>{q.customer}</span></td>
                   <td style={{ padding:"12px 16px", color:C.muted }}>{q.items.length} item{q.items.length!==1?"s":""}</td>
                   <td style={{ padding:"12px 16px", fontWeight:700, color:C.text }}>{fmtMoney(q.total)}</td>
                   <td style={{ padding:"12px 16px", color:C.muted }}>{fmtDate(q.validUntil)}</td>
@@ -618,7 +634,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string) => v
             <Badge status={selected.status}/>
           </div>
           <p style={{ color:C.muted, fontSize:13 }}>
-            Created {fmtDate(selected.createdAt)} · Customer: <strong style={{ color:C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{selected.customer}</span></strong>
+            Created {fmtDate(selected.createdAt)} · Customer: <strong style={{ color:C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers", selected.customer)}>{selected.customer}</span></strong>
           </p>
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center" }}>

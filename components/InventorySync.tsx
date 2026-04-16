@@ -181,7 +181,7 @@ const StatusBadge = ({ item }: { item: InventoryItem }) => {
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function InventorySync({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+export default function InventorySync({ onNavigate }: { onNavigate?: (tab: string, id?: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
   const [items,     setItems]     = useState<InventoryItem[]>([]);
@@ -193,6 +193,12 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
   const [rule,      setRule]      = useState({ cat:"Fasteners", change:"+10", type:"price" });
   const [applied,   setApplied]   = useState(false);
   const [showAdd,   setShowAdd]   = useState(false);
+
+  // Reorder approval state
+  const [showReorderModal, setShowReorderModal] = useState(false);
+  const [reorderQueue,     setReorderQueue]     = useState<InventoryItem[]>([]);
+  const [reorderBusy,      setReorderBusy]      = useState(false);
+  const [reorderDone,      setReorderDone]      = useState("");
 
   // Phase 13/19/22 — AI + Barcode feature flags
   const [aiReorderOn,     setAiReorderOn]     = useState(false);
@@ -290,6 +296,44 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
     setShowAdd(false);
   };
 
+  // ── Approve reorder: creates a ticket per unique supplier ────────────────────
+  const approveReorder = async () => {
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+    if (!wid || reorderQueue.length === 0) return;
+    setReorderBusy(true);
+    try {
+      // Group by supplier
+      const bySupplier: Record<string, InventoryItem[]> = {};
+      for (const item of reorderQueue) {
+        const key = item.supplier || "Unknown Supplier";
+        if (!bySupplier[key]) bySupplier[key] = [];
+        bySupplier[key].push(item);
+      }
+      for (const [supplier, items] of Object.entries(bySupplier)) {
+        const lines = items.map(i => `${i.sku} — ${i.name}: order ${i.reorderQty} units (est. $${(i.unitCost * i.reorderQty).toFixed(2)})`).join("\n");
+        await fetch("/api/tickets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title:       `Reorder Request — ${supplier}`,
+            description: `The following items need restocking:\n\n${lines}\n\nPlease place purchase order with ${supplier}.`,
+            type:        "reorder",
+            priority:    items.some(i => getStockStatus(i) === "out_of_stock" || getStockStatus(i) === "critical") ? "high" : "medium",
+            status:      "open",
+            workspaceId: wid,
+          }),
+        });
+      }
+      setReorderDone(`✓ ${Object.keys(bySupplier).length} reorder ticket(s) created. Check the Tickets tab.`);
+      setShowReorderModal(false);
+      setTimeout(() => setReorderDone(""), 6000);
+    } catch {
+      setReorderDone("Failed to create tickets. Please try again.");
+    } finally {
+      setReorderBusy(false);
+    }
+  };
+
   const cats     = ["Fasteners","Bearings","Hydraulics","Pneumatics","Tools","Safety Gear","Structural","Electronics","Mechanical"];
   const selStyle = { background:C.surface, border:`1px solid ${C.border}`, borderRadius:8, padding:"8px 12px", fontSize:13, color:C.text, outline:"none" };
 
@@ -297,6 +341,57 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
 
       {showAdd && <AddSKUModal onSave={handleAddSKU} onClose={() => setShowAdd(false)} />}
+
+      {/* ── Reorder Approval Modal ── */}
+      {showReorderModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:200, padding:16 }}>
+          <div style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:16, padding:28, width:"100%", maxWidth:600, maxHeight:"85vh", overflowY:"auto", boxShadow:"0 24px 80px rgba(0,0,0,0.18)" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <h2 style={{ fontSize:17, fontWeight:800, color:C.text }}>Reorder Approval</h2>
+              <button onClick={() => setShowReorderModal(false)} style={{ background:"none", border:"none", cursor:"pointer", color:C.muted }}><X size={18}/></button>
+            </div>
+            <p style={{ fontSize:13, color:C.muted, marginBottom:16 }}>
+              Review the items below. On approval, a reorder ticket will be created per supplier.
+            </p>
+            <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
+              {reorderQueue.map(item => {
+                const status = getStockStatus(item);
+                const s = STATUS_COLOR[status];
+                const estCost = item.unitCost * item.reorderQty;
+                return (
+                  <div key={item.id} style={{ display:"grid", gridTemplateColumns:"1fr auto", gap:12, padding:"12px 14px", background:s.bg, border:`1px solid ${s.border}`, borderRadius:10 }}>
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{item.name}</div>
+                      <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>
+                        SKU: <span style={{ fontFamily:"monospace", color:C.blue }}>{item.sku}</span>
+                        {" · "}Supplier: <strong>{item.supplier || "—"}</strong>
+                        {" · "}Current stock: <strong>{item.stockLevel}</strong>
+                      </div>
+                    </div>
+                    <div style={{ textAlign:"right", flexShrink:0 }}>
+                      <div style={{ fontWeight:800, color:s.color, fontSize:13 }}>Order {item.reorderQty} units</div>
+                      <div style={{ fontSize:11, color:C.muted }}>Est. {fmtMoney(estCost)}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setShowReorderModal(false)} style={{ padding:"10px 20px", background:"none", border:`1px solid ${C.border}`, borderRadius:9, color:C.muted, fontSize:13, fontWeight:600, cursor:"pointer" }}>Cancel</button>
+              <button onClick={approveReorder} disabled={reorderBusy} style={{ padding:"10px 24px", background:reorderBusy ? C.border : C.blue, border:"none", borderRadius:9, color:reorderBusy ? C.muted : "#fff", fontSize:13, fontWeight:700, cursor:reorderBusy ? "not-allowed" : "pointer" }}>
+                {reorderBusy ? "Creating tickets…" : "✓ Approve & Create Tickets"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reorder done banner */}
+      {reorderDone && (
+        <div style={{ padding:"11px 16px", background:reorderDone.startsWith("✓") ? C.greenBg : C.redBg, border:`1px solid ${reorderDone.startsWith("✓") ? C.greenBorder : C.redBorder}`, borderRadius:10, fontSize:13, color:reorderDone.startsWith("✓") ? C.green : C.red, fontWeight:600 }}>
+          {reorderDone}
+        </div>
+      )}
 
       {/* ── Header ── */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -310,6 +405,11 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
               <AlertTriangle size={15}/>
               {alertItems.length} item{alertItems.length !== 1 ? "s" : ""} need reordering
             </div>
+          )}
+          {alertItems.length > 0 && !isViewer && (
+            <button onClick={() => { setReorderQueue(alertItems); setShowReorderModal(true); }} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 18px", borderRadius:10, background:C.amber, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+              <Package size={14}/> Reorder All ({alertItems.length})
+            </button>
           )}
           {!isViewer && (
           <button onClick={() => setShowAdd(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
@@ -498,13 +598,19 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
                   <AlertTriangle size={16} color={s.color}/>
                   <div style={{ flex:1 }}>
                     <div style={{ fontWeight:700, fontSize:13, color:C.text }}>{item.name}</div>
-                    <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{item.sku} · {item.warehouse} · {item.zone}/{item.binLocation}{item.supplier ? <> · <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("suppliers")}>{item.supplier}</span></> : ""}</div>
+                    <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{item.sku} · {item.warehouse} · {item.zone}/{item.binLocation}{item.supplier ? <> · <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("suppliers", item.supplier)}>{item.supplier}</span></> : ""}</div>
                   </div>
                   <div style={{ textAlign:"right" }}>
                     <div style={{ fontSize:14, fontWeight:800, color:s.color }}>{item.stockLevel} units</div>
                     <div style={{ fontSize:11, color:C.muted }}>Reorder at {item.reorderPoint} · Order {item.reorderQty}</div>
+                    <div style={{ fontSize:11, color:C.muted }}>Est. cost: {fmtMoney(item.unitCost * item.reorderQty)}</div>
                   </div>
                   <StatusBadge item={item}/>
+                  {!isViewer && (
+                    <button onClick={() => { setReorderQueue([item]); setShowReorderModal(true); }} style={{ padding:"6px 14px", background:C.amber, border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
+                      Reorder
+                    </button>
+                  )}
                 </div>
               );
             })}
