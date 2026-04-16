@@ -344,6 +344,11 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
   const [emailMsg,     setEmailMsg]     = useState("");
   const [showEmail,    setShowEmail]    = useState(false);
 
+  // Price-editing for portal-requested draft quotes (total === 0)
+  const [editingPrices,  setEditingPrices]  = useState(false);
+  const [editPrices,     setEditPrices]     = useState<Record<string, string>>({});
+  const [savingPrices,   setSavingPrices]   = useState(false);
+
   const sendEmail = async (q: Quote) => {
     if (!emailTo.trim()) { setEmailMsg("Enter an email address."); return; }
     setEmailSending(true); setEmailMsg("");
@@ -358,6 +363,35 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
       else         { setEmailMsg("Email sent successfully!"); setEmailTo(""); setShowEmail(false); }
     } catch { setEmailMsg("Network error. Please try again."); }
     finally { setEmailSending(false); }
+  };
+
+  const savePricedQuote = async () => {
+    if (!selected) return;
+    setSavingPrices(true);
+    try {
+      // Build updated items with new unit prices
+      const updatedItems = selected.items.map(item => {
+        const newPrice = parseFloat(editPrices[item.id] ?? String(item.unitPrice)) || 0;
+        const total    = parseFloat((item.qty * newPrice * (1 - item.discount / 100)).toFixed(2));
+        return { ...item, unitPrice: newPrice, total };
+      });
+      const subtotal    = updatedItems.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+      const discountAmt = updatedItems.reduce((s, i) => s + (i.qty * i.unitPrice * i.discount / 100), 0);
+      const tax         = parseFloat(((subtotal - discountAmt) * 0.08).toFixed(2));
+      const total       = parseFloat((subtotal - discountAmt + tax).toFixed(2));
+
+      const patch = { items: updatedItems, subtotal, discountAmt, tax, total, status: "sent" as Quote["status"] };
+      await updateQuoteInDb(selected.id, patch);
+
+      const updatedQuote = { ...selected, ...patch };
+      const newList = quotes.map(q => q.id === selected.id ? updatedQuote : q);
+      setQuotes(newList);
+      saveQuotes(newList);
+      setSelected(updatedQuote);
+      setEditingPrices(false);
+      setEditPrices({});
+    } catch { /* silent */ }
+    finally { setSavingPrices(false); }
   };
 
   // ── LIST VIEW ──────────────────────────────────────────────────────────────
@@ -730,6 +764,68 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
           ))}
         </div>
       </Card>
+
+      {/* Portal request pricing panel — shown for draft quotes with $0 total */}
+      {!isViewer && selected.status === "draft" && selected.total === 0 && (
+        <Card style={{ background: C.amberBg, border: `1px solid ${C.amberBorder}` }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: editingPrices ? 14 : 0 }}>
+            <div>
+              <div style={{ fontWeight:700, fontSize:13, color:C.amber, marginBottom:2 }}>📋 Portal Request — Pricing Required</div>
+              <div style={{ fontSize:12, color:C.muted }}>This quote was submitted by the customer. Set unit prices and send it to them for approval.</div>
+            </div>
+            {!editingPrices && (
+              <button
+                onClick={() => {
+                  const init: Record<string, string> = {};
+                  selected.items.forEach(i => { init[i.id] = String(i.unitPrice || ""); });
+                  setEditPrices(init);
+                  setEditingPrices(true);
+                }}
+                style={{ padding:"8px 16px", background:C.amber, border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
+                Set Prices
+              </button>
+            )}
+          </div>
+          {editingPrices && (
+            <div>
+              <div style={{ marginBottom:10 }}>
+                {selected.items.map(item => (
+                  <div key={item.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
+                    <span style={{ fontFamily:"monospace", fontWeight:700, color:C.blue, minWidth:100, fontSize:13 }}>{item.sku}</span>
+                    <span style={{ fontSize:13, color:C.muted, flex:1 }}>{item.desc}</span>
+                    <span style={{ fontSize:12, color:C.muted, marginRight:4 }}>Qty {item.qty} ×</span>
+                    <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                      <span style={{ fontSize:13, color:C.muted }}>$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={editPrices[item.id] ?? ""}
+                        onChange={e => setEditPrices(prev => ({ ...prev, [item.id]: e.target.value }))}
+                        placeholder="0.00"
+                        style={{ width:90, padding:"6px 8px", borderRadius:7, border:`1px solid ${C.amberBorder}`, fontSize:13, fontWeight:700, outline:"none", background:C.surface }}
+                      />
+                    </div>
+                    <span style={{ fontSize:12, color:C.muted, minWidth:70, textAlign:"right" }}>
+                      = {fmtMoney(item.qty * (parseFloat(editPrices[item.id] || "0") || 0))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                <button onClick={() => { setEditingPrices(false); setEditPrices({}); }}
+                  style={{ padding:"8px 16px", borderRadius:8, background:"none", border:`1px solid ${C.border}`, color:C.muted, fontSize:12, fontWeight:600, cursor:"pointer" }}>
+                  Cancel
+                </button>
+                <button onClick={savePricedQuote} disabled={savingPrices}
+                  style={{ padding:"8px 20px", borderRadius:8, background:`linear-gradient(135deg,${C.green},#3aaa72)`, border:"none", color:"#fff", fontSize:12, fontWeight:700, cursor: savingPrices ? "not-allowed" : "pointer", opacity: savingPrices ? 0.7 : 1 }}>
+                  {savingPrices ? "Saving…" : "💾 Save & Send to Customer"}
+                </button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {!isViewer && (
         <Card>

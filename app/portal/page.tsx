@@ -178,19 +178,40 @@ export default function PortalPage() {
     setTab("orders"); setReqSent(false); setReqError("");
   };
 
-  // ── FIX 1: Quote accept/decline — updates DB ──────────────────────────────
+  // ── Quote accept/decline — routes through portal API (no NextAuth needed) ──
   const updateQuoteStatus = async (quoteId: string, newStatus: "accepted" | "declined") => {
+    if (!customer) return;
     // Update UI immediately (feels fast)
     setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, status: newStatus } : q));
-    // Then save to DB in background
     try {
-      await fetch("/api/quotes", {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: quoteId, status: newStatus }),
+      const res = await fetch("/api/portal/quotes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id:         quoteId,
+          status:     newStatus,
+          customerId: customer.id,
+          workspaceId: customer.workspaceId,
+        }),
       });
+      if (!res.ok) {
+        const data = await res.json();
+        // Revert on error and show message
+        setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, status: q.status === newStatus ? "sent" : q.status } : q));
+        alert(data.error || "Could not update quote. Please try again.");
+      } else if (newStatus === "accepted") {
+        // Refresh orders so the auto-created order appears
+        const refreshRes = await fetch("/api/portal/login", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: customer.email, code: customer.portalCode }),
+        });
+        if (refreshRes.ok) {
+          const refreshed = await refreshRes.json();
+          setOrders(refreshed.orders || []);
+        }
+      }
     } catch {
-      // If DB fails, revert the UI change
-      setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, status: q.status } : q));
+      setQuotes(prev => prev.map(q => q.id === quoteId ? { ...q, status: "sent" } : q));
     }
   };
 
@@ -217,14 +238,14 @@ export default function PortalPage() {
       const data = await res.json();
       if (!res.ok) { setReqError(data.error || "Could not submit."); return; }
 
-      // ── Auto-refresh the orders list so the new one appears immediately ──
+      // ── Refresh quotes list so the new draft quote appears immediately ──
       const refreshRes = await fetch("/api/portal/login", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: customer.email, code: customer.portalCode }),
       });
       if (refreshRes.ok) {
         const refreshed = await refreshRes.json();
-        setOrders(refreshed.orders || []);
+        setQuotes(refreshed.quotes || []);
       }
 
       setReqSent(true);
@@ -235,7 +256,7 @@ export default function PortalPage() {
   // ── Derived counts ────────────────────────────────────────────────────────
   const activeOrders  = orders.filter(o => o.stage !== "Delivered").length;
   const overdueInv    = invoices.filter(i => i.status === "overdue").length;
-  const pendingQuotes = quotes.filter(q => q.status === "sent" || q.status === "draft").length;
+  const pendingQuotes = quotes.filter(q => q.status === "sent").length;
   const totalBalance  = invoices.filter(i => i.status !== "paid")
                                  .reduce((s, i) => s + (i.total - i.amountPaid), 0);
 
@@ -412,25 +433,39 @@ export default function PortalPage() {
               </Card>
             ) : quotes.map(q => {
               const s = QUOTE_STYLE[q.status] || QUOTE_STYLE.draft;
-              const isPending = q.status === "sent" || q.status === "draft";
+              const isActionable = q.status === "sent";
+              const isAwaitingPricing = q.status === "draft";
               return (
-                <Card key={q.id} style={{ border: isPending ? `1px solid ${P.amberBorder}` : `1px solid ${P.border}`, background: isPending ? P.amberBg : P.surface }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: isPending ? 16 : 0 }}>
+                <Card key={q.id} style={{
+                  border: isActionable ? `1px solid ${P.amberBorder}` : isAwaitingPricing ? `1px solid ${P.blueBorder}` : `1px solid ${P.border}`,
+                  background: isActionable ? P.amberBg : isAwaitingPricing ? P.blueBg : P.surface,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: (isActionable || isAwaitingPricing) ? 12 : 0 }}>
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
                         <span style={{ fontWeight: 800, fontSize: 15, fontFamily: "monospace", color: P.text }}>{q.quoteNumber}</span>
                         <Badge label={s.label} s={s} />
                       </div>
-                      <div style={{ fontSize: 13, color: P.muted }}>Valid until {fmtDate(q.validUntil)} · Created {fmtDate(q.createdAt)}</div>
+                      <div style={{ fontSize: 13, color: P.muted }}>
+                        {isAwaitingPricing ? `Requested ${fmtDate(q.createdAt)}` : `Valid until ${fmtDate(q.validUntil)} · Created ${fmtDate(q.createdAt)}`}
+                      </div>
                     </div>
-                    <div style={{ fontWeight: 800, fontSize: 20, color: P.text }}>{fmtMoney(q.total)}</div>
+                    <div style={{ fontWeight: 800, fontSize: 20, color: P.text }}>
+                      {q.total > 0 ? fmtMoney(q.total) : <span style={{ fontSize: 13, color: P.muted, fontWeight: 400 }}>Pricing pending</span>}
+                    </div>
                   </div>
-                  {/* Accept/Decline buttons — only shown for pending quotes */}
-                  {isPending && (
+                  {/* Awaiting pricing — supplier hasn't priced yet */}
+                  {isAwaitingPricing && (
+                    <div style={{ padding: "10px 13px", background: P.surface, border: `1px solid ${P.blueBorder}`, borderRadius: 8, fontSize: 13, color: P.blue }}>
+                      ⏳ Your supplier is reviewing this request and will send you a priced quote shortly.
+                    </div>
+                  )}
+                  {/* Accept/Decline — only for sent (priced) quotes */}
+                  {isActionable && (
                     <div style={{ display: "flex", gap: 10 }}>
                       <button onClick={() => updateQuoteStatus(q.id, "accepted")}
                         style={{ flex: 1, padding: "11px", background: "linear-gradient(135deg,#1a7f5a,#28a770)", border: "none", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                        ✓ Accept Quote
+                        ✓ Accept Quote — {fmtMoney(q.total)}
                       </button>
                       <button onClick={() => updateQuoteStatus(q.id, "declined")}
                         style={{ flex: 1, padding: "11px", background: P.surface, border: `1px solid ${P.redBorder}`, borderRadius: 9, color: P.red, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
@@ -440,7 +475,7 @@ export default function PortalPage() {
                   )}
                   {q.status === "accepted" && (
                     <div style={{ marginTop: 10, padding: "8px 12px", background: P.greenBg, border: `1px solid ${P.greenBorder}`, borderRadius: 8, fontSize: 12, color: P.green }}>
-                      ✅ You accepted this quote. Your supplier will raise an invoice shortly.
+                      ✅ You accepted this quote. An order has been placed — check the <strong>My Orders</strong> tab.
                     </div>
                   )}
                   {q.status === "declined" && (
@@ -538,12 +573,12 @@ export default function PortalPage() {
                 <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
                 <h3 style={{ fontSize: 20, fontWeight: 800, color: P.text, marginBottom: 8 }}>Request Submitted!</h3>
                 <p style={{ color: P.muted, fontSize: 14, marginBottom: 24, lineHeight: 1.6 }}>
-                  Your request is now in your supplier's order pipeline.<br />
-                  Check the <strong>My Orders</strong> tab — it's already there.
+                  Your quote request has been sent to your supplier.<br />
+                  They will review and price it — check the <strong>Quotes</strong> tab for updates.
                 </p>
-                <button onClick={() => { setReqSent(false); setReqSku(""); setReqQty(""); setReqNotes(""); setReqDeadline(""); setReqError(""); setTab("orders"); }}
+                <button onClick={() => { setReqSent(false); setReqSku(""); setReqQty(""); setReqNotes(""); setReqDeadline(""); setReqError(""); setTab("quotes"); }}
                   style={{ padding: "11px 24px", borderRadius: 9, background: "linear-gradient(135deg,#3b6fd4,#6d28d9)", border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                  View My Orders →
+                  View My Quotes →
                 </button>
               </Card>
             ) : (
