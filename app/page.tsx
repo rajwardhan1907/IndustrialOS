@@ -161,7 +161,7 @@ export default function App() {
 
   const [met, setMet] = useState({
     opm: 0, skus: 0, sync: 0, activeOrders: 0,
-    rev: 0, latency: 0, queue: 0, conflicts: 0,
+    rev: 0, queue: 0,
   });
   const [chart,  setChart]  = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);

@@ -3,6 +3,8 @@ import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContai
 import { Bell, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import { C, fmt } from "@/lib/utils";
 import { useIsMobile } from "@/lib/useIsMobile";
+import { useEffect, useState } from "react";
+import { loadConflicts } from "@/lib/inventory";
 
 export function Card({ children, style={} }: any) {
   return <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:14,padding:18,boxShadow:"0 1px 4px rgba(0,0,0,0.05)",...style}}>{children}</div>;
@@ -20,6 +22,12 @@ export function SectionTitle({ icon: Icon, children, sub }: any) {
 
 export default function Dashboard({ met, chart, alerts }: any) {
   const isMobile = useIsMobile();
+  const [openConflicts, setOpenConflicts] = useState(0);
+
+  useEffect(() => {
+    const count = loadConflicts().filter((c: any) => c.status === "alert").length;
+    setOpenConflicts(count);
+  }, []);
 
   const stats = [
     {l:"Orders / min",  v:met.opm,                  col:C.blue,   bg:C.blueBg,   bdr:C.blueBorder,   ico:"📦"},
@@ -27,9 +35,8 @@ export default function Dashboard({ met, chart, alerts }: any) {
     {l:"Sync Health",   v:`${met.sync.toFixed(1)}%`, col:C.green,  bg:C.greenBg,  bdr:C.greenBorder,  ico:"✅"},
     {l:"Active Orders", v:fmt(met.activeOrders),     col:C.amber,  bg:C.amberBg,  bdr:C.amberBorder,  ico:"🛒"},
     {l:"Revenue MTD",   v:`$${fmt(met.rev)}`,        col:C.green,  bg:C.greenBg,  bdr:C.greenBorder,  ico:"💰"},
-    {l:"API Latency",   v:`${met.latency}ms`,        col:C.amber,  bg:C.amberBg,  bdr:C.amberBorder,  ico:"⚡"},
     {l:"Queue Depth",   v:met.queue,                 col:C.blue,   bg:C.blueBg,   bdr:C.blueBorder,   ico:"🔄"},
-    {l:"Conflicts",     v:met.conflicts,             col:C.red,    bg:C.redBg,    bdr:C.redBorder,    ico:"⚠️"},
+    {l:"Inv. Conflicts",v:openConflicts,             col:C.red,    bg:C.redBg,    bdr:C.redBorder,    ico:"⚠️"},
   ];
 
   const tt = { contentStyle:{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,fontSize:11,color:C.text} };
@@ -65,14 +72,13 @@ export default function Dashboard({ met, chart, alerts }: any) {
           </ResponsiveContainer>
         </Card>
         <Card>
-          <SectionTitle>Latency (ms) &amp; Errors</SectionTitle>
+          <SectionTitle>Revenue / 5-min bucket (live)</SectionTitle>
           <ResponsiveContainer width="100%" height={isMobile?120:145}>
             <BarChart data={chart}>
               <XAxis dataKey="t" tick={{fontSize:9,fill:C.subtle}} axisLine={false} tickLine={false}/>
               <YAxis tick={{fontSize:9,fill:C.subtle}} axisLine={false} tickLine={false}/>
               <Tooltip {...tt}/>
-              <Bar dataKey="latency" fill={C.purple} radius={[3,3,0,0]} fillOpacity={0.75}/>
-              <Bar dataKey="errors"  fill={C.red}    radius={[3,3,0,0]} fillOpacity={0.7}/>
+              <Bar dataKey="revenue" fill={C.green} radius={[3,3,0,0]} fillOpacity={0.75}/>
             </BarChart>
           </ResponsiveContainer>
         </Card>

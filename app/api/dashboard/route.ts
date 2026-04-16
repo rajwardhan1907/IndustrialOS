@@ -79,13 +79,13 @@ export async function GET(req: Request) {
       const label = bucketEnd.toLocaleTimeString('en-US', {
         hour: '2-digit', minute: '2-digit', hour12: false,
       })
-      const orders = recentOrders.filter(o => {
+      const bucketOrders = recentOrders.filter(o => {
         const t = new Date(o.createdAt)
         return t >= bucketStart && t < bucketEnd
-      }).length
-      const latency = Math.floor(Math.random() * 40 + 60) // simulated — real APM needed for true latency
-      const errors  = Math.floor(Math.random() * 2)
-      return { t: label, orders, latency, errors }
+      })
+      const orders  = bucketOrders.length
+      const revenue = bucketOrders.reduce((sum, o) => sum + (o.value || 0), 0)
+      return { t: label, orders, revenue }
     }).reverse()
 
     // Alerts
@@ -104,9 +104,7 @@ export async function GET(req: Request) {
         sync,
         activeOrders,
         rev: Math.round(rev),
-        latency: 87,   // placeholder until real APM
         queue,
-        conflicts: 0,  // conflicts live in localStorage
       },
       chart,
       alerts,
