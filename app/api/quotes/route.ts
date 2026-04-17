@@ -90,25 +90,29 @@ export async function PATCH(req: Request) {
       })
 
       // Automation 2 — auto-create order when quote is accepted
-      // Fix 9: iterate ALL items for inventory subtraction (was only using items[0])
       if (body.status === 'accepted') {
         const itemsArr = Array.isArray(updated.items) ? updated.items as any[] : []
         const primarySku = itemsArr[0]?.sku ?? updated.quoteNumber ?? ''
         const totalQty   = itemsArr.reduce((sum: number, it: any) => sum + (Number(it?.qty) || 1), 0)
 
-        await tx.order.create({
-          data: {
-            customer:    updated.customer,
-            sku:         primarySku,
-            items:       totalQty,
-            value:       updated.total,
-            stage:       'Placed',
-            priority:    'MED',
-            source:      'quote',
-            notes:       `Auto-created from quote ${updated.quoteNumber}`,
-            workspaceId: updated.workspaceId,
-          },
-        })
+        // Avoid duplicate order if quote was already accepted once
+        const existingOrder = await tx.order.findFirst({ where: { quoteId: updated.id } })
+        if (!existingOrder) {
+          await tx.order.create({
+            data: {
+              customer:    updated.customer,
+              sku:         primarySku,
+              items:       totalQty,
+              value:       updated.total,
+              stage:       'Placed',
+              priority:    'MED',
+              source:      'quote',
+              notes:       `Auto-created from quote ${updated.quoteNumber}`,
+              quoteId:     updated.id,
+              workspaceId: updated.workspaceId,
+            },
+          })
+        }
 
         // Subtract inventory for ALL line items
         for (const lineItem of itemsArr) {

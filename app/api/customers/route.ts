@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { validateNonNegative } from '@/lib/automation'
 
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
@@ -89,6 +90,11 @@ export async function POST(req: Request) {
     if (!body.workspaceId) {
       return NextResponse.json({ error: 'workspaceId is required' }, { status: 400, headers: CORS })
     }
+    const vErr =
+      validateNonNegative(body.creditLimit, 'creditLimit') ??
+      validateNonNegative(body.balanceDue, 'balanceDue')
+    if (vErr) return NextResponse.json({ error: vErr }, { status: 400, headers: CORS })
+
     const portalCode = await uniquePortalCode(body.portalCode ?? '', body.workspaceId);
     const customer = await prisma.customer.create({
       data: {
@@ -98,9 +104,11 @@ export async function POST(req: Request) {
         phone:       body.phone       ?? '',
         country:     body.country     ?? '',
         industry:    body.industry    ?? '',
-        creditLimit: body.creditLimit ?? 0,
-        balanceDue:  body.balanceDue  ?? 0,
+        creditLimit: Number(body.creditLimit ?? 0),
+        balanceDue:  Number(body.balanceDue  ?? 0),
         status:      body.status      ?? 'active',
+        onCreditHold:     Boolean(body.onCreditHold ?? false),
+        creditHoldReason: body.creditHoldReason ?? '',
         portalCode,
         notes:       body.notes       ?? '',
         orders:      body.orders      ?? [],
@@ -131,6 +139,11 @@ export async function PATCH(req: Request) {
       }
     }
 
+    const vErr =
+      (body.creditLimit !== undefined ? validateNonNegative(body.creditLimit, 'creditLimit') : null) ??
+      (body.balanceDue  !== undefined ? validateNonNegative(body.balanceDue, 'balanceDue') : null)
+    if (vErr) return NextResponse.json({ error: vErr }, { status: 400, headers: CORS })
+
     const customer = await prisma.customer.update({
       where: { id: body.id },
       data: {
@@ -140,14 +153,16 @@ export async function PATCH(req: Request) {
         ...(body.phone       !== undefined && { phone:       body.phone       }),
         ...(body.country     !== undefined && { country:     body.country     }),
         ...(body.industry    !== undefined && { industry:    body.industry    }),
-        ...(body.creditLimit !== undefined && { creditLimit: body.creditLimit }),
-        ...(body.balanceDue  !== undefined && { balanceDue:  body.balanceDue  }),
+        ...(body.creditLimit !== undefined && { creditLimit: Number(body.creditLimit) }),
+        ...(body.balanceDue  !== undefined && { balanceDue:  Number(body.balanceDue)  }),
         ...(body.status      !== undefined && { status:      body.status      }),
         ...(portalCode       !== undefined && { portalCode }),
-        ...(body.notes           !== undefined && { notes:           body.notes           }),
-        ...(body.orders          !== undefined && { orders:          body.orders          }),
-        ...(body.whatsappPaused  !== undefined && { whatsappPaused:  body.whatsappPaused  }),
-        ...(body.totalSpend      !== undefined && { totalSpend:      body.totalSpend      }),
+        ...(body.notes              !== undefined && { notes:            body.notes            }),
+        ...(body.orders             !== undefined && { orders:           body.orders           }),
+        ...(body.whatsappPaused     !== undefined && { whatsappPaused:   body.whatsappPaused   }),
+        ...(body.totalSpend         !== undefined && { totalSpend:       body.totalSpend       }),
+        ...(body.onCreditHold       !== undefined && { onCreditHold:     Boolean(body.onCreditHold) }),
+        ...(body.creditHoldReason   !== undefined && { creditHoldReason: body.creditHoldReason }),
       },
     })
     return NextResponse.json(customer, { headers: CORS })

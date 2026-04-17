@@ -646,6 +646,7 @@ function PricingRulesSection() {
   };
 
   const deleteRule = async (id: string) => {
+    if (!confirm("Delete this pricing rule?")) return;
     setRules(prev => prev.filter(r => r.id !== id));
     fetch(`/api/pricing-rules?id=${id}`, { method: "DELETE" }).catch(() => {});
   };

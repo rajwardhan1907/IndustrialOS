@@ -35,15 +35,18 @@ export async function GET(req: Request) {
       take:    100,
     })
     const dbNotifications = dbRows.map(n => ({
-      id:        n.id,
-      type:      n.type,
-      severity:  n.severity,
-      title:     n.title,
-      body:      n.body,
-      tab:       n.tab,
-      read:      n.read,
-      createdAt: n.createdAt,
-      source:    'db' as const,
+      id:         n.id,
+      type:       n.type,
+      severity:   n.severity,
+      title:      n.title,
+      body:       n.body,
+      tab:        n.tab,
+      linkedType: n.linkedType,
+      linkedId:   n.linkedId,
+      groupKey:   n.groupKey,
+      read:       n.read,
+      createdAt:  n.createdAt,
+      source:     'db' as const,
     }))
 
     // ── 2. Overdue invoices (derived) ────────────────────────────────────────
@@ -165,12 +168,21 @@ export async function GET(req: Request) {
   }
 }
 
-// POST — create a persistent notification (called by other routes)
+// POST — create a persistent notification (called by other routes).
+// Dedupes by (workspaceId, groupKey) within a 5-minute window if groupKey provided.
 export async function POST(req: Request) {
   try {
     const body = await req.json()
     if (!body.workspaceId || !body.title) {
       return NextResponse.json({ error: 'workspaceId and title are required' }, { status: 400, headers: CORS })
+    }
+    const groupKey = body.groupKey ?? ''
+    if (groupKey) {
+      const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000)
+      const existing = await prisma.notification.findFirst({
+        where: { workspaceId: body.workspaceId, groupKey, createdAt: { gte: fiveMinAgo } },
+      })
+      if (existing) return NextResponse.json(existing, { headers: CORS })
     }
     const notif = await prisma.notification.create({
       data: {
@@ -180,6 +192,9 @@ export async function POST(req: Request) {
         title:       body.title,
         body:        body.body     ?? '',
         tab:         body.tab      ?? '',
+        linkedType:  body.linkedType ?? '',
+        linkedId:    body.linkedId  ?? '',
+        groupKey,
       },
     })
     return NextResponse.json(notif, { headers: CORS })
