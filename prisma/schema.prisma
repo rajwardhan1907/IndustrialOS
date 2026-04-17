@@ -201,7 +201,7 @@ model PurchaseOrder {
 model Shipment {
   id             String    @id @default(cuid())
   shipmentNumber String
-  orderId        String    @default("")
+  orderId        String?
   customer       String
   carrier        String    @default("Other")
   trackingNumber String    @default("")
@@ -264,7 +264,7 @@ model Contract {
 model Return {
   id           String    @id @default(cuid())
   rmaNumber    String
-  orderId      String    @default("")
+  orderId      String?
   customer     String
   sku          String
   qty          Int       @default(1)
