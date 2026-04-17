@@ -1,22 +1,23 @@
 // app/api/returns/route.ts
-// Phase 18 — Returns & RMA API
-// GET  /api/returns?workspaceId=xxx   → list all returns
-// POST /api/returns                   → create a new return request
-// PATCH /api/returns                  → update status, notes, refund fields
+// Returns & RMA API.
+// Status flow: requested → approved → received → refunded | rejected
+// On approve: deduct refund from customer.balanceDue (or set credit note).
+// On received: add qty back to inventory.
+// On refunded: mark refundProcessed + refundDate.
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { createNotification, validatePositive, validateNonNegative } from '@/lib/automation'
 
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
   "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
-};
-
-export async function OPTIONS() {
-  return new NextResponse(null, { status: 204, headers: CORS });
 }
 
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS })
+}
 
 function makeRMANumber(): string {
   const year = new Date().getFullYear()
@@ -24,7 +25,6 @@ function makeRMANumber(): string {
   return `RMA-${year}-${num}`
 }
 
-// ── GET ───────────────────────────────────────────────────────────────────────
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
@@ -43,7 +43,6 @@ export async function GET(req: Request) {
   }
 }
 
-// ── POST ──────────────────────────────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -56,19 +55,23 @@ export async function POST(req: Request) {
     if (!body.sku?.trim()) {
       return NextResponse.json({ error: 'SKU is required' }, { status: 400, headers: CORS })
     }
+    const vErr =
+      validatePositive(body.qty, 'qty') ??
+      validateNonNegative(body.refundAmount, 'refundAmount')
+    if (vErr) return NextResponse.json({ error: vErr }, { status: 400, headers: CORS })
 
     const ret = await prisma.return.create({
       data: {
         rmaNumber:     body.rmaNumber    ?? makeRMANumber(),
-        orderId:       body.orderId      ?? '',
+        orderId:       body.orderId      || null,
         customer:      body.customer.trim(),
         customerEmail: body.customerEmail ?? '',
         sku:           body.sku.trim(),
-        qty:           body.qty          ?? 1,
+        qty:           Number(body.qty ?? 1),
         reason:        body.reason       ?? 'other',
         description:   body.description  ?? '',
         status:        'requested',
-        refundAmount:  body.refundAmount ?? 0,
+        refundAmount:  Number(body.refundAmount ?? 0),
         refundMethod:  body.refundMethod ?? 'original',
         notes:         body.notes        ?? '',
         workspaceId:   body.workspaceId,
@@ -81,8 +84,6 @@ export async function POST(req: Request) {
   }
 }
 
-// ── PATCH ─────────────────────────────────────────────────────────────────────
-// Automation 4: status → "received" → add stock back to inventory
 export async function PATCH(req: Request) {
   try {
     const body = await req.json()
@@ -91,31 +92,87 @@ export async function PATCH(req: Request) {
     }
 
     const ret = await prisma.$transaction(async (tx) => {
-      // Fetch current return record first so we have sku + qty
       const current = await tx.return.findUnique({ where: { id: body.id } })
+      if (!current) throw new Error('Return not found')
 
       const updated = await tx.return.update({
         where: { id: body.id },
         data: {
           ...(body.status       !== undefined && { status:       body.status       }),
           ...(body.notes        !== undefined && { notes:        body.notes        }),
-          ...(body.refundAmount !== undefined && { refundAmount: body.refundAmount }),
+          ...(body.refundAmount !== undefined && { refundAmount: Number(body.refundAmount) }),
           ...(body.refundMethod !== undefined && { refundMethod: body.refundMethod }),
           ...(body.description  !== undefined && { description:  body.description  }),
+          ...(body.qty          !== undefined && { qty:          Number(body.qty)  }),
         },
       })
 
-      // Automation 4 — add returned stock back to inventory
-      if (body.status === 'received' && current?.sku) {
-        const invItem = await tx.inventoryItem.findFirst({
-          where: { sku: current.sku, workspaceId: updated.workspaceId },
-        })
-        if (invItem) {
-          await tx.inventoryItem.update({
-            where: { id: invItem.id },
-            data:  { stockLevel: invItem.stockLevel + (current.qty ?? 1) },
+      // Transition: → approved → deduct from customer.balanceDue, restore inventory
+      if (body.status === 'approved' && current.status !== 'approved') {
+        // Restore inventory
+        if (updated.sku) {
+          const invItem = await tx.inventoryItem.findFirst({
+            where: { sku: updated.sku, workspaceId: updated.workspaceId },
           })
+          if (invItem) {
+            await tx.inventoryItem.update({
+              where: { id: invItem.id },
+              data:  { stockLevel: invItem.stockLevel + (updated.qty ?? 1) },
+            })
+          }
         }
+        // Deduct refund from customer balanceDue
+        if (updated.refundAmount > 0) {
+          const customer = await tx.customer.findFirst({
+            where: { workspaceId: updated.workspaceId, name: { mode: 'insensitive', equals: updated.customer } },
+          })
+          if (customer) {
+            await tx.customer.update({
+              where: { id: customer.id },
+              data: {
+                balanceDue: Math.max(0, customer.balanceDue - updated.refundAmount),
+              },
+            })
+          }
+        }
+
+        await createNotification(tx, {
+          workspaceId: updated.workspaceId,
+          type: 'return',
+          severity: 'info',
+          title: `Return Approved — ${updated.customer}`,
+          body: `${updated.rmaNumber} · ${updated.sku} · $${updated.refundAmount.toLocaleString()}`,
+          tab: 'returns',
+          linkedType: 'return',
+          linkedId: updated.id,
+          groupKey: `return-approved-${updated.id}`,
+        })
+      }
+
+      // Transition: → received → (legacy inventory restore if not already done on approve)
+      if (body.status === 'received' && current.status !== 'received' && current.status !== 'approved') {
+        if (updated.sku) {
+          const invItem = await tx.inventoryItem.findFirst({
+            where: { sku: updated.sku, workspaceId: updated.workspaceId },
+          })
+          if (invItem) {
+            await tx.inventoryItem.update({
+              where: { id: invItem.id },
+              data:  { stockLevel: invItem.stockLevel + (updated.qty ?? 1) },
+            })
+          }
+        }
+      }
+
+      // Transition: → refunded → mark refundProcessed + refundDate
+      if (body.status === 'refunded' && current.status !== 'refunded') {
+        await tx.return.update({
+          where: { id: updated.id },
+          data: {
+            refundProcessed: true,
+            refundDate: new Date().toISOString().split('T')[0],
+          },
+        })
       }
 
       return updated
@@ -128,7 +185,6 @@ export async function PATCH(req: Request) {
   }
 }
 
-// ── DELETE ────────────────────────────────────────────────────────────────────
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url)

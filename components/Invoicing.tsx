@@ -359,6 +359,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
   };
 
   const deleteInvoice = (id: string) => {
+    if (!confirm("Delete this invoice? Associated payment records will also be removed. This cannot be undone.")) return;
     const updated = invoices.filter(inv => inv.id !== id);
     setInvoices(updated);
     saveInvoices(updated);

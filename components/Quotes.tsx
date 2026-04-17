@@ -322,6 +322,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
   };
 
   const deleteQuote = (id: string) => {
+    if (!confirm("Delete this quote? This action cannot be undone.")) return;
     const updated = quotes.filter(q => q.id !== id);
     setQuotes(updated);
     saveQuotes(updated);

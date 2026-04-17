@@ -15,31 +15,33 @@ model Workspace {
   industry            String
   createdAt           DateTime @default(now())
   poApprovalThreshold Float    @default(0)
-  currency            String   @default("USD")   // Phase 15
-  whatsappEnabled     Boolean  @default(false)   // Phase 11
+  currency            String   @default("USD") // Phase 15
+  whatsappEnabled     Boolean  @default(false) // Phase 11
   whatsappStages      String   @default("Confirmed,Shipped,Delivered") // Phase 11
-  quickbooksConnected Boolean  @default(false)   // Phase 17
-  xeroConnected       Boolean  @default(false)   // Phase 17
-  returnAddress       String   @default("")      // Portal returns: ship-to address shown after approval
-  returnInstructions  String   @default("")      // Portal returns: instructions shown after approval
+  quickbooksConnected Boolean  @default(false) // Phase 17
+  xeroConnected       Boolean  @default(false) // Phase 17
+  returnAddress       String   @default("")
+  returnInstructions  String   @default("")
 
-  users          User[]
-  orders         Order[]
-  invoices       Invoice[]
-  customers      Customer[]
-  quotes         Quote[]
-  inventory      InventoryItem[]
-  suppliers      Supplier[]
-  purchaseOrders PurchaseOrder[]
-  shipments      Shipment[]
-  returns        Return[]
-  pricingRules   PricingRule[]
-  contracts      Contract[]       // Phase 12
-  ediPartners    EdiPartner[]     // Phase 23
-  ediTransactions EdiTransaction[] // Phase 23
-  tickets          Ticket[]           // Phase 24
-  notifications    Notification[]     // Phase 25
-  customerAccounts CustomerAccount[]  // Customer Portal
+  users                   User[]
+  orders                  Order[]
+  invoices                Invoice[]
+  customers               Customer[]
+  quotes                  Quote[]
+  inventory               InventoryItem[]
+  suppliers               Supplier[]
+  purchaseOrders          PurchaseOrder[]
+  shipments               Shipment[]
+  returns                 Return[]
+  pricingRules            PricingRule[]
+  contracts               Contract[]
+  ediPartners             EdiPartner[]
+  ediTransactions         EdiTransaction[]
+  tickets                 Ticket[]
+  notifications           Notification[]
+  customerAccounts        CustomerAccount[]
+  notificationPreferences NotificationPreference[]
+  paymentRecords          PaymentRecord[]
 }
 
 // ── User ──────────────────────────────────────────────────────────────────────
@@ -52,6 +54,8 @@ model User {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   createdAt   DateTime  @default(now())
+
+  notificationPreferences NotificationPreference[]
 }
 
 // ── Order ─────────────────────────────────────────────────────────────────────
@@ -65,9 +69,16 @@ model Order {
   priority    String    @default("MED")
   source      String    @default("manual")
   notes       String    @default("")
+  quoteId     String?
+  quote       Quote?    @relation(fields: [quoteId], references: [id])
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @default(now()) @updatedAt
+
+  shipments Shipment[]
+  invoices  Invoice[]
+  returns   Return[]
 }
 
 // ── Invoice ───────────────────────────────────────────────────────────────────
@@ -81,36 +92,48 @@ model Invoice {
   total         Float     @default(0)
   amountPaid    Float     @default(0)
   paymentTerms  String    @default("Net 30")
+  paymentMethod String    @default("")
+  paymentDate   String    @default("")
   issueDate     String
   dueDate       String
   status        String    @default("unpaid")
   notes         String    @default("")
-  currency      String    @default("USD")  // Phase 15
+  currency      String    @default("USD")
+  orderId       String?
+  order         Order?    @relation(fields: [orderId], references: [id])
   workspaceId   String
   workspace     Workspace @relation(fields: [workspaceId], references: [id])
   createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+
+  payments PaymentRecord[]
 }
 
 // ── Customer ──────────────────────────────────────────────────────────────────
 model Customer {
-  id          String    @id @default(cuid())
-  name        String
-  contactName String
-  email       String
-  phone       String    @default("")
-  country     String    @default("")
-  industry    String    @default("")
-  creditLimit Float     @default(0)
-  balanceDue  Float     @default(0)
-  totalSpend  Float     @default(0)
-  status      String    @default("active")
-  portalCode  String    @default("")
-  notes           String    @default("")
-  orders          Json      @default("[]")
-  whatsappPaused  Boolean   @default(false)  // Phase 11
-  workspaceId     String
-  workspace       Workspace @relation(fields: [workspaceId], references: [id])
-  createdAt       DateTime  @default(now())
+  id                   String    @id @default(cuid())
+  name                 String
+  contactName          String
+  email                String
+  phone                String    @default("")
+  country              String    @default("")
+  industry             String    @default("")
+  creditLimit          Float     @default(0)
+  balanceDue           Float     @default(0)
+  totalSpend           Float     @default(0)
+  status               String    @default("active")
+  portalCode           String    @default("")
+  notes                String    @default("")
+  orders               Json      @default("[]")
+  whatsappPaused       Boolean   @default(false)
+  onCreditHold         Boolean   @default(false)
+  creditHoldReason     String    @default("")
+  daysSalesOutstanding Float     @default(0)
+  avgPaymentDaysLate   Float     @default(0)
+  returnRate           Float     @default(0)
+  workspaceId          String
+  workspace            Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt            DateTime  @default(now())
 
   @@unique([portalCode, workspaceId])
 }
@@ -133,6 +156,8 @@ model Quote {
   workspaceId  String
   workspace    Workspace @relation(fields: [workspaceId], references: [id])
   createdAt    DateTime  @default(now())
+
+  orders Order[]
 }
 
 // ── Inventory Item ────────────────────────────────────────────────────────────
@@ -150,6 +175,10 @@ model InventoryItem {
   binLocation  String    @default("")
   lastSynced   String
   supplier     String    @default("")
+  supplierId   String?
+  supplierRef  Supplier? @relation(fields: [supplierId], references: [id])
+  lastPoDate   String    @default("")
+  autoPoCount  Int       @default(0)
   workspaceId  String
   workspace    Workspace @relation(fields: [workspaceId], references: [id])
   createdAt    DateTime  @default(now())
@@ -157,51 +186,61 @@ model InventoryItem {
 
 // ── Supplier ──────────────────────────────────────────────────────────────────
 model Supplier {
-  id           String    @id @default(cuid())
-  name         String
-  contactName  String
-  email        String
-  phone        String    @default("")
-  country      String    @default("")
-  category     String    @default("other")
-  status       String    @default("active")
-  paymentTerms String    @default("Net 30")
-  leadTimeDays Int       @default(14)
-  rating       Int       @default(3)
-  notes        String    @default("")
-  workspaceId  String
-  workspace    Workspace @relation(fields: [workspaceId], references: [id])
-  createdAt    DateTime  @default(now())
+  id                    String    @id @default(cuid())
+  name                  String
+  contactName           String
+  email                 String
+  phone                 String    @default("")
+  country               String    @default("")
+  category              String    @default("other")
+  status                String    @default("active")
+  paymentTerms          String    @default("Net 30")
+  leadTimeDays          Int       @default(14)
+  rating                Int       @default(3)
+  notes                 String    @default("")
+  onTimeDeliveryPercent Float     @default(100)
+  qualityScore          Float     @default(5)
+  totalOrdersCount      Int       @default(0)
+  lastPoDate            String    @default("")
+  workspaceId           String
+  workspace             Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt             DateTime  @default(now())
+
+  inventoryItems InventoryItem[]
 }
 
 // ── Purchase Order ────────────────────────────────────────────────────────────
 model PurchaseOrder {
-  id             String    @id @default(cuid())
-  poNumber       String
-  supplierId     String
-  supplierName   String
-  items          Json
-  subtotal       Float     @default(0)
-  tax            Float     @default(0)
-  total          Float     @default(0)
-  status         String    @default("draft")
-  paymentTerms   String    @default("Net 30")
-  expectedDate   String
-  notes          String    @default("")
-  rejectionNote  String    @default("")
-  approvalStatus String    @default("not_required")
-  approvedBy     String    @default("")
-  approvedAt     String    @default("")
-  workspaceId    String
-  workspace      Workspace @relation(fields: [workspaceId], references: [id])
-  createdAt      DateTime  @default(now())
+  id                  String    @id @default(cuid())
+  poNumber            String
+  supplierId          String
+  supplierName        String
+  items               Json
+  subtotal            Float     @default(0)
+  tax                 Float     @default(0)
+  total               Float     @default(0)
+  status              String    @default("draft")
+  paymentTerms        String    @default("Net 30")
+  expectedDate        String
+  notes               String    @default("")
+  rejectionNote       String    @default("")
+  approvalStatus      String    @default("not_required")
+  approvedBy          String    @default("")
+  approvedAt          String    @default("")
+  isAutoPo            Boolean   @default(false)
+  triggeredByLowStock Boolean   @default(false)
+  lowStockSkuId       String    @default("")
+  workspaceId         String
+  workspace           Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt           DateTime  @default(now())
 }
 
 // ── Shipment ──────────────────────────────────────────────────────────────────
 model Shipment {
   id             String    @id @default(cuid())
   shipmentNumber String
-  orderId        String    @default("")
+  orderId        String?
+  order          Order?    @relation(fields: [orderId], references: [id])
   customer       String
   carrier        String    @default("Other")
   trackingNumber String    @default("")
@@ -217,20 +256,17 @@ model Shipment {
   workspaceId    String
   workspace      Workspace @relation(fields: [workspaceId], references: [id])
   createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @default(now()) @updatedAt
 }
 
 // ── Pricing Rule ─────────────────────────────────────────────────────────────
-// Phase 12 — Pricing Rules Engine
-// Two rule types:
-//   "volume"   — discount kicks in when line-item qty >= minQty
-//   "customer" — discount always applies for a named customer
 model PricingRule {
   id           String    @id @default(cuid())
-  name         String                          // human label, e.g. "Bulk 200+ deal"
-  type         String                          // "volume" | "customer"
-  minQty       Int       @default(0)           // volume rules: minimum qty to trigger
-  customerName String    @default("")          // customer rules: exact customer name
-  discountPct  Float     @default(0)           // discount percentage e.g. 10 = 10%
+  name         String
+  type         String
+  minQty       Int       @default(0)
+  customerName String    @default("")
+  discountPct  Float     @default(0)
   active       Boolean   @default(true)
   workspaceId  String
   workspace    Workspace @relation(fields: [workspaceId], references: [id])
@@ -238,20 +274,18 @@ model PricingRule {
 }
 
 // ── Contract & SLA Tracker ───────────────────────────────────────────────────
-// Phase 12 (roadmap) — track contracts with customers.
-// Status is auto-derived: draft → active → expiring (≤30 days) → expired
 model Contract {
   id             String    @id @default(cuid())
   contractNumber String
   title          String
   customer       String
-  minOrderQty    Int       @default(0)    // agreed minimum order quantity per period
-  agreedPricing  String    @default("")   // free-text description of pricing terms
-  deliverySLA    Int       @default(7)    // max delivery days agreed in contract
-  value          Float     @default(0)   // total contract value
+  minOrderQty    Int       @default(0)
+  agreedPricing  String    @default("")
+  deliverySLA    Int       @default(7)
+  value          Float     @default(0)
   startDate      String
   expiryDate     String
-  status         String    @default("active") // draft | active | expiring | expired
+  status         String    @default("active")
   notes          String    @default("")
   workspaceId    String
   workspace      Workspace @relation(fields: [workspaceId], references: [id])
@@ -259,70 +293,65 @@ model Contract {
 }
 
 // ── Return / RMA ──────────────────────────────────────────────────────────────
-// Phase 18 — Returns & RMA
-// Status flow: requested → approved → received → refunded | rejected
 model Return {
-  id           String    @id @default(cuid())
-  rmaNumber    String
-  orderId      String    @default("")
-  customer     String
-  sku          String
-  qty          Int       @default(1)
-  reason       String    @default("other")
-  description  String    @default("")
-  status        String    @default("requested")
-  refundAmount  Float     @default(0)
-  refundMethod  String    @default("original")
-  notes         String    @default("")
-  customerEmail String    @default("")           // set when customer submits via portal
-  workspaceId   String
-  workspace    Workspace @relation(fields: [workspaceId], references: [id])
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id              String    @id @default(cuid())
+  rmaNumber       String
+  orderId         String?
+  order           Order?    @relation(fields: [orderId], references: [id])
+  customer        String
+  sku             String
+  qty             Int       @default(1)
+  reason          String    @default("other")
+  description     String    @default("")
+  status          String    @default("requested")
+  refundAmount    Float     @default(0)
+  refundMethod    String    @default("original")
+  refundProcessed Boolean   @default(false)
+  refundDate      String    @default("")
+  notes           String    @default("")
+  customerEmail   String    @default("")
+  workspaceId     String
+  workspace       Workspace @relation(fields: [workspaceId], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 // ── EDI Trading Partner ───────────────────────────────────────────────────────
-// Phase 23 — EDI Support (X12 + EDIFACT)
-// One record per trading partner (customer or supplier that uses EDI).
 model EdiPartner {
-  id             String    @id @default(cuid())
-  name           String                        // human label, e.g. "Acme Corp EDI"
-  standard       String    @default("X12")     // "X12" | "EDIFACT"
-  // X12 ISA identifiers
-  isaQualifier   String    @default("01")       // ISA06 sender qual
-  isaId          String    @default("")         // ISA06 sender ID (15 chars)
-  partnerQual    String    @default("01")       // ISA08 receiver qual
-  partnerId      String    @default("")         // ISA08 receiver ID
-  // EDIFACT UNB identifiers
-  unbSenderId    String    @default("")
-  unbReceiverId  String    @default("")
-  // which transaction sets this partner uses
-  txSets         String    @default("850,855,856,810") // comma-separated
-  active         Boolean   @default(true)
-  notes          String    @default("")
-  workspaceId    String
-  workspace      Workspace @relation(fields: [workspaceId], references: [id])
-  transactions   EdiTransaction[]
-  createdAt      DateTime  @default(now())
+  id            String           @id @default(cuid())
+  name          String
+  standard      String           @default("X12")
+  isaQualifier  String           @default("01")
+  isaId         String           @default("")
+  partnerQual   String           @default("01")
+  partnerId     String           @default("")
+  unbSenderId   String           @default("")
+  unbReceiverId String           @default("")
+  txSets        String           @default("850,855,856,810")
+  active        Boolean          @default(true)
+  notes         String           @default("")
+  workspaceId   String
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id])
+  transactions  EdiTransaction[]
+  createdAt     DateTime         @default(now())
 }
 
 // ── EDI Transaction Log ───────────────────────────────────────────────────────
-// One row per EDI message sent or received.
 model EdiTransaction {
-  id              String     @id @default(cuid())
-  direction       String                           // "inbound" | "outbound"
-  standard        String     @default("X12")       // "X12" | "EDIFACT"
-  txSet           String                           // e.g. "850", "ORDERS"
-  controlNumber   String     @default("")
-  partnerId       String
-  partner         EdiPartner @relation(fields: [partnerId], references: [id])
-  status          String     @default("received")  // received | processed | error | sent | acked
-  rawPayload      String     @db.Text             // full EDI text stored for audit
-  parsedJson      Json?                            // parsed structured data
-  errorMsg        String     @default("")
-  workspaceId     String
-  workspace       Workspace  @relation(fields: [workspaceId], references: [id])
-  createdAt       DateTime   @default(now())
+  id            String     @id @default(cuid())
+  direction     String
+  standard      String     @default("X12")
+  txSet         String
+  controlNumber String     @default("")
+  partnerId     String
+  partner       EdiPartner @relation(fields: [partnerId], references: [id])
+  status        String     @default("received")
+  rawPayload    String     @db.Text
+  parsedJson    Json?
+  errorMsg      String     @default("")
+  workspaceId   String
+  workspace     Workspace  @relation(fields: [workspaceId], references: [id])
+  createdAt     DateTime   @default(now())
 }
 
 // ── Ticket ────────────────────────────────────────────────────────────────────
@@ -359,30 +388,66 @@ model TicketComment {
 }
 
 // ── Notification ──────────────────────────────────────────────────────────────
-// Phase 25 — Persistent Notifications
-// Written by server-side routes (tickets, orders, inventory automations).
-// Read state is tracked per-record in the DB (not in localStorage).
 model Notification {
   id          String    @id @default(cuid())
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
-  type        String    @default("info")    // invoice | inventory | order | contract | ticket
-  severity    String    @default("info")    // info | warn | error
+  type        String    @default("info")
+  severity    String    @default("info")
   title       String
   body        String    @default("")
-  tab         String    @default("")        // the app tab to navigate to
+  tab         String    @default("")
+  linkedType  String    @default("")
+  linkedId    String    @default("")
+  groupKey    String    @default("")
   read        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([workspaceId, groupKey, createdAt])
+}
+
+// ── Notification Preference ───────────────────────────────────────────────────
+// Per-user alert routing preferences. One row per user per workspace.
+model NotificationPreference {
+  id               String    @id @default(cuid())
+  workspaceId      String
+  workspace        Workspace @relation(fields: [workspaceId], references: [id])
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  alertOrdersAbove Float     @default(0) // 0 = all orders
+  sendEmail        Boolean   @default(false)
+  sendSms          Boolean   @default(false)
+  useDigest        Boolean   @default(false)
+  digestTime       String    @default("09:00")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([workspaceId, userId])
+}
+
+// ── Payment Record ────────────────────────────────────────────────────────────
+// One row per payment transaction against an invoice.
+// type: payment | refund | credit | overpayment
+model PaymentRecord {
+  id          String    @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  amount      Float     @default(0)
+  type        String    @default("payment")
+  method      String    @default("")
+  reference   String    @default("")
+  notes       String    @default("")
   createdAt   DateTime  @default(now())
 }
 
 // ── Customer Portal ───────────────────────────────────────────────────────────
-// Customer-facing portal accounts (separate from internal User accounts).
-// Customers sign up at /portal/[workspaceId] with email + password.
 model CustomerAccount {
   id          String            @id @default(cuid())
   email       String
   name        String            @default("")
-  password    String            @default("")  // bcrypt hash
+  password    String            @default("")
   workspaceId String
   workspace   Workspace         @relation(fields: [workspaceId], references: [id])
   sessions    CustomerSession[]

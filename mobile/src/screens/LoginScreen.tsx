@@ -26,7 +26,7 @@ export default function LoginScreen({ onLogin }: Props) {
     try {
       const res = await login(email.trim().toLowerCase(), password);
       // res: { token, workspaceId, role, userId, email, name }
-      await storeSession(res.token, res.workspaceId, res.role, res.userId ?? "", res.email, res.name);
+      await storeSession(res.token, res.workspaceId, res.role, res.userId ?? "", res.email, res.name, res.expiresAt);
 
       // Register for push notifications
       const pushToken = await registerForPushNotifications();

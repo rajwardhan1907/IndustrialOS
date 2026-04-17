@@ -248,6 +248,7 @@ export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) =
   };
 
   const deleteContract = (id: string) => {
+    if (!confirm("Delete this contract? This action cannot be undone.")) return;
     save(contracts.filter(c => c.id !== id));
     deleteContractFromDb(id);
     setSelected(null);
