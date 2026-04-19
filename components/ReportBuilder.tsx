@@ -263,10 +263,10 @@ export default function ReportBuilder() {
       <div style={{
         background: C.surface, border: `1px solid ${C.border}`,
         borderRadius: 12, padding: 20, marginBottom: 20,
-        display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16,
+        display: "flex", flexDirection: "column", gap: 16,
       }}>
 
-        {/* Data source */}
+        {/* Row 1 — Data source (full width) */}
         <div>
           <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, display: "block", marginBottom: 6 }}>
             DATA SOURCE
@@ -286,86 +286,91 @@ export default function ReportBuilder() {
           </div>
         </div>
 
-        {/* Date range */}
-        <div>
-          <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, display: "block", marginBottom: 6 }}>
-            DATE RANGE
-          </label>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{
-              flex: 1, padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-              background: C.bg, color: C.text, fontSize: 13,
-            }} />
-            <span style={{ color: C.muted, fontSize: 12 }}>to</span>
-            <input type="date" value={dateTo}   onChange={e => setDateTo(e.target.value)}   style={{
-              flex: 1, padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-              background: C.bg, color: C.text, fontSize: 13,
-            }} />
-            {(dateFrom || dateTo) && (
-              <button onClick={() => { setDateFrom(""); setDateTo(""); }} style={{
-                background: "none", border: "none", cursor: "pointer", color: C.muted, padding: 2,
-              }}><X size={14} /></button>
+        {/* Row 2 — Date range · Status filter · Columns */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 16, alignItems: "start" }}>
+
+          {/* Date range */}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, display: "block", marginBottom: 6 }}>
+              DATE RANGE
+            </label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{
+                flex: 1, padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+                background: C.bg, color: C.text, fontSize: 13,
+              }} />
+              <span style={{ color: C.muted, fontSize: 12, whiteSpace: "nowrap" }}>to</span>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{
+                flex: 1, padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+                background: C.bg, color: C.text, fontSize: 13,
+              }} />
+              {(dateFrom || dateTo) && (
+                <button onClick={() => { setDateFrom(""); setDateTo(""); }} style={{
+                  background: "none", border: "none", cursor: "pointer", color: C.muted, padding: 2, flexShrink: 0,
+                }}><X size={14} /></button>
+              )}
+            </div>
+          </div>
+
+          {/* Status filter */}
+          <div style={{ minWidth: 160 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, display: "block", marginBottom: 6 }}>
+              STATUS FILTER
+            </label>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{
+              width: "100%", padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
+              background: C.bg, color: C.text, fontSize: 13, cursor: "pointer",
+            }}>
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="active">Active</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="shipped">Shipped</option>
+              <option value="paid">Paid</option>
+              <option value="overdue">Overdue</option>
+              <option value="draft">Draft</option>
+            </select>
+          </div>
+
+          {/* Columns */}
+          <div style={{ position: "relative" }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, display: "block", marginBottom: 6 }}>
+              COLUMNS ({selectedCols.length}/{allCols.length})
+            </label>
+            <button onClick={() => setColPicker(v => !v)} style={{
+              display: "flex", alignItems: "center", gap: 6, width: "100%",
+              padding: "7px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
+              background: C.bg, color: C.text, fontSize: 13, cursor: "pointer", justifyContent: "space-between",
+            }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Filter size={13} /> Choose columns</span>
+              <ChevronDown size={13} />
+            </button>
+            {colPicker && (
+              <div style={{
+                position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
+                background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.1)", padding: 12, marginTop: 4,
+              }}>
+                {allCols.map(col => (
+                  <label key={col.key} style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    padding: "6px 4px", cursor: "pointer", fontSize: 13,
+                    color: selectedCols.includes(col.key) ? C.text : C.muted,
+                  }}>
+                    <input type="checkbox"
+                      checked={selectedCols.includes(col.key)}
+                      onChange={e => {
+                        if (e.target.checked) setSelectedCols(s => [...s, col.key]);
+                        else setSelectedCols(s => s.filter(k => k !== col.key));
+                      }}
+                    />
+                    {col.label}
+                  </label>
+                ))}
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Status filter */}
-        <div>
-          <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, display: "block", marginBottom: 6 }}>
-            STATUS FILTER
-          </label>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{
-            width: "100%", padding: "7px 10px", borderRadius: 8, border: `1px solid ${C.border}`,
-            background: C.bg, color: C.text, fontSize: 13, cursor: "pointer",
-          }}>
-            <option value="all">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="active">Active</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="shipped">Shipped</option>
-            <option value="paid">Paid</option>
-            <option value="overdue">Overdue</option>
-            <option value="draft">Draft</option>
-          </select>
-        </div>
-
-        {/* Columns */}
-        <div style={{ position: "relative" }}>
-          <label style={{ fontSize: 12, fontWeight: 700, color: C.muted, display: "block", marginBottom: 6 }}>
-            COLUMNS ({selectedCols.length}/{allCols.length})
-          </label>
-          <button onClick={() => setColPicker(v => !v)} style={{
-            display: "flex", alignItems: "center", gap: 6, width: "100%",
-            padding: "7px 12px", borderRadius: 8, border: `1px solid ${C.border}`,
-            background: C.bg, color: C.text, fontSize: 13, cursor: "pointer", justifyContent: "space-between",
-          }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 6 }}><Filter size={13} /> Choose columns</span>
-            <ChevronDown size={13} />
-          </button>
-          {colPicker && (
-            <div style={{
-              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 100,
-              background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.1)", padding: 12, marginTop: 4,
-            }}>
-              {allCols.map(col => (
-                <label key={col.key} style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "6px 4px", cursor: "pointer", fontSize: 13,
-                  color: selectedCols.includes(col.key) ? C.text : C.muted,
-                }}>
-                  <input type="checkbox"
-                    checked={selectedCols.includes(col.key)}
-                    onChange={e => {
-                      if (e.target.checked) setSelectedCols(s => [...s, col.key]);
-                      else setSelectedCols(s => s.filter(k => k !== col.key));
-                    }}
-                  />
-                  {col.label}
-                </label>
-              ))}
-            </div>
-          )}
         </div>
       </div>
 
