@@ -12,7 +12,7 @@ import { downloadCSV } from "@/lib/exportCSV";
 import {
   Plus, FileText, Calendar, AlertTriangle, CheckCircle,
   Clock, Trash2, ChevronLeft, Building2, Package,
-  Truck, DollarSign, Edit3, Download, X,
+  Truck, DollarSign, Edit3, Download, X, Search,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -220,11 +220,12 @@ export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) =
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
 
-  const [contracts, setContracts] = useState<Contract[]>(() => loadContracts());
-  const [view,     setView]     = useState<"list" | "detail">("list");
-  const [selected, setSelected] = useState<Contract | null>(null);
-  const [showNew,  setShowNew]  = useState(false);
-  const [filter,   setFilter]   = useState<ContractStatus | "all">("all");
+  const [contracts,  setContracts]  = useState<Contract[]>(() => loadContracts());
+  const [view,       setView]       = useState<"list" | "detail">("list");
+  const [selected,   setSelected]   = useState<Contract | null>(null);
+  const [showNew,    setShowNew]    = useState(false);
+  const [filter,     setFilter]     = useState<ContractStatus | "all">("all");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Load from DB in background
   useEffect(() => {
@@ -260,7 +261,14 @@ export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) =
   const expired  = contracts.filter(c => c.status === "expired").length;
   const totalVal = contracts.filter(c => c.status !== "expired").reduce((s, c) => s + c.value, 0);
 
-  const visible = filter === "all" ? contracts : contracts.filter(c => c.status === filter);
+  const visible = contracts.filter(c => {
+    if (filter !== "all" && c.status !== filter) return false;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      if (!(c.customer?.toLowerCase().includes(term) || c.title?.toLowerCase().includes(term) || c.contractNumber?.toLowerCase().includes(term))) return false;
+    }
+    return true;
+  });
 
   // ── DETAIL VIEW ─────────────────────────────────────────────────────────────
   if (view === "detail" && selected) {
@@ -367,7 +375,11 @@ export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) =
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Contracts & SLAs</h1>
           <p style={{ color: C.muted, fontSize: 13 }}>Track customer agreements, delivery SLAs, and contract expiry dates.</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={14} style={{ position: "absolute", left: 10, color: C.muted, pointerEvents: "none" }} />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search contracts…" style={{ padding: "9px 12px 9px 32px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, outline: "none", width: 190 }} />
+          </div>
           <button
             onClick={() => downloadCSV(`contracts_${new Date().toISOString().split("T")[0]}`, contracts.map(c => ({
               "Contract #":    c.contractNumber,

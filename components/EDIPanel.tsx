@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { Plus, Trash2, Send, Download, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Plus, Trash2, Send, Download, RefreshCw, ChevronDown, ChevronRight, AlertTriangle, CheckCircle, XCircle, Clock, Search } from "lucide-react";
 import { C } from "@/lib/utils";
 import { Card, SectionTitle } from "./Dashboard";
 
@@ -66,6 +66,7 @@ export default function EDIPanel() {
   const [tab,          setTab]         = useState<"partners" | "inbound" | "outbound" | "log">("partners");
   const [partners,     setPartners]    = useState<Partner[]>([]);
   const [transactions, setTransactions]= useState<Transaction[]>([]);
+  const [searchTerm,   setSearchTerm]  = useState("");
   const [loading,      setLoading]     = useState(false);
   const [msg,          setMsg]         = useState("");
   const [err,          setErr]         = useState("");
@@ -222,12 +223,18 @@ export default function EDIPanel() {
       {/* ── PARTNERS tab ─────────────────────────────────────────────────── */}
       {tab === "partners" && (
         <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div style={{ fontSize: 13, color: C.muted }}>{partners.length} trading partner{partners.length !== 1 ? "s" : ""}</div>
-            <button onClick={() => { setShowPartnerForm(true); setEditingId(null); setPartnerForm(blankPartner()); }}
-              style={{ padding: "8px 16px", background: C.blue, color: "#fff", border: `1px solid ${C.blueBorder}`, borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-              <Plus size={13} /> Add Partner
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <Search size={13} style={{ position: "absolute", left: 9, color: C.muted, pointerEvents: "none" }} />
+                <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search partners…" style={{ padding: "7px 10px 7px 28px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 12, outline: "none", width: 170 }} />
+              </div>
+              <button onClick={() => { setShowPartnerForm(true); setEditingId(null); setPartnerForm(blankPartner()); }}
+                style={{ padding: "8px 16px", background: C.blue, color: "#fff", border: `1px solid ${C.blueBorder}`, borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+                <Plus size={13} /> Add Partner
+              </button>
+            </div>
           </div>
 
           {showPartnerForm && (
@@ -284,7 +291,7 @@ export default function EDIPanel() {
             </div>
           )}
 
-          {partners.map(p => (
+          {partners.filter(p => !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.standard.toLowerCase().includes(searchTerm.toLowerCase()) || p.isaId?.toLowerCase().includes(searchTerm.toLowerCase())).map(p => (
             <Card key={p.id}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -442,11 +449,17 @@ export default function EDIPanel() {
       {/* ── LOG tab ───────────────────────────────────────────────────────── */}
       {tab === "log" && (
         <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
             <div style={{ fontSize: 13, color: C.muted }}>{transactions.length} transaction{transactions.length !== 1 ? "s" : ""}</div>
-            <button onClick={load} style={{ padding: "7px 14px", background: C.bg, color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
-              <RefreshCw size={12} /> Refresh
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <Search size={13} style={{ position: "absolute", left: 9, color: C.muted, pointerEvents: "none" }} />
+                <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search transactions…" style={{ padding: "7px 10px 7px 28px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 12, outline: "none", width: 190 }} />
+              </div>
+              <button onClick={load} style={{ padding: "7px 14px", background: C.bg, color: C.muted, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center", gap: 5 }}>
+                <RefreshCw size={12} /> Refresh
+              </button>
+            </div>
           </div>
 
           {transactions.length === 0 && (
@@ -455,7 +468,7 @@ export default function EDIPanel() {
             </div>
           )}
 
-          {transactions.map(tx => {
+          {transactions.filter(tx => !searchTerm || tx.txSet?.toLowerCase().includes(searchTerm.toLowerCase()) || tx.controlNumber?.toLowerCase().includes(searchTerm.toLowerCase()) || tx.partner?.name?.toLowerCase().includes(searchTerm.toLowerCase())).map(tx => {
             const sc = statusColor(tx.status);
             const expanded = expandedTx === tx.id;
             return (

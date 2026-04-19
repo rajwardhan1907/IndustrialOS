@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, X, CheckCircle, ChevronRight, Receipt, Trash2 } from "lucide-react";
+import { Plus, X, CheckCircle, ChevronRight, Receipt, Trash2, Search } from "lucide-react";
 import { C } from "@/lib/utils";
 import { Card, SectionTitle } from "./Dashboard";
 import {
@@ -193,6 +193,7 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
   const [showNew,    setShowNew]    = useState(false);
   const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null);
   const [skuPopup,   setSkuPopup]   = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Load from localStorage immediately (fast), then refresh from DB
   // Also poll every 30s so portal orders appear without manual reload
@@ -313,9 +314,18 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
     }
   };
 
+  const term = searchTerm.toLowerCase();
+  const filteredOrders = term
+    ? orders.filter(o =>
+        o.customer?.toLowerCase().includes(term) ||
+        o.id?.toLowerCase().includes(term) ||
+        o.sku?.toLowerCase().includes(term)
+      )
+    : orders;
+
   const cols = STAGES.map(stage => ({
     stage,
-    items: orders.filter(o => o.stage === stage),
+    items: filteredOrders.filter(o => o.stage === stage),
   }));
 
   const activeCount = orders.filter(o => o.stage !== "Delivered").length;
@@ -354,18 +364,24 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
             {activeCount} active order{activeCount !== 1 ? "s" : ""}
           </div>
         </div>
-        {!isViewer && (
-        <button
-          onClick={() => setShowNew(true)}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "9px 18px", background: C.blue, border: "none",
-            borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer",
-          }}
-        >
-          <Plus size={15} /> New Order
-        </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={14} style={{ position: "absolute", left: 10, color: C.muted, pointerEvents: "none" }} />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search orders…" style={{ padding: "9px 12px 9px 32px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, outline: "none", width: 180 }} />
+          </div>
+          {!isViewer && (
+          <button
+            onClick={() => setShowNew(true)}
+            style={{
+              display: "flex", alignItems: "center", gap: 6,
+              padding: "9px 18px", background: C.blue, border: "none",
+              borderRadius: 10, color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer",
+            }}
+          >
+            <Plus size={15} /> New Order
+          </button>
+          )}
+        </div>
       </div>
 
       {/* ── Kanban board ── */}
