@@ -2,7 +2,7 @@
 // Issues a fresh token if the provided token is still valid (not expired).
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { makeToken, decodeToken } from "../mobile-token/route";
+import { makeToken, decodeToken } from "@/lib/mobileToken";
 
 const CORS = {
   "Access-Control-Allow-Origin":  "*",

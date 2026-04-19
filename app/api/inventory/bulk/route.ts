@@ -11,7 +11,7 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS })
 }
 
-export interface BulkRow {
+interface BulkRow {
   sku:          string;
   name:         string;
   category?:    string;
