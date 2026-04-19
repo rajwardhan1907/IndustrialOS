@@ -7,6 +7,8 @@ import {
 import { theme, s } from "../lib/theme";
 import { fetchTickets, createTicket, updateTicket, postTicketComment, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
+import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
+import { SkuModal } from "./SkuModal";
 
 interface Comment { id: string; authorName: string; body: string; createdAt: string; }
 interface Ticket {
@@ -45,6 +47,8 @@ export default function TicketsScreen() {
   const [posting,    setPosting]    = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [session,    setSession]    = useState<any>({});
+  const [workspaceId, setWorkspaceId] = useState<string>("");
+  const [skuOpen,    setSkuOpen]    = useState<string | null>(null);
 
   useEffect(() => { getSession().then(setSession); }, []);
 
@@ -53,6 +57,7 @@ export default function TicketsScreen() {
     try {
       const { workspaceId } = await getSession();
       if (!workspaceId) { setSessionExpired(true); return; }
+      setWorkspaceId(workspaceId);
       const data = await fetchTickets(workspaceId);
       setTickets(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -103,6 +108,19 @@ export default function TicketsScreen() {
     } catch (e: any) { Alert.alert("Error", e.message); }
     finally { setUpdatingStatus(false); }
   };
+
+  const PRIORITY_RANK: Record<string, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
+  const STATUS_RANK: Record<string, number> = { open: 1, in_progress: 2, resolved: 3 };
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered } = useFilterSort(tickets, {
+    searchFields: (i) => [i.title, i.description, i.ticketNumber, i.raisedName, i.assignedName, (i as any).customer, (i as any).sku],
+    sortOptions: [
+      { value: "date",     label: "Date",     get: (i) => i.createdAt },
+      { value: "priority", label: "Priority", get: (i) => PRIORITY_RANK[i.priority] ?? 0 },
+      { value: "status",   label: "Status",   get: (i) => STATUS_RANK[i.status] ?? 0 },
+    ],
+    defaultSort: "date",
+    defaultDir: "desc",
+  });
 
   if (loading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}><ActivityIndicator size="large" color={theme.blue} /></View>;
 
@@ -191,11 +209,22 @@ export default function TicketsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />}
       >
         <Text style={[s.heading, { marginBottom: 16 }]}>Tickets</Text>
+        <SearchSortBar
+          search={search} setSearch={setSearch}
+          sortBy={sortBy} setSortBy={setSortBy}
+          sortDir={sortDir} setSortDir={setSortDir}
+          sortOptions={[
+            { value: "date",     label: "Date" },
+            { value: "priority", label: "Priority" },
+            { value: "status",   label: "Status" },
+          ]}
+          placeholder="Search subject, customer, or SKU…"
+        />
         {tickets.length === 0 ? (
           <View style={[s.card, { alignItems: "center", padding: 32 }]}>
             <Text style={{ color: theme.muted, fontSize: 13 }}>No tickets yet. Tap + to create one.</Text>
           </View>
-        ) : tickets.map(t => {
+        ) : filtered.map(t => {
           const p = priorityColor(t.priority);
           const st = statusColor(t.status);
           return (
@@ -265,6 +294,8 @@ export default function TicketsScreen() {
           </View>
         </View>
       </Modal>
+
+      <SkuModal sku={skuOpen} workspaceId={workspaceId} onClose={() => setSkuOpen(null)} />
     </View>
   );
 }

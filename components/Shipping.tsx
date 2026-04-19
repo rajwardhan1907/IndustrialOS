@@ -20,6 +20,7 @@ import {
   fetchShipmentsFromDb, createShipmentInDb, updateShipmentInDb,
 } from "@/lib/shipping";
 import { loadOrders } from "@/lib/orders";
+import { useFilterSort, SearchSortBar } from "./useFilterSort";
 
 // ── Status style map ──────────────────────────────────────────────────────────
 const STATUS_STYLE: Record<ShipmentStatus, { color: string; bg: string; border: string }> = {
@@ -276,6 +277,17 @@ export default function Shipping({ onNavigate }: { onNavigate?: (tab: string) =>
   // ── Filtered list ─────────────────────────────────────────────────────────
   const filtered = filter === "all" ? shipments : shipments.filter(s => s.status === filter);
 
+  const shipmentSort = useFilterSort(filtered, {
+    searchFields: (s) => [s.customer, s.trackingNumber, s.shipmentNumber, s.origin, s.destination],
+    sortOptions: [
+      { value: "date",     label: "Date",     get: (s) => s.createdAt },
+      { value: "customer", label: "Customer", get: (s) => s.customer },
+      { value: "status",   label: "Status",   get: (s) => s.status },
+    ],
+    defaultSort: "date",
+    defaultDir: "desc",
+  });
+
   // ── Carrier summary ───────────────────────────────────────────────────────
   const carrierMap = shipments.reduce((acc, s) => {
     acc[s.carrier] = (acc[s.carrier] || 0) + 1;
@@ -365,6 +377,18 @@ export default function Shipping({ onNavigate }: { onNavigate?: (tab: string) =>
           )}
         </Card>
       ) : (
+        <>
+        <SearchSortBar
+          search={shipmentSort.search} setSearch={shipmentSort.setSearch}
+          sortBy={shipmentSort.sortBy} setSortBy={shipmentSort.setSortBy}
+          sortDir={shipmentSort.sortDir} setSortDir={shipmentSort.setSortDir}
+          sortOptions={[
+            { value: "date", label: "Date" },
+            { value: "customer", label: "Customer" },
+            { value: "status", label: "Status" },
+          ]}
+          placeholder="Search shipments…"
+        />
         <Card style={{ padding:0, overflow:"hidden" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
             <thead>
@@ -375,8 +399,8 @@ export default function Shipping({ onNavigate }: { onNavigate?: (tab: string) =>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((s,i)=>(
-                <tr key={s.id} onClick={()=>setSelected(s)} style={{ borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none", cursor:"pointer" }}>
+              {shipmentSort.filtered.map((s,i)=>(
+                <tr key={s.id} onClick={()=>setSelected(s)} style={{ borderBottom:i<shipmentSort.filtered.length-1?`1px solid ${C.border}`:"none", cursor:"pointer" }}>
                   <td style={{ padding:"13px 16px", fontWeight:700, color:C.blue, fontFamily:"monospace" }}>{s.shipmentNumber}</td>
                   <td style={{ padding:"13px 16px", fontWeight:600, color:C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{s.customer}</span></td>
                   <td style={{ padding:"13px 16px" }}><CarrierBadge carrier={s.carrier}/></td>
@@ -398,6 +422,7 @@ export default function Shipping({ onNavigate }: { onNavigate?: (tab: string) =>
             </tbody>
           </table>
         </Card>
+        </>
       )}
 
       {/* ── Shipment Detail Panel ── */}

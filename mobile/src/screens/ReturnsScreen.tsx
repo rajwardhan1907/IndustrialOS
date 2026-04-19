@@ -8,6 +8,8 @@ import {
 import { theme, s } from "../lib/theme";
 import { fetchReturns, updateReturnStatus, createReturn, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
+import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
+import { SkuModal, SkuText } from "./SkuModal";
 
 interface Return {
   id: string; rmaNumber: string; customer: string; sku: string;
@@ -32,6 +34,8 @@ export default function ReturnsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [selected,   setSelected]   = useState<Return | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string>("");
+  const [skuOpen,    setSkuOpen]    = useState<string | null>(null);
   // New return state
   const [showNew,    setShowNew]    = useState(false);
   const [newCustomer,setNewCustomer]= useState("");
@@ -46,6 +50,7 @@ export default function ReturnsScreen() {
     try {
       const { workspaceId } = await getSession();
       if (!workspaceId) { setSessionExpired(true); return; }
+      setWorkspaceId(workspaceId);
       const data = await fetchReturns(workspaceId);
       setReturns(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -77,6 +82,17 @@ export default function ReturnsScreen() {
     } catch (e: any) { Alert.alert("Error", e.message); }
     finally { setCreating(false); }
   };
+
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered } = useFilterSort(returns, {
+    searchFields: (i) => [i.customer, i.sku, i.reason, i.rmaNumber],
+    sortOptions: [
+      { value: "date",     label: "Date",     get: (i) => (i as any).createdAt ?? i.rmaNumber },
+      { value: "customer", label: "Customer", get: (i) => (i.customer || "").toLowerCase() },
+      { value: "status",   label: "Status",   get: (i) => STATUSES.indexOf(i.status) },
+    ],
+    defaultSort: "date",
+    defaultDir: "desc",
+  });
 
   if (loading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}><ActivityIndicator size="large" color={theme.blue} /></View>;
 
@@ -142,11 +158,22 @@ export default function ReturnsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />}
       >
         <Text style={[s.heading, { marginBottom: 16 }]}>Returns</Text>
+        <SearchSortBar
+          search={search} setSearch={setSearch}
+          sortBy={sortBy} setSortBy={setSortBy}
+          sortDir={sortDir} setSortDir={setSortDir}
+          sortOptions={[
+            { value: "date", label: "Date" },
+            { value: "customer", label: "Customer" },
+            { value: "status", label: "Status" },
+          ]}
+          placeholder="Search customer, SKU, or reason…"
+        />
         {returns.length === 0 ? (
           <View style={[s.card, { alignItems: "center", padding: 32 }]}>
             <Text style={{ color: theme.muted, fontSize: 13 }}>No returns found. Tap + to log one.</Text>
           </View>
-        ) : returns.map(r => {
+        ) : filtered.map(r => {
           const st = statusColor(r.status);
           return (
             <TouchableOpacity key={r.id} style={[s.card, { marginBottom: 10 }]} onPress={() => setSelected(r)} activeOpacity={0.85}>
@@ -155,7 +182,9 @@ export default function ReturnsScreen() {
                 <View style={s.badge(st.bg, st.color, st.border)}><Text style={s.badgeText(st.color)}>{r.status.toUpperCase()}</Text></View>
               </View>
               <Text style={{ fontSize: 14, fontWeight: "700", color: theme.text, marginBottom: 4 }}>{r.customer}</Text>
-              <Text style={{ fontSize: 12, color: theme.muted }}>SKU: {r.sku} · Qty: {r.qty}</Text>
+              <Text style={{ fontSize: 12, color: theme.muted }}>
+                SKU: <SkuText sku={r.sku} onPress={() => setSkuOpen(r.sku)} /> · Qty: {r.qty}
+              </Text>
             </TouchableOpacity>
           );
         })}
@@ -208,6 +237,8 @@ export default function ReturnsScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      <SkuModal sku={skuOpen} workspaceId={workspaceId} onClose={() => setSkuOpen(null)} />
     </View>
   );
 }

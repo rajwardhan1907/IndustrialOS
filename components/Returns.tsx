@@ -7,6 +7,8 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Plus, X, ChevronLeft, RotateCcw, CheckCircle, XCircle, Package, RefreshCw } from "lucide-react";
 import { C } from "@/lib/utils";
+import { useFilterSort, SearchSortBar } from "./useFilterSort";
+import { SkuLink } from "./SkuPopup";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ReturnStatus  = "requested" | "approved" | "received" | "refunded" | "rejected";
@@ -278,6 +280,18 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
   // ── Filtered list ──────────────────────────────────────────────────────────
   const visible = filter === "all" ? returns : returns.filter(r => r.status === filter);
 
+  const workspaceId = typeof window !== "undefined" ? (localStorage.getItem("workspaceDbId") ?? "") : "";
+  const returnSort = useFilterSort(visible, {
+    searchFields: (r) => [r.customer, r.sku, r.rmaNumber, r.description, REASON_LABELS[r.reason]],
+    sortOptions: [
+      { value: "date",     label: "Date",     get: (r) => r.createdAt },
+      { value: "customer", label: "Customer", get: (r) => r.customer },
+      { value: "status",   label: "Status",   get: (r) => r.status },
+    ],
+    defaultSort: "date",
+    defaultDir: "desc",
+  });
+
   // ── Stats ──────────────────────────────────────────────────────────────────
   const stats = {
     total:     returns.length,
@@ -453,6 +467,18 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
             )}
           </div>
         ) : (
+          <>
+          <SearchSortBar
+            search={returnSort.search} setSearch={returnSort.setSearch}
+            sortBy={returnSort.sortBy} setSortBy={returnSort.setSortBy}
+            sortDir={returnSort.sortDir} setSortDir={returnSort.setSortDir}
+            sortOptions={[
+              { value: "date", label: "Date" },
+              { value: "customer", label: "Customer" },
+              { value: "status", label: "Status" },
+            ]}
+            placeholder="Search returns…"
+          />
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
@@ -463,11 +489,11 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
                 </tr>
               </thead>
               <tbody>
-                {visible.map((ret, i) => {
+                {returnSort.filtered.map((ret, i) => {
                   const cfg  = STATUS_CFG[ret.status];
                   const Icon = cfg.icon;
                   return (
-                    <tr key={ret.id} style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
+                    <tr key={ret.id} style={{ borderBottom: i < returnSort.filtered.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
                       onClick={() => setSelected(ret)}>
                       <td style={{ padding: "13px 16px", fontWeight: 700, color: C.blue, fontFamily: "monospace" }}>{ret.rmaNumber}</td>
                       <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}>
@@ -478,7 +504,7 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
                           </span>
                         )}
                       </td>
-                      <td style={{ padding: "13px 16px", color: C.muted, fontFamily: "monospace" }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("inventory")}>{ret.sku}</span></td>
+                      <td style={{ padding: "13px 16px", color: C.muted, fontFamily: "monospace" }} onClick={(e) => e.stopPropagation()}><SkuLink sku={ret.sku} workspaceId={workspaceId} /></td>
                       <td style={{ padding: "13px 16px", color: C.text }}>{ret.qty}</td>
                       <td style={{ padding: "13px 16px", color: C.muted }}>{REASON_LABELS[ret.reason]}</td>
                       <td style={{ padding: "13px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(ret.refundAmount)}</td>
@@ -514,6 +540,7 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
               </tbody>
             </table>
           </div>
+          </>
         )
       )}
     </div>

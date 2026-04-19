@@ -8,6 +8,7 @@ import {
 import { theme, s } from "../lib/theme";
 import { fetchInvoices, createInvoice, updateInvoiceStatus, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
+import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
 
 interface InvoiceItem { id: string; desc: string; qty: number; unitPrice: number; total: number; }
 interface Invoice {
@@ -73,6 +74,19 @@ export default function InvoicingScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered } = useFilterSort(invoices, {
+    searchFields: (inv) => [inv.customer, inv.invoiceNumber],
+    sortOptions: [
+      { value: "issueDate", label: "Issue date", get: (inv) => inv.issueDate ?? "" },
+      { value: "customer",  label: "Customer",   get: (inv) => (inv.customer || "").toLowerCase() },
+      { value: "total",     label: "Total",      get: (inv) => inv.total ?? 0 },
+      { value: "dueDate",   label: "Due date",   get: (inv) => inv.dueDate ?? "" },
+      { value: "status",    label: "Status",     get: (inv) => inv.status ?? "" },
+    ],
+    defaultSort: "issueDate",
+    defaultDir: "desc",
+  });
 
   if (sessionExpired) return <SessionExpiredView />;
 
@@ -258,11 +272,24 @@ export default function InvoicingScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />}
       >
         <Text style={[s.heading, { marginBottom: 16 }]}>Invoices</Text>
-        {invoices.length === 0 ? (
+        <SearchSortBar
+          search={search} setSearch={setSearch}
+          sortBy={sortBy} setSortBy={setSortBy}
+          sortDir={sortDir} setSortDir={setSortDir}
+          sortOptions={[
+            { value: "issueDate", label: "Issue" },
+            { value: "customer",  label: "Customer" },
+            { value: "total",     label: "Total" },
+            { value: "dueDate",   label: "Due" },
+            { value: "status",    label: "Status" },
+          ]}
+          placeholder="Search customer or invoice #…"
+        />
+        {filtered.length === 0 ? (
           <View style={[s.card, { alignItems: "center", padding: 32 }]}>
-            <Text style={{ color: theme.muted, fontSize: 13 }}>No invoices yet. Tap + to create one.</Text>
+            <Text style={{ color: theme.muted, fontSize: 13 }}>{invoices.length === 0 ? "No invoices yet. Tap + to create one." : "No invoices match."}</Text>
           </View>
-        ) : invoices.map(inv => {
+        ) : filtered.map(inv => {
           const st = statusColor(inv.status);
           const outstanding = (inv.total || 0) - (inv.amountPaid || 0);
           return (

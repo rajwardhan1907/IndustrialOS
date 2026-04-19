@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, X, CheckCircle, ChevronRight, Receipt } from "lucide-react";
+import { Plus, X, CheckCircle, ChevronRight, Receipt, Trash2 } from "lucide-react";
 import { C } from "@/lib/utils";
 import { Card, SectionTitle } from "./Dashboard";
 import {
@@ -14,6 +14,8 @@ import {
   fetchOrdersFromDb, updateOrderInDb,
 } from "@/lib/orders";
 import { loadInventory } from "@/lib/inventory";
+import { useFilterSort, SearchSortBar } from "./useFilterSort";
+import { SkuLink } from "./SkuPopup";
 
 // ── Stage config ──────────────────────────────────────────────────────────────
 const STAGES: OrderStage[] = ["Placed", "Confirmed", "Picked", "Shipped", "Delivered"];
@@ -300,9 +302,42 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
     }
   };
 
+  // Delete order (cascades on the backend: invoices/shipments/returns, inventory reversal, balance adjust)
+  const deleteOrder = async (o: Order) => {
+    if (!confirm(
+      `Delete order ${o.id} for ${o.customer}?\n\n` +
+      `This will also remove any linked invoices, shipments, and returns.\n` +
+      `If the order was Confirmed or later, inventory will be restored.\n\nThis cannot be undone.`
+    )) return;
+    try {
+      await fetch(`/api/orders?id=${encodeURIComponent(o.id)}`, { method: "DELETE" });
+    } catch {/* non-blocking */}
+    setOrders(prev => {
+      const updated = prev.filter(x => x.id !== o.id);
+      saveOrders(updated);
+      return updated;
+    });
+  };
+
+  const workspaceId = typeof window !== "undefined" ? (localStorage.getItem("workspaceDbId") ?? "") : "";
+
+  // Search + sort across all orders (kanban still groups by stage)
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered } = useFilterSort(orders, {
+    searchFields: (o) => [o.customer, o.sku, o.id, o.notes, o.priority, o.source],
+    sortOptions: [
+      { value: "createdAt", label: "Date",     get: (o) => o.createdAt },
+      { value: "customer",  label: "Customer", get: (o) => o.customer?.toLowerCase() },
+      { value: "value",     label: "Value",    get: (o) => o.value },
+      { value: "priority",  label: "Priority", get: (o) => ({ HIGH: 3, MED: 2, LOW: 1 } as any)[o.priority] ?? 0 },
+      { value: "stage",     label: "Stage",    get: (o) => STAGES.indexOf(o.stage) },
+    ],
+    defaultSort: "createdAt",
+    defaultDir: "desc",
+  });
+
   const cols = STAGES.map(stage => ({
     stage,
-    items: orders.filter(o => o.stage === stage),
+    items: filtered.filter(o => o.stage === stage),
   }));
 
   const activeCount = orders.filter(o => o.stage !== "Delivered").length;
@@ -354,6 +389,24 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
         )}
       </div>
 
+      {/* ── Search + Sort ── */}
+      <SearchSortBar
+        search={search}
+        setSearch={setSearch}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        sortDir={sortDir}
+        setSortDir={setSortDir}
+        sortOptions={[
+          { value: "createdAt", label: "Date" },
+          { value: "customer",  label: "Customer" },
+          { value: "value",     label: "Value" },
+          { value: "priority",  label: "Priority" },
+          { value: "stage",     label: "Stage" },
+        ]}
+        placeholder="Search orders by customer, SKU, id, notes…"
+      />
+
       {/* ── Kanban board ── */}
       <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8 }}>
         {cols.map(({ stage, items }) => {
@@ -399,7 +452,10 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
                         <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers", o.customer)}>{o.customer}</span>
                       </div>
                       <div style={{ fontSize: 11, color: C.subtle, marginBottom: 4 }}>
-                        {o.items} unit{o.items !== 1 ? "s" : ""} · {o.sku}
+                        {o.items} unit{o.items !== 1 ? "s" : ""} ·{" "}
+                        {workspaceId
+                          ? <SkuLink sku={o.sku} workspaceId={workspaceId} style={{ fontSize: 11 }} />
+                          : o.sku}
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                         <span style={{ fontSize: 14, fontWeight: 800, color: C.green }}>

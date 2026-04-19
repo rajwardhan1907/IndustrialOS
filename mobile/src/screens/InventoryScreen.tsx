@@ -16,8 +16,9 @@ if (Platform.OS !== "web") {
   useCameraPermissions = cam.useCameraPermissions;
   Haptics              = require("expo-haptics");
 }
-import { fetchInventory, updateInventoryItem, createInventoryItem, getSession } from "../lib/api";
+import { fetchInventory, updateInventoryItem, createInventoryItem, createAutoPo, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
+import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
 
 interface Item {
   id: string; sku: string; name: string; category: string;
@@ -34,11 +35,9 @@ function stockBadge(item: Item) {
 
 export default function InventoryScreen() {
   const [items,      setItems]      = useState<Item[]>([]);
-  const [filtered,   setFiltered]   = useState<Item[]>([]);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const [search,     setSearch]     = useState("");
   const [scanning,   setScanning]   = useState(false);
   const [scanned,    setScanned]    = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -66,7 +65,6 @@ export default function InventoryScreen() {
       if (!workspaceId) { setSessionExpired(true); return; }
       const data = await fetchInventory(workspaceId);
       setItems(data);
-      setFiltered(data);
     } catch (e: any) {
       Alert.alert("Error", e.message);
     } finally {
@@ -76,15 +74,17 @@ export default function InventoryScreen() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Keep search filter effect BEFORE any conditional returns to satisfy React hooks rules
-  useEffect(() => {
-    const q = search.toLowerCase().trim();
-    setFiltered(q ? items.filter(i =>
-      i.sku.toLowerCase().includes(q) ||
-      i.name.toLowerCase().includes(q) ||
-      i.binLocation.toLowerCase().includes(q)
-    ) : items);
-  }, [search, items]);
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered } = useFilterSort(items, {
+    searchFields: (i) => [i.sku, i.name, i.category, i.supplier, i.binLocation],
+    sortOptions: [
+      { value: "sku",        label: "SKU",       get: (i) => (i.sku || "").toLowerCase() },
+      { value: "name",       label: "Name",      get: (i) => (i.name || "").toLowerCase() },
+      { value: "stockLevel", label: "Stock",     get: (i) => i.stockLevel ?? 0 },
+      { value: "unitCost",   label: "Unit cost", get: (i) => (i as any).unitCost ?? 0 },
+    ],
+    defaultSort: "sku",
+    defaultDir: "asc",
+  });
 
   if (sessionExpired) return <SessionExpiredView />;
 
@@ -170,11 +170,20 @@ export default function InventoryScreen() {
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       {/* Search + Scan bar */}
       <View style={styles.topBar}>
-        <TextInput
-          style={styles.search} value={search} onChangeText={setSearch}
-          placeholder="Search SKU, name or bin…" placeholderTextColor={theme.subtle}
-          returnKeyType="search"
-        />
+        <View style={{ flex: 1 }}>
+          <SearchSortBar
+            search={search} setSearch={setSearch}
+            sortBy={sortBy} setSortBy={setSortBy}
+            sortDir={sortDir} setSortDir={setSortDir}
+            sortOptions={[
+              { value: "sku",        label: "SKU" },
+              { value: "name",       label: "Name" },
+              { value: "stockLevel", label: "Stock" },
+              { value: "unitCost",   label: "Unit cost" },
+            ]}
+            placeholder="Search SKU, name, category, supplier…"
+          />
+        </View>
         <TouchableOpacity style={styles.scanBtn} onPress={openScanner} activeOpacity={0.85}>
           <Text style={styles.scanBtnText}>📷 Scan</Text>
         </TouchableOpacity>
@@ -289,6 +298,34 @@ export default function InventoryScreen() {
             <Text style={s.label}>BIN LOCATION</Text>
             <TextInput style={styles.input} value={editBin} onChangeText={setEditBin}
               placeholder="e.g. A-12-3" placeholderTextColor={theme.subtle} />
+            <TouchableOpacity
+              style={[styles.btnOutline, { marginBottom: 10, borderColor: theme.greenBorder, backgroundColor: theme.greenBg }]}
+              onPress={() => {
+                if (!editItem) return;
+                Alert.alert(
+                  "Auto-PO?",
+                  `Create a Purchase Order for ${editItem.sku} (${editItem.name})?\n\nSends a PO to the linked supplier. The item must have a supplier assigned.`,
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Create PO", onPress: async () => {
+                        try {
+                          const { workspaceId } = await getSession();
+                          if (!workspaceId) { setSessionExpired(true); return; }
+                          await createAutoPo(workspaceId, editItem.id);
+                          Alert.alert("PO Created", `Purchase Order created for ${editItem.sku}.`);
+                          setEditItem(null);
+                        } catch (e: any) {
+                          Alert.alert("Could not create PO", e?.message || "Make sure this item has a supplier assigned.");
+                        }
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <Text style={[styles.btnOutlineText, { color: theme.green }]}>📦 Auto-PO</Text>
+            </TouchableOpacity>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <TouchableOpacity style={[styles.btn, { flex: 2, opacity: saving ? 0.6 : 1 }]} onPress={saveEdit} disabled={saving}>
                 <Text style={styles.btnText}>{saving ? "Saving…" : "Save Changes"}</Text>

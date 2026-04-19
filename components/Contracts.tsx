@@ -14,6 +14,7 @@ import {
   Clock, Trash2, ChevronLeft, Building2, Package,
   Truck, DollarSign, Edit3, Download, X,
 } from "lucide-react";
+import { useFilterSort, SearchSortBar } from "./useFilterSort";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type ContractStatus = "active" | "expiring" | "expired" | "draft";
@@ -263,6 +264,18 @@ export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) =
 
   const visible = filter === "all" ? contracts : contracts.filter(c => c.status === filter);
 
+  const contractSort = useFilterSort(visible, {
+    searchFields: (c) => [c.customer, c.contractNumber, c.title, c.notes],
+    sortOptions: [
+      { value: "start",  label: "Start Date", get: (c) => c.startDate },
+      { value: "expiry", label: "End Date",   get: (c) => c.expiryDate },
+      { value: "value",  label: "Value",      get: (c) => Number(c.value ?? 0) },
+      { value: "status", label: "Status",     get: (c) => c.status },
+    ],
+    defaultSort: "expiry",
+    defaultDir: "asc",
+  });
+
   // ── DETAIL VIEW ─────────────────────────────────────────────────────────────
   if (view === "detail" && selected) {
     const s    = STATUS_CFG[selected.status];
@@ -457,6 +470,19 @@ export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) =
           </div>
         </Card>
       ) : (
+        <>
+        <SearchSortBar
+          search={contractSort.search} setSearch={contractSort.setSearch}
+          sortBy={contractSort.sortBy} setSortBy={contractSort.setSortBy}
+          sortDir={contractSort.sortDir} setSortDir={contractSort.setSortDir}
+          sortOptions={[
+            { value: "start", label: "Start Date" },
+            { value: "expiry", label: "End Date" },
+            { value: "value", label: "Value" },
+            { value: "status", label: "Status" },
+          ]}
+          placeholder="Search contracts…"
+        />
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
@@ -467,12 +493,12 @@ export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) =
               </tr>
             </thead>
             <tbody>
-              {visible.map((c, i) => {
+              {contractSort.filtered.map((c, i) => {
                 const days = Math.ceil((new Date(c.expiryDate).getTime() - Date.now()) / 86400000);
                 return (
                   <tr key={c.id}
                     onClick={() => { setSelected(c); setView("detail"); }}
-                    style={{ borderBottom: i < visible.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
+                    style={{ borderBottom: i < contractSort.filtered.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
                     onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
                     onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                   >
@@ -503,6 +529,7 @@ export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) =
             </tbody>
           </table>
         </Card>
+        </>
       )}
     </div>
   );

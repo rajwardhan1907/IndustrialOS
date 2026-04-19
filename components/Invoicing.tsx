@@ -14,6 +14,7 @@ import {
 import { C, fmt } from "@/lib/utils";
 import { fmtCurrency, CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
 import { loadWorkspace } from "@/lib/workspace";
+import { useFilterSort, SearchSortBar } from "./useFilterSort";
 
 interface InvoiceItem {
   id:        string;
@@ -413,6 +414,18 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
     .filter(i => i.status === "paid" && new Date(i.createdAt).getMonth() === new Date().getMonth())
     .reduce((s, i) => s + i.total, 0);
 
+  const invoiceSort = useFilterSort(invoices, {
+    searchFields: (i) => [i.customer, i.invoiceNumber, i.notes],
+    sortOptions: [
+      { value: "date",     label: "Date",     get: (i) => i.createdAt },
+      { value: "customer", label: "Customer", get: (i) => i.customer },
+      { value: "amount",   label: "Amount",   get: (i) => Number(i.total ?? 0) },
+      { value: "status",   label: "Status",   get: (i) => i.status },
+    ],
+    defaultSort: "date",
+    defaultDir: "desc",
+  });
+
   // ── LIST VIEW ──────────────────────────────────────────────────────────────
   if (view === "list") return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -493,6 +506,19 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
           )}
         </Card>
       ) : (
+        <>
+        <SearchSortBar
+          search={invoiceSort.search} setSearch={invoiceSort.setSearch}
+          sortBy={invoiceSort.sortBy} setSortBy={invoiceSort.setSortBy}
+          sortDir={invoiceSort.sortDir} setSortDir={invoiceSort.setSortDir}
+          sortOptions={[
+            { value: "date", label: "Date" },
+            { value: "customer", label: "Customer" },
+            { value: "amount", label: "Amount" },
+            { value: "status", label: "Status" },
+          ]}
+          placeholder="Search invoices…"
+        />
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
@@ -503,11 +529,11 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
               </tr>
             </thead>
             <tbody>
-              {invoices.map((inv, i) => (
+              {invoiceSort.filtered.map((inv, i) => (
                 <tr
                   key={inv.id}
                   onClick={() => { setSelected(inv); setPayAmount(""); setPayError(""); setView("detail"); }}
-                  style={{ borderBottom: i < invoices.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
+                  style={{ borderBottom: i < invoiceSort.filtered.length - 1 ? `1px solid ${C.border}` : "none", cursor: "pointer" }}
                   onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                 >
@@ -525,6 +551,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
             </tbody>
           </table>
         </Card>
+        </>
       )}
     </div>
   );

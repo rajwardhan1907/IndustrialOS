@@ -188,6 +188,18 @@ export async function updateOrderStage(id: string, stage: string) {
   });
 }
 
+export async function deleteOrder(id: string) {
+  return apiFetch(`/api/orders?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// Per-item Auto-PO (mobile)
+export async function createAutoPo(workspaceId: string, inventoryItemId: string) {
+  return apiFetch("/api/purchase-orders/auto-create", {
+    method: "POST",
+    body: JSON.stringify({ workspaceId, inventoryItemId }),
+  });
+}
+
 // ── Shipments ─────────────────────────────────────────────────────────────────
 export async function fetchShipments(workspaceId: string) {
   return apiFetch(`/api/shipments?workspaceId=${workspaceId}`);

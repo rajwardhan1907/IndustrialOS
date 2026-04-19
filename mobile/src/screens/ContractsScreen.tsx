@@ -8,6 +8,7 @@ import {
 import { theme, s } from "../lib/theme";
 import { fetchContracts, createContract, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
+import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
 
 interface Contract {
   id: string; contractNumber: string; title: string;
@@ -79,6 +80,18 @@ export default function ContractsScreen() {
     finally { setCreating(false); }
   };
 
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered } = useFilterSort(contracts, {
+    searchFields: (i) => [i.customer, i.contractNumber, i.title],
+    sortOptions: [
+      { value: "startDate", label: "Start",  get: (i) => (i as any).startDate ?? "" },
+      { value: "endDate",   label: "Expiry", get: (i) => i.expiryDate ?? "" },
+      { value: "value",     label: "Value",  get: (i) => i.value ?? 0 },
+      { value: "status",    label: "Status", get: (i) => (i.status || "").toLowerCase() },
+    ],
+    defaultSort: "endDate",
+    defaultDir: "desc",
+  });
+
   if (loading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}><ActivityIndicator size="large" color={theme.blue} /></View>;
 
   if (selected) {
@@ -117,11 +130,23 @@ export default function ContractsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />}
       >
         <Text style={[s.heading, { marginBottom: 16 }]}>Contracts</Text>
+        <SearchSortBar
+          search={search} setSearch={setSearch}
+          sortBy={sortBy} setSortBy={setSortBy}
+          sortDir={sortDir} setSortDir={setSortDir}
+          sortOptions={[
+            { value: "startDate", label: "Start" },
+            { value: "endDate",   label: "Expiry" },
+            { value: "value",     label: "Value" },
+            { value: "status",    label: "Status" },
+          ]}
+          placeholder="Search customer, contract #, or title…"
+        />
         {contracts.length === 0 ? (
           <View style={[s.card, { alignItems: "center", padding: 32 }]}>
             <Text style={{ color: theme.muted, fontSize: 13 }}>No contracts found. Tap + to create one.</Text>
           </View>
-        ) : contracts.map(c => {
+        ) : filtered.map(c => {
           const st = statusColor(c.status);
           return (
             <TouchableOpacity key={c.id} style={[s.card, { marginBottom: 10 }]} onPress={() => setSelected(c)} activeOpacity={0.85}>

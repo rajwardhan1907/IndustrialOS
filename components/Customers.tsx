@@ -10,6 +10,7 @@ import { C } from "@/lib/utils";
 import { Card, SectionTitle } from "./Dashboard";
 import { Users, Plus, Search, Building2, Mail, Phone, TrendingUp, AlertCircle, Download, Link2 } from "lucide-react";
 import { downloadCSV } from "@/lib/exportCSV";
+import { useFilterSort, SearchSortBar } from "./useFilterSort";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type CustStatus = "active" | "on_hold" | "inactive" | "pending";
@@ -250,11 +251,72 @@ function NewCustomerModal({ onSave, onClose }: { onSave: (c: Customer) => void; 
   );
 }
 
+// ── Edit Customer (supplier-side) — ONLY creditLimit + notes are editable. ───
+// Name/email/phone are customer-owned and can only be changed via the portal
+// (PATCH /api/portal/me), which creates a notification back to the supplier.
+function EditCustomerModal({ cust, onSave, onClose }: {
+  cust: Customer;
+  onSave: (patch: { creditLimit: number; notes: string }) => void;
+  onClose: () => void;
+}) {
+  const [creditLimit, setCreditLimit] = useState(String(cust.creditLimit ?? 0));
+  const [notes,       setNotes]       = useState(cust.notes ?? "");
+  const [err,         setErr]         = useState("");
+
+  const submit = () => {
+    const cl = parseFloat(creditLimit);
+    if (isNaN(cl) || cl < 0) { setErr("Credit limit must be a non-negative number."); return; }
+    onSave({ creditLimit: cl, notes: notes.trim() });
+    onClose();
+  };
+
+  const inputStyle = {
+    width: "100%", padding: "9px 11px", background: C.bg,
+    border: `1px solid ${C.border}`, borderRadius: 8,
+    color: C.text, fontSize: 13, outline: "none",
+    boxSizing: "border-box" as const, fontFamily: "inherit",
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.18)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: C.text }}>Edit {cust.company}</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 20 }}>✕</button>
+        </div>
+
+        <div style={{ fontSize: 11, color: C.muted, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", marginBottom: 14, lineHeight: 1.5 }}>
+          Only credit limit and notes are editable here. Customer-owned fields (name, email, phone) are changed by the customer via their portal.
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Credit Limit ($)</label>
+          <input type="number" min="0" step="1" value={creditLimit} onChange={e => setCreditLimit(e.target.value)} style={inputStyle} />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.05em" }}>Notes</label>
+          <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4}
+            style={{ ...inputStyle, resize: "vertical" }}
+            placeholder="Internal notes about this customer…" />
+        </div>
+
+        {err && <div style={{ color: C.red, fontSize: 12, marginBottom: 10 }}>{err}</div>}
+
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "9px 18px", background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+          <button onClick={submit} style={{ padding: "9px 20px", background: C.blue, border: "none", borderRadius: 8, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Customer detail panel ─────────────────────────────────────────────────────
-function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, isViewer }: {
+function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, onEdit, isViewer }: {
   cust: Customer; onClose: () => void;
   onStatusChange:   (id: string, s: CustStatus) => void;
   onWhatsAppToggle: (id: string, paused: boolean) => void;  // Phase 11
+  onEdit:           (cust: Customer) => void;
   isViewer?: boolean;
 }) {
   const usedCredit = (cust.balance / cust.creditLimit) * 100;
@@ -391,6 +453,11 @@ function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, isVie
           {!isViewer && cust.status !== "active"   && <button onClick={() => onStatusChange(cust.id, "active")}   style={{ padding: "8px 16px", background: C.greenBg, border: `1px solid ${C.greenBorder}`, borderRadius: 8, color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{cust.status === "pending" ? "✅ Approve & Send Code" : "Set Active"}</button>}
           {!isViewer && cust.status !== "on_hold"  && <button onClick={() => onStatusChange(cust.id, "on_hold")}  style={{ padding: "8px 16px", background: C.amberBg, border: `1px solid ${C.amberBorder}`, borderRadius: 8, color: C.amber, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Put on Hold</button>}
           {!isViewer && cust.status !== "inactive" && <button onClick={() => onStatusChange(cust.id, "inactive")} style={{ padding: "8px 16px", background: C.surface, border: `1px solid ${C.border}`,       borderRadius: 8, color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Deactivate</button>}
+          {!isViewer && (
+            <button onClick={() => onEdit(cust)} style={{ padding: "8px 16px", background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 8, color: C.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              ✎ Edit Credit/Notes
+            </button>
+          )}
           {/* Phase 11 — WhatsApp pause toggle */}
           {!isViewer && (
             <button
@@ -420,6 +487,7 @@ export default function Customers({ focusId }: { focusId?: string }) {
   const [filter,       setFilter]       = useState<CustStatus | "all">("all");
   const [showNew,      setShowNew]      = useState(false);
   const [selected,     setSelected]     = useState<Customer | null>(null);
+  const [editing,      setEditing]      = useState<Customer | null>(null);
   const [healthFilter, setHealthFilter] = useState<HealthGrade | "all">("all");
   const [portalCopied, setPortalCopied] = useState(false);
 
@@ -496,12 +564,30 @@ export default function Customers({ focusId }: { focusId?: string }) {
     setSelected(prev => prev?.id === id ? { ...prev, whatsappPaused: paused } : prev);
   };
 
+  // Supplier-side edit — only creditLimit + notes may change through this path.
+  const saveCustomerEdit = (id: string, patch: { creditLimit: number; notes: string }) => {
+    save(customers.map(c => c.id === id ? { ...c, creditLimit: patch.creditLimit, notes: patch.notes } : c));
+    updateCustomerInDb(id, { creditLimit: patch.creditLimit, notes: patch.notes });
+    setSelected(prev => prev?.id === id ? { ...prev, creditLimit: patch.creditLimit, notes: patch.notes } : prev);
+  };
+
   const visible = customers.filter(c => {
     const matchFilter = filter === "all" || c.status === filter;
     const matchSearch = !search || c.company.toLowerCase().includes(search.toLowerCase()) || c.contact.name.toLowerCase().includes(search.toLowerCase());
     const h = getHealthScore({ status: c.status, balance: c.balance, creditLimit: c.creditLimit, totalSpend: c.totalSpend, orders: c.orders });
     const matchHealth = healthFilter === "all" || h.grade === healthFilter;
     return matchFilter && matchSearch && matchHealth;
+  });
+
+  const customerSort = useFilterSort(visible, {
+    searchFields: (c) => [c.company, c.contact.name, c.contact.email, c.contact.phone],
+    sortOptions: [
+      { value: "name",    label: "Name",         get: (c) => c.company },
+      { value: "spend",   label: "Total Spend",  get: (c) => Number(c.totalSpend ?? 0) },
+      { value: "created", label: "Created Date", get: (c) => c.since },
+    ],
+    defaultSort: "name",
+    defaultDir: "asc",
   });
 
   const totalSpend   = customers.reduce((s, c) => s + c.totalSpend, 0);
@@ -601,11 +687,22 @@ export default function Customers({ focusId }: { focusId?: string }) {
       </div>
 
       {/* List */}
+      <SearchSortBar
+        search={customerSort.search} setSearch={customerSort.setSearch}
+        sortBy={customerSort.sortBy} setSortBy={customerSort.setSortBy}
+        sortDir={customerSort.sortDir} setSortDir={customerSort.setSortDir}
+        sortOptions={[
+          { value: "name", label: "Name" },
+          { value: "spend", label: "Total Spend" },
+          { value: "created", label: "Created Date" },
+        ]}
+        placeholder="Sort and refine…"
+      />
       <Card>
-        {visible.length === 0 ? (
+        {customerSort.filtered.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px 0", color: C.muted }}><Users size={32} style={{ marginBottom: 10, opacity: 0.4 }} /><div>No customers found</div></div>
-        ) : visible.map((c, idx) => (
-          <div key={c.id} onClick={() => setSelected(c)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 4px", cursor: "pointer", borderBottom: idx < visible.length - 1 ? `1px solid ${C.border}` : "none" }}
+        ) : customerSort.filtered.map((c, idx) => (
+          <div key={c.id} onClick={() => setSelected(c)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 4px", cursor: "pointer", borderBottom: idx < customerSort.filtered.length - 1 ? `1px solid ${C.border}` : "none" }}
             onMouseEnter={e => (e.currentTarget.style.background = C.bg)}
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
           >
@@ -641,7 +738,8 @@ export default function Customers({ focusId }: { focusId?: string }) {
       </Card>
 
       {showNew  && <NewCustomerModal onSave={addCustomer} onClose={() => setShowNew(false)} />}
-      {selected && <CustomerDetail cust={selected} onClose={() => setSelected(null)} onStatusChange={changeStatus} onWhatsAppToggle={toggleWhatsApp} isViewer={isViewer} />}
+      {selected && <CustomerDetail cust={selected} onClose={() => setSelected(null)} onStatusChange={changeStatus} onWhatsAppToggle={toggleWhatsApp} onEdit={(c) => setEditing(c)} isViewer={isViewer} />}
+      {editing  && <EditCustomerModal cust={editing} onSave={(patch) => saveCustomerEdit(editing.id, patch)} onClose={() => setEditing(null)} />}
     </div>
   );
 }

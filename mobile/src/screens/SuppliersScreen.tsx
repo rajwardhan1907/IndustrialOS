@@ -8,6 +8,7 @@ import {
 import { theme, s } from "../lib/theme";
 import { fetchSuppliers, createSupplier, updateSupplier, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
+import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
 
 interface Supplier {
   id: string; name: string; contactName?: string; email?: string;
@@ -153,6 +154,17 @@ export default function SuppliersScreen() {
   };
 
 
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered } = useFilterSort(suppliers, {
+    searchFields: (i) => [i.name, i.contactName, i.email],
+    sortOptions: [
+      { value: "name",     label: "Name",     get: (i) => (i.name || "").toLowerCase() },
+      { value: "rating",   label: "Rating",   get: (i) => i.rating ?? 0 },
+      { value: "leadTime", label: "Lead Time", get: (i) => i.leadTimeDays ?? 0 },
+    ],
+    defaultSort: "name",
+    defaultDir: "asc",
+  });
+
   if (loading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}><ActivityIndicator size="large" color={theme.blue} /></View>;
 
   if (selected) {
@@ -215,11 +227,22 @@ export default function SuppliersScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />}
       >
         <Text style={[s.heading, { marginBottom: 16 }]}>Suppliers</Text>
+        <SearchSortBar
+          search={search} setSearch={setSearch}
+          sortBy={sortBy} setSortBy={setSortBy}
+          sortDir={sortDir} setSortDir={setSortDir}
+          sortOptions={[
+            { value: "name", label: "Name" },
+            { value: "rating", label: "Rating" },
+            { value: "leadTime", label: "Lead Time" },
+          ]}
+          placeholder="Search name, contact, or email…"
+        />
         {suppliers.length === 0 ? (
           <View style={[s.card, { alignItems: "center", padding: 32 }]}>
             <Text style={{ color: theme.muted, fontSize: 13 }}>No suppliers found. Tap + to add one.</Text>
           </View>
-        ) : suppliers.map(sup => (
+        ) : filtered.map(sup => (
           <TouchableOpacity key={sup.id} style={[s.card, { marginBottom: 10 }]} onPress={() => setSelected(sup)} activeOpacity={0.85}>
             <Text style={{ fontSize: 14, fontWeight: "700", color: theme.text, marginBottom: 6 }}>{sup.name}</Text>
             {sup.email ? <Text style={{ fontSize: 12, color: theme.muted, marginBottom: 4 }}>{sup.email}</Text> : null}

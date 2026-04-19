@@ -27,6 +27,7 @@ import {
   createSupplierInDb, createPOInDb, updatePOInDb,
   approvePOInDb, rejectPOInDb,
 } from "@/lib/suppliers";
+import { useFilterSort, SearchSortBar } from "./useFilterSort";
 
 // ── Status configs ────────────────────────────────────────────────────────────
 const SUP_STATUS: Record<SupplierStatus, { label: string; color: string; bg: string; border: string }> = {
@@ -446,6 +447,17 @@ export default function Suppliers({ focusId }: { focusId?: string }) {
     rejectPOInDb(id, adminEmail)
   }
 
+  const supplierSort = useFilterSort(suppliers, {
+    searchFields: (s) => [s.name, s.contactName, s.email, s.country],
+    sortOptions: [
+      { value: "name",     label: "Name",      get: (s) => s.name },
+      { value: "rating",   label: "Rating",    get: (s) => Number(s.rating ?? 0) },
+      { value: "leadTime", label: "Lead Time", get: (s) => Number(s.leadTimeDays ?? 0) },
+    ],
+    defaultSort: "name",
+    defaultDir: "asc",
+  })
+
   const activeCount  = suppliers.filter(s=>s.status==="active").length
   const pendingCount = suppliers.filter(s=>s.status==="pending").length
   const openPOs      = pos.filter(p=>!["received","cancelled"].includes(p.status)).length
@@ -587,8 +599,20 @@ export default function Suppliers({ focusId }: { focusId?: string }) {
             <button onClick={()=>setShowNewSup(true)} style={{ padding:"11px 24px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>Add Supplier</button>
           </Card>
         ) : (
+          <>
+          <SearchSortBar
+            search={supplierSort.search} setSearch={supplierSort.setSearch}
+            sortBy={supplierSort.sortBy} setSortBy={supplierSort.setSortBy}
+            sortDir={supplierSort.sortDir} setSortDir={supplierSort.setSortDir}
+            sortOptions={[
+              { value: "name", label: "Name" },
+              { value: "rating", label: "Rating" },
+              { value: "leadTime", label: "Lead Time" },
+            ]}
+            placeholder="Search suppliers…"
+          />
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:16 }}>
-            {suppliers.map(s => {
+            {supplierSort.filtered.map(s => {
               const cfg  = SUP_STATUS[s.status]
               const sPOs = supplierPOs(s.id)
               return (
@@ -618,6 +642,7 @@ export default function Suppliers({ focusId }: { focusId?: string }) {
               )
             })}
           </div>
+          </>
         )
       )}
 

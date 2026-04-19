@@ -94,8 +94,10 @@ export async function PATCH(req: Request) {
       })
 
       // Bidirectional sync: shipment delivered → order Delivered (triggers invoice etc via order PATCH logic)
-      if (body.status === 'delivered' && prev.status !== 'delivered' && updated.orderId) {
-        const order = await tx.order.findUnique({ where: { id: updated.orderId } })
+      // Guard: only run if orderId is a non-empty, non-null string (old records may have "").
+      const hasOrderLink = typeof updated.orderId === 'string' && updated.orderId.length > 0
+      if (body.status === 'delivered' && prev.status !== 'delivered' && hasOrderLink) {
+        const order = await tx.order.findUnique({ where: { id: updated.orderId! } })
         if (order && order.stage !== 'Delivered') {
           await tx.order.update({
             where: { id: order.id },
