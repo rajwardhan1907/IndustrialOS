@@ -8,6 +8,7 @@ import { PricingRule, applyPricingRules, getRulesSummary } from "@/lib/pricingRu
 import { downloadCSV } from "@/lib/exportCSV";
 import { loadWorkspace } from "@/lib/workspace";
 import { loadInventory } from "@/lib/inventory";
+import SkuPopup from "./SkuPopup";
 import {
   Plus, Sparkles, ChevronLeft, FileText,
   Clock, CheckCircle, XCircle, Send, Trash2,
@@ -158,6 +159,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
   const isViewer = session?.user?.role === "viewer";
   const [view,      setView]     = useState<"list"|"new"|"detail">("list");
   const [quotes,    setQuotes]   = useState<Quote[]>(() => loadQuotes());
+  const [skuPopup,  setSkuPopup] = useState<string | null>(null);
   const [prompt,    setPrompt]   = useState("");
   const [thinking,  setThinking] = useState(false);
   const [aiError,   setAiError]  = useState("");
@@ -556,6 +558,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
         </Card>
       )}
 
+      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
       {draft && !thinking && (
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -605,7 +608,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
               <tbody>
                 {draft.items.map(item => (
                   <tr key={item.id} style={{ borderTop:`1px solid ${C.border}` }}>
-                    <td style={{ padding:"11px 16px", fontFamily:"monospace", fontWeight:700, color:C.blue }}>{item.sku}</td>
+                    <td style={{ padding:"11px 16px", fontFamily:"monospace", fontWeight:700, color:C.blue }}><span style={{ cursor:"pointer", textDecoration:"underline" }} onClick={() => setSkuPopup(item.sku)}>{item.sku}</span></td>
                     <td style={{ padding:"11px 16px", color:C.text }}>{item.desc}</td>
                     <td style={{ padding:"11px 16px", fontWeight:600 }}>{item.qty.toLocaleString()}</td>
                     <td style={{ padding:"11px 16px" }}>{fmtMoney(item.unitPrice)}</td>
@@ -657,6 +660,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
   // ── DETAIL VIEW ────────────────────────────────────────────────────────────
   if (view === "detail" && selected) return (
     <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:780 }}>
+      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
       <button onClick={() => { setSelected(null); setView("list"); }} style={{ display:"inline-flex", alignItems:"center", gap:6, background:"none", border:"none", color:C.muted, fontSize:13, cursor:"pointer", fontWeight:600, padding:0 }}>
         &#8592; Back to Quotes
       </button>
@@ -736,7 +740,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
           <tbody>
             {selected.items.map(item => (
               <tr key={item.id} style={{ borderTop:`1px solid ${C.border}` }}>
-                <td style={{ padding:"11px 16px", fontFamily:"monospace", fontWeight:700, color:C.blue }}>{item.sku}</td>
+                <td style={{ padding:"11px 16px", fontFamily:"monospace", fontWeight:700, color:C.blue }}><span style={{ cursor:"pointer", textDecoration:"underline" }} onClick={() => setSkuPopup(item.sku)}>{item.sku}</span></td>
                 <td style={{ padding:"11px 16px", color:C.text }}>{item.desc}</td>
                 <td style={{ padding:"11px 16px", fontWeight:600 }}>{item.qty.toLocaleString()}</td>
                 <td style={{ padding:"11px 16px" }}>{fmtMoney(item.unitPrice)}</td>

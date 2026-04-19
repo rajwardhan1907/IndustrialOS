@@ -14,6 +14,7 @@ import {
 import { C, fmt } from "@/lib/utils";
 import { fmtCurrency, CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
 import { loadWorkspace } from "@/lib/workspace";
+import SkuPopup from "./SkuPopup";
 
 interface InvoiceItem {
   id:        string;
@@ -63,6 +64,7 @@ const makeInvNum  = () => `INV-${new Date().getFullYear()}-${String(Math.floor(M
 const fmtDate     = (d: string) => new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 // Phase 15: currency-aware money formatter — uses invoice currency if provided, else workspace default
 const fmtMoney = (n: number, currencyCode?: string) => fmtCurrency(n, currencyCode ?? DEFAULT_CURRENCY);
+const extractSku = (desc: string) => { const m = desc.match(/[A-Z]{2,}-[\w-]+/i); return m ? m[0].toUpperCase() : null; };
 
 function calcDueDate(issueDate: string, terms: PaymentTerms): string {
   const d = new Date(issueDate);
@@ -206,6 +208,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
   const [selected,  setSelected]  = useState<Invoice | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payError,  setPayError]  = useState("");
+  const [skuPopup,  setSkuPopup]  = useState<string | null>(null);
 
   useEffect(() => {
     const refreshed = invoices.map(inv => ({ ...inv, status: deriveStatus(inv) }));
@@ -415,6 +418,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
   // ── LIST VIEW ──────────────────────────────────────────────────────────────
   if (view === "list") return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Invoicing &amp; Payments</h1>
@@ -633,6 +637,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 820 }}>
+      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
         <button onClick={() => { setSelected(null); setView("list"); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0 }}>
           &#8592; Back to Invoices
         </button>
@@ -723,14 +728,21 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
               </tr>
             </thead>
             <tbody>
-              {selected.items.map(item => (
+              {selected.items.map(item => {
+                const sku = extractSku(item.desc);
+                return (
                 <tr key={item.id} style={{ borderTop: `1px solid ${C.border}` }}>
-                  <td style={{ padding: "11px 16px", color: C.text }}>{item.desc}</td>
+                  <td style={{ padding: "11px 16px", color: C.text }}>
+                    {sku
+                      ? <span style={{ cursor: "pointer", textDecoration: "underline", color: C.blue }} onClick={() => setSkuPopup(sku)}>{item.desc}</span>
+                      : item.desc}
+                  </td>
                   <td style={{ padding: "11px 16px", color: C.muted }}>{item.qty.toLocaleString()}</td>
                   <td style={{ padding: "11px 16px", color: C.muted }}>{fmtMoney(item.unitPrice, selected?.currency)}</td>
                   <td style={{ padding: "11px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(item.total, selected?.currency)}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           <div style={{ padding: "14px 18px", borderTop: `1px solid ${C.border}`, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>

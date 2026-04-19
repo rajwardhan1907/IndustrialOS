@@ -396,13 +396,6 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {!isMobile && (
-            <button
-              onClick={() => window.open("/portal", "_blank")}
-              style={{ padding: "7px 14px", background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 8, color: C.blue, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
-              Customer Portal ↗
-            </button>
-          )}
           <NotificationBell
             onNavigate={(t) => setTab(t)}
             workspaceId={session?.user?.workspaceId}

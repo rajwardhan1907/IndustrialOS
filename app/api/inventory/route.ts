@@ -19,10 +19,15 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: 'workspaceId is required' }, { status: 400, headers: CORS })
     }
 
+    const sku = searchParams.get('sku')
+    const where: any = { workspaceId }
+    if (sku) where.sku = { equals: sku, mode: 'insensitive' }
+
     const items = await prisma.inventoryItem.findMany({
-      where: { workspaceId },
+      where,
       orderBy: { createdAt: 'desc' },
     })
+    if (sku) return NextResponse.json(items[0] ?? null, { headers: CORS })
     return NextResponse.json(items, { headers: CORS })
   } catch (err: any) {
     console.error('Inventory GET error:', err)

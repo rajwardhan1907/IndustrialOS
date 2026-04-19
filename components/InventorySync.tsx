@@ -280,6 +280,35 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
     setAdjustErr("");
   };
 
+  // ── Per-item Reorder ─────────────────────────────────────────────────────
+  const [reorderItemMsg, setReorderItemMsg] = useState<Record<string, string>>({});
+  const reorderItem = async (item: InventoryItem) => {
+    if (!item.supplier || item.supplier === "—") {
+      setReorderItemMsg(prev => ({ ...prev, [item.id]: "No supplier configured." }));
+      setTimeout(() => setReorderItemMsg(prev => { const n = { ...prev }; delete n[item.id]; return n; }), 4000);
+      return;
+    }
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+    if (!wid) return;
+    setReorderItemMsg(prev => ({ ...prev, [item.id]: "Creating…" }));
+    try {
+      const res = await fetch("/api/purchase-orders/auto-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: wid, inventoryItemId: item.id }),
+      });
+      if (res.ok) {
+        setReorderItemMsg(prev => ({ ...prev, [item.id]: "✓ PO created" }));
+      } else {
+        const d = await res.json();
+        setReorderItemMsg(prev => ({ ...prev, [item.id]: d.error ?? "Failed" }));
+      }
+    } catch {
+      setReorderItemMsg(prev => ({ ...prev, [item.id]: "Network error" }));
+    }
+    setTimeout(() => setReorderItemMsg(prev => { const n = { ...prev }; delete n[item.id]; return n; }), 5000);
+  };
+
   // ── Resolve conflict ──────────────────────────────────────────────────────
   const resolveConflict = (id: number) => {
     const updated = conflicts.map(c => c.id === id ? { ...c, status:"resolved" as const } : c);
@@ -525,7 +554,7 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
               <thead>
                 <tr style={{ color:C.muted, fontSize:11, textTransform:"uppercase" as const, letterSpacing:"0.04em" }}>
-                  {["SKU","Name","Category","Stock","Reorder Pt","Unit Cost","Warehouse","Zone / Bin","Status",""].map((h,i)=>(
+                  {["SKU","Name","Category","Stock","Reorder Pt","Unit Cost","Warehouse","Zone / Bin","Status","",""].map((h,i)=>(
                     <th key={i} style={{ textAlign:"left", padding:"8px 10px", borderBottom:`1px solid ${C.border}`, whiteSpace:"nowrap" as const }}>{h}</th>
                   ))}
                 </tr>
@@ -566,6 +595,19 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
                         <button onClick={()=>{setAdjustId(item.id);setAdjustVal("");}} style={{ padding:"5px 10px", background:C.blueBg, border:`1px solid ${C.blueBorder}`, borderRadius:7, color:C.blue, fontSize:11, fontWeight:700, cursor:"pointer" }}>
                           Adjust
                         </button>
+                      )}
+                    </td>
+                    <td style={{ padding:"10px" }}>
+                      {!isViewer && (
+                        reorderItemMsg[item.id] ? (
+                          <span style={{ fontSize:11, color: reorderItemMsg[item.id].startsWith("✓") ? C.green : C.red, fontWeight:600 }}>
+                            {reorderItemMsg[item.id]}
+                          </span>
+                        ) : (
+                          <button onClick={() => reorderItem(item)} style={{ padding:"5px 10px", background:C.amberBg, border:`1px solid ${C.amberBorder}`, borderRadius:7, color:C.amber, fontSize:11, fontWeight:700, cursor:"pointer", whiteSpace:"nowrap" as const }}>
+                            Reorder
+                          </button>
+                        )
                       )}
                     </td>
                   </tr>

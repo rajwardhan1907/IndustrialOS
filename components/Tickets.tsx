@@ -5,6 +5,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Plus, X, ChevronLeft, MessageSquare, Tag, AlertCircle } from "lucide-react";
 import { C } from "@/lib/utils";
+import SkuPopup from "./SkuPopup";
+
+function extractSku(s: string) {
+  const m = s.match(/[A-Z]{2,}-[\w-]+/i);
+  return m ? m[0].toUpperCase() : null;
+}
 
 type TicketType     = "issue" | "request" | "alert" | "other";
 type TicketPriority = "low" | "medium" | "high" | "urgent";
@@ -169,11 +175,12 @@ function NewTicketModal({ users, session, onSave, onClose }: {
 }
 
 // ── Ticket Detail Panel ───────────────────────────────────────────────────────
-function TicketDetail({ ticket, users, session, onUpdate, onBack, onNavigate }: {
+function TicketDetail({ ticket, users, session, onUpdate, onBack, onNavigate, onSkuPopup }: {
   ticket: Ticket; users: any[]; session: any;
   onUpdate: (t: Ticket) => void;
   onBack: () => void;
   onNavigate?: (tab: string) => void;
+  onSkuPopup?: (sku: string) => void;
 }) {
   const [commentBody, setCommentBody]   = useState("");
   const [submitting,  setSubmitting]    = useState(false);
@@ -247,7 +254,13 @@ function TicketDetail({ ticket, users, session, onUpdate, onBack, onNavigate }: 
         {ticket.linkedLabel && (
           <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: C.bg, borderRadius: 8, marginBottom: 14, width: "fit-content" }}>
             <Tag size={12} color={C.blue} />
-            <span style={{ fontSize: 12, color: C.blue, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }} onClick={() => { if (ticket.linkedType === "inventory") onNavigate?.("inventory"); else if (ticket.linkedType === "customer") onNavigate?.("customers"); else if (ticket.linkedType === "order") onNavigate?.("orders"); }}>{ticket.linkedLabel}</span>
+            <span style={{ fontSize: 12, color: C.blue, fontWeight: 600, cursor: "pointer", textDecoration: "underline" }} onClick={() => {
+              if (ticket.linkedType === "inventory") {
+                const sku = extractSku(ticket.linkedLabel);
+                if (sku && onSkuPopup) { onSkuPopup(sku); } else { onNavigate?.("inventory"); }
+              } else if (ticket.linkedType === "customer") onNavigate?.("customers");
+              else if (ticket.linkedType === "order") onNavigate?.("orders");
+            }}>{ticket.linkedLabel}</span>
           </div>
         )}
 
@@ -336,6 +349,7 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
   const [showNew,   setShowNew]   = useState(false);
   const [statusFilter,   setStatusFilter]   = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [skuPopup,  setSkuPopup]  = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!wsId) return;
@@ -430,7 +444,14 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
                   </div>
                   {t.linkedLabel && (
                     <div style={{ fontSize: 11, color: C.blue, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
-                      <Tag size={10} /> <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => { if (t.linkedType === "inventory") onNavigate?.("inventory"); else if (t.linkedType === "customer") onNavigate?.("customers"); else if (t.linkedType === "order") onNavigate?.("orders"); }}>{t.linkedLabel}</span>
+                      <Tag size={10} /> <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={e => {
+                        e.stopPropagation();
+                        if (t.linkedType === "inventory") {
+                          const sku = extractSku(t.linkedLabel);
+                          if (sku) { setSkuPopup(sku); } else { onNavigate?.("inventory"); }
+                        } else if (t.linkedType === "customer") onNavigate?.("customers");
+                        else if (t.linkedType === "order") onNavigate?.("orders");
+                      }}>{t.linkedLabel}</span>
                     </div>
                   )}
                 </div>
@@ -448,6 +469,7 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
             onUpdate={updateTicket}
             onBack={() => setSelected(null)}
             onNavigate={onNavigate}
+            onSkuPopup={setSkuPopup}
           />
         </div>
       )}
@@ -455,6 +477,7 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
       {showNew && (
         <NewTicketModal users={users} session={session} onSave={addTicket} onClose={() => setShowNew(false)} />
       )}
+      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
     </div>
   );
 }

@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Plus, X, ChevronLeft, RotateCcw, CheckCircle, XCircle, Package, RefreshCw } from "lucide-react";
+import SkuPopup from "./SkuPopup";
 import { C } from "@/lib/utils";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -230,6 +231,7 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
   const [showNew,  setShowNew]  = useState(false);
   const [selected, setSelected] = useState<ReturnRecord | null>(null);
   const [filter,   setFilter]   = useState<ReturnStatus | "all">("all");
+  const [skuPopup, setSkuPopup] = useState<string | null>(null);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -289,6 +291,7 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
+      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
       {showNew && <NewReturnModal onSave={handleNewReturn} onClose={() => setShowNew(false)} />}
 
       {/* Header */}
@@ -401,18 +404,18 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, margin: "16px 0" }}>
             {[
-              { label: "Customer",      value: selected.customer, tab: "customers" as string | undefined },
-              { label: "SKU",           value: selected.sku,      tab: "inventory" as string | undefined },
-              { label: "Qty",           value: String(selected.qty), tab: undefined },
-              { label: "Reason",        value: REASON_LABELS[selected.reason], tab: undefined },
-              { label: "Refund Method", value: REFUND_METHOD_LABELS[selected.refundMethod], tab: undefined },
-              { label: "Refund Amount", value: fmtMoney(selected.refundAmount), tab: undefined },
-              ...(selected.customerEmail ? [{ label: "Customer Email", value: selected.customerEmail, tab: undefined }] : []),
-            ].map(({ label, value, tab }) => (
+              { label: "Customer",      value: selected.customer, tab: "customers" as string | undefined, isSku: false },
+              { label: "SKU",           value: selected.sku,      tab: undefined,                        isSku: true  },
+              { label: "Qty",           value: String(selected.qty), tab: undefined,                     isSku: false },
+              { label: "Reason",        value: REASON_LABELS[selected.reason], tab: undefined,            isSku: false },
+              { label: "Refund Method", value: REFUND_METHOD_LABELS[selected.refundMethod], tab: undefined, isSku: false },
+              { label: "Refund Amount", value: fmtMoney(selected.refundAmount), tab: undefined,           isSku: false },
+              ...(selected.customerEmail ? [{ label: "Customer Email", value: selected.customerEmail, tab: undefined, isSku: false }] : []),
+            ].map(({ label, value, tab, isSku }) => (
               <div key={label} style={{ background: C.bg, borderRadius: 10, border: `1px solid ${C.border}`, padding: "10px 14px" }}>
                 <div style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: tab ? C.blue : C.text, cursor: tab ? "pointer" : "default", textDecoration: tab ? "underline" : "none" }}
-                     onClick={() => tab && onNavigate?.(tab)}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: (tab || isSku) ? C.blue : C.text, cursor: (tab || isSku) ? "pointer" : "default", textDecoration: (tab || isSku) ? "underline" : "none" }}
+                     onClick={() => { if (isSku) setSkuPopup(value); else if (tab) onNavigate?.(tab); }}>
                   {value}
                 </div>
               </div>
@@ -478,7 +481,7 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
                           </span>
                         )}
                       </td>
-                      <td style={{ padding: "13px 16px", color: C.muted, fontFamily: "monospace" }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("inventory")}>{ret.sku}</span></td>
+                      <td style={{ padding: "13px 16px", color: C.muted, fontFamily: "monospace" }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={e => { e.stopPropagation(); setSkuPopup(ret.sku); }}>{ret.sku}</span></td>
                       <td style={{ padding: "13px 16px", color: C.text }}>{ret.qty}</td>
                       <td style={{ padding: "13px 16px", color: C.muted }}>{REASON_LABELS[ret.reason]}</td>
                       <td style={{ padding: "13px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(ret.refundAmount)}</td>

@@ -6,7 +6,7 @@ import {
   RefreshControl, ActivityIndicator, Alert, Modal, TextInput,
 } from "react-native";
 import { theme, s } from "../lib/theme";
-import { fetchInvoices, createInvoice, updateInvoiceStatus, getSession } from "../lib/api";
+import { fetchInvoices, createInvoice, updateInvoiceStatus, fetchInventoryBySku, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface InvoiceItem { id: string; desc: string; qty: number; unitPrice: number; total: number; }
@@ -60,6 +60,18 @@ export default function InvoicingScreen() {
     { id: makeId(), desc: "", qty: 1, unitPrice: 0, total: 0 },
   ]);
   const [creating,    setCreating]    = useState(false);
+
+  const extractSku = (desc: string) => { const m = desc.match(/[A-Z]{2,}-[\w-]+/i); return m ? m[0].toUpperCase() : null; };
+
+  const showSkuInfo = async (sku: string) => {
+    try {
+      const { workspaceId } = await getSession();
+      if (!workspaceId) return;
+      const item = await fetchInventoryBySku(workspaceId, sku);
+      if (!item) { Alert.alert("Not Found", `No inventory record for ${sku}.`); return; }
+      Alert.alert("SKU Details", `SKU: ${item.sku}\nName: ${item.name}\nStock: ${item.stockLevel}\nReorder Point: ${item.reorderPoint}\nUnit Cost: $${Number(item.unitCost).toFixed(2)}`);
+    } catch (e: any) { Alert.alert("Error", e.message); }
+  };
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
@@ -181,15 +193,24 @@ export default function InvoicingScreen() {
             {Array.isArray(selected.items) && selected.items.length > 0 && (
               <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border }}>
                 <Text style={{ fontSize: 11, color: theme.muted, fontWeight: "700", marginBottom: 8 }}>LINE ITEMS</Text>
-                {(selected.items as InvoiceItem[]).map((item, idx) => (
-                  <View key={idx} style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={{ fontSize: 13, color: theme.text }}>{item.desc}</Text>
-                      <Text style={{ fontSize: 11, color: theme.muted }}>{item.qty} × ${(item.unitPrice || 0).toFixed(2)}</Text>
+                {(selected.items as InvoiceItem[]).map((item, idx) => {
+                  const sku = extractSku(item.desc);
+                  return (
+                    <View key={idx} style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        {sku ? (
+                          <TouchableOpacity onPress={() => showSkuInfo(sku)}>
+                            <Text style={{ fontSize: 13, color: theme.blue, textDecorationLine: "underline" }}>{item.desc}</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={{ fontSize: 13, color: theme.text }}>{item.desc}</Text>
+                        )}
+                        <Text style={{ fontSize: 11, color: theme.muted }}>{item.qty} × ${(item.unitPrice || 0).toFixed(2)}</Text>
+                      </View>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>${(item.total || 0).toFixed(2)}</Text>
                     </View>
-                    <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text }}>${(item.total || 0).toFixed(2)}</Text>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             )}
 

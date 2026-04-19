@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, X, CheckCircle, ChevronRight, Receipt } from "lucide-react";
+import { Plus, X, CheckCircle, ChevronRight, Receipt, Trash2 } from "lucide-react";
 import { C } from "@/lib/utils";
 import { Card, SectionTitle } from "./Dashboard";
 import {
@@ -14,6 +14,7 @@ import {
   fetchOrdersFromDb, updateOrderInDb,
 } from "@/lib/orders";
 import { loadInventory } from "@/lib/inventory";
+import SkuPopup from "./SkuPopup";
 
 // ── Stage config ──────────────────────────────────────────────────────────────
 const STAGES: OrderStage[] = ["Placed", "Confirmed", "Picked", "Shipped", "Delivered"];
@@ -191,6 +192,7 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
   const [orders,     setOrders]     = useState<Order[]>([]);
   const [showNew,    setShowNew]    = useState(false);
   const [invoiceMsg, setInvoiceMsg] = useState<string | null>(null);
+  const [skuPopup,   setSkuPopup]   = useState<string | null>(null);
 
   // Load from localStorage immediately (fast), then refresh from DB
   // Also poll every 30s so portal orders appear without manual reload
@@ -246,6 +248,17 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
     });
     addOrder(order); // writes to DB in background
     setShowNew(false);
+  };
+
+  // ── Delete order ─────────────────────────────────────────────────────────
+  const deleteOrder = (id: string) => {
+    if (!window.confirm("Delete this order? This cannot be undone.")) return;
+    setOrders(prev => {
+      const updated = prev.filter(o => o.id !== id);
+      saveOrders(updated);
+      return updated;
+    });
+    fetch(`/api/orders?id=${id}`, { method: "DELETE" }).catch(() => {});
   };
 
   // ── Create invoice from order ────────────────────────────────────────────
@@ -321,6 +334,7 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
       {showNew && (
         <NewOrderModal onSave={handleNewOrder} onClose={() => setShowNew(false)} />
       )}
+      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
 
       {invoiceMsg && (
         <div style={{
@@ -399,7 +413,7 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
                         <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers", o.customer)}>{o.customer}</span>
                       </div>
                       <div style={{ fontSize: 11, color: C.subtle, marginBottom: 4 }}>
-                        {o.items} unit{o.items !== 1 ? "s" : ""} · {o.sku}
+                        {o.items} unit{o.items !== 1 ? "s" : ""} · <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => setSkuPopup(o.sku)}>{o.sku}</span>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
                         <span style={{ fontSize: 14, fontWeight: 800, color: C.green }}>
@@ -471,6 +485,20 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
                         >
                           <Receipt size={11} /> Invoice
                         </button>
+                        {!isViewer && (
+                          <button
+                            onClick={() => deleteOrder(o.id)}
+                            title="Delete order"
+                            style={{
+                              padding: "5px 8px", borderRadius: 6, cursor: "pointer", fontSize: 11,
+                              background: C.redBg, color: C.red,
+                              border: `1px solid ${C.redBorder}`,
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                            }}
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );

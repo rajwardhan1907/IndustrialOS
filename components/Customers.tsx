@@ -251,12 +251,32 @@ function NewCustomerModal({ onSave, onClose }: { onSave: (c: Customer) => void; 
 }
 
 // ── Customer detail panel ─────────────────────────────────────────────────────
-function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, isViewer }: {
+function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, onEdit, isViewer }: {
   cust: Customer; onClose: () => void;
   onStatusChange:   (id: string, s: CustStatus) => void;
-  onWhatsAppToggle: (id: string, paused: boolean) => void;  // Phase 11
+  onWhatsAppToggle: (id: string, paused: boolean) => void;
+  onEdit:           (id: string, creditLimit: number, notes: string) => void;
   isViewer?: boolean;
 }) {
+  const [showEdit,  setShowEdit]  = useState(false);
+  const [editLimit, setEditLimit] = useState(String(cust.creditLimit));
+  const [editNotes, setEditNotes] = useState(cust.notes);
+  const [saving,    setSaving]    = useState(false);
+
+  const saveEdit = async () => {
+    setSaving(true);
+    try {
+      const creditLimit = parseFloat(editLimit) || 0;
+      await fetch("/api/customers", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: cust.id, creditLimit, notes: editNotes }),
+      });
+      onEdit(cust.id, creditLimit, editNotes);
+      setShowEdit(false);
+    } finally { setSaving(false); }
+  };
+
   const usedCredit = (cust.balance / cust.creditLimit) * 100;
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
@@ -273,9 +293,32 @@ function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, isVie
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <Badge status={cust.status} />
+            {!isViewer && (
+              <button onClick={() => setShowEdit(true)} style={{ padding: "6px 12px", background: C.blueBg, border: `1px solid ${C.blueBorder}`, borderRadius: 7, color: C.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Edit</button>
+            )}
             <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 20 }}>✕</button>
           </div>
         </div>
+
+        {showEdit && (
+          <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "18px 20px", marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: C.text, marginBottom: 14 }}>Edit Customer</div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Credit Limit ($)</label>
+              <input type="number" value={editLimit} onChange={e => setEditLimit(e.target.value)}
+                style={{ width: "100%", padding: "9px 11px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" as const }} />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Notes</label>
+              <textarea value={editNotes} onChange={e => setEditNotes(e.target.value)} rows={3}
+                style={{ width: "100%", padding: "9px 11px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", resize: "vertical" as const, fontFamily: "inherit", boxSizing: "border-box" as const }} />
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setShowEdit(false)} style={{ padding: "8px 16px", background: "none", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              <button onClick={saveEdit} disabled={saving} style={{ padding: "8px 18px", background: C.blue, border: "none", borderRadius: 8, color: "#fff", fontSize: 12, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>{saving ? "Saving…" : "Save"}</button>
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         {(() => {
@@ -489,6 +532,12 @@ export default function Customers({ focusId }: { focusId?: string }) {
     setSelected(prev => prev?.id === id ? { ...prev, status } : prev);
   };
 
+  const editCustomer = (id: string, creditLimit: number, notes: string) => {
+    save(customers.map(c => c.id === id ? { ...c, creditLimit, notes } : c));
+    updateCustomerInDb(id, { creditLimit, notes });
+    setSelected(prev => prev?.id === id ? { ...prev, creditLimit, notes } : prev);
+  };
+
   // Phase 11 — toggle WhatsApp pause per customer
   const toggleWhatsApp = (id: string, paused: boolean) => {
     save(customers.map(c => c.id === id ? { ...c, whatsappPaused: paused } : c));
@@ -641,7 +690,7 @@ export default function Customers({ focusId }: { focusId?: string }) {
       </Card>
 
       {showNew  && <NewCustomerModal onSave={addCustomer} onClose={() => setShowNew(false)} />}
-      {selected && <CustomerDetail cust={selected} onClose={() => setSelected(null)} onStatusChange={changeStatus} onWhatsAppToggle={toggleWhatsApp} isViewer={isViewer} />}
+      {selected && <CustomerDetail cust={selected} onClose={() => setSelected(null)} onStatusChange={changeStatus} onWhatsAppToggle={toggleWhatsApp} onEdit={editCustomer} isViewer={isViewer} />}
     </div>
   );
 }
