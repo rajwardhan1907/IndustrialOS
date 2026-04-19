@@ -83,6 +83,10 @@ export async function fetchInventory(workspaceId: string) {
   return apiFetch(`/api/inventory?workspaceId=${workspaceId}`);
 }
 
+export async function fetchInventoryBySku(workspaceId: string, sku: string) {
+  return apiFetch(`/api/inventory?workspaceId=${workspaceId}&sku=${encodeURIComponent(sku)}`);
+}
+
 export async function updateInventoryItem(id: string, fields: Record<string, any>) {
   return apiFetch("/api/inventory", {
     method: "PATCH",
@@ -100,6 +104,10 @@ export async function updateOrderStage(id: string, stage: string) {
     method: "PATCH",
     body: JSON.stringify({ id, stage }),
   });
+}
+
+export async function deleteOrder(id: string) {
+  return apiFetch(`/api/orders?id=${id}`, { method: "DELETE" });
 }
 
 // ── Shipments ─────────────────────────────────────────────────────────────────
@@ -285,6 +293,10 @@ export async function updateInvoiceStatus(id: string, status: string, amountPaid
 // ── Purchase Orders (create) ──────────────────────────────────────────────────
 export async function createPurchaseOrder(data: object) {
   return apiFetch("/api/purchase-orders", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function autoCreatePurchaseOrder(workspaceId: string, inventoryItemId: string) {
+  return apiFetch("/api/purchase-orders/auto-create", { method: "POST", body: JSON.stringify({ workspaceId, inventoryItemId }) });
 }
 
 // ── Contracts (create) ────────────────────────────────────────────────────────

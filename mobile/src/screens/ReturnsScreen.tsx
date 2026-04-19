@@ -6,7 +6,7 @@ import {
   RefreshControl, ActivityIndicator, Alert, Modal, TextInput,
 } from "react-native";
 import { theme, s } from "../lib/theme";
-import { fetchReturns, updateReturnStatus, createReturn, getSession } from "../lib/api";
+import { fetchReturns, updateReturnStatus, createReturn, fetchInventoryBySku, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Return {
@@ -78,6 +78,16 @@ export default function ReturnsScreen() {
     finally { setCreating(false); }
   };
 
+  const showSkuInfo = async (sku: string) => {
+    try {
+      const { workspaceId } = await getSession();
+      if (!workspaceId) return;
+      const item = await fetchInventoryBySku(workspaceId, sku);
+      if (!item) { Alert.alert("Not Found", `No inventory record for ${sku}.`); return; }
+      Alert.alert("SKU Details", `SKU: ${item.sku}\nName: ${item.name}\nStock: ${item.stockLevel}\nReorder Point: ${item.reorderPoint}\nUnit Cost: $${Number(item.unitCost).toFixed(2)}`);
+    } catch (e: any) { Alert.alert("Error", e.message); }
+  };
+
   if (loading) return <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}><ActivityIndicator size="large" color={theme.blue} /></View>;
 
   if (selected) {
@@ -114,7 +124,12 @@ export default function ReturnsScreen() {
             <Text style={{ fontSize: 11, color: theme.muted, fontWeight: "700", marginBottom: 4 }}>{selected.rmaNumber}</Text>
             <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text, marginBottom: 12 }}>{selected.customer}</Text>
             <View style={s.badge(st.bg, st.color, st.border)}><Text style={s.badgeText(st.color)}>{selected.status.toUpperCase()}</Text></View>
-            <Text style={{ fontSize: 13, color: theme.muted, marginTop: 12 }}>SKU: {selected.sku}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", marginTop: 12 }}>
+              <Text style={{ fontSize: 13, color: theme.muted }}>SKU: </Text>
+              <TouchableOpacity onPress={() => showSkuInfo(selected.sku)}>
+                <Text style={{ fontSize: 13, color: theme.blue, fontWeight: "700", textDecorationLine: "underline" }}>{selected.sku}</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={{ fontSize: 13, color: theme.muted }}>Qty: {selected.qty}</Text>
             <Text style={{ fontSize: 13, color: theme.muted, marginTop: 8 }}>Reason: {selected.reason.replace("_", " ")}</Text>
           </View>
@@ -155,7 +170,13 @@ export default function ReturnsScreen() {
                 <View style={s.badge(st.bg, st.color, st.border)}><Text style={s.badgeText(st.color)}>{r.status.toUpperCase()}</Text></View>
               </View>
               <Text style={{ fontSize: 14, fontWeight: "700", color: theme.text, marginBottom: 4 }}>{r.customer}</Text>
-              <Text style={{ fontSize: 12, color: theme.muted }}>SKU: {r.sku} · Qty: {r.qty}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={{ fontSize: 12, color: theme.muted }}>SKU: </Text>
+                <TouchableOpacity onPress={() => showSkuInfo(r.sku)}>
+                  <Text style={{ fontSize: 12, color: theme.blue, fontWeight: "700", textDecorationLine: "underline" }}>{r.sku}</Text>
+                </TouchableOpacity>
+                <Text style={{ fontSize: 12, color: theme.muted }}> · Qty: {r.qty}</Text>
+              </View>
             </TouchableOpacity>
           );
         })}

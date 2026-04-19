@@ -9,7 +9,7 @@ import { theme, s } from "../lib/theme";
 
 let Haptics: any = null;
 if (Platform.OS !== "web") Haptics = require("expo-haptics");
-import { fetchOrders, updateOrderStage, createOrder, getSession } from "../lib/api";
+import { fetchOrders, updateOrderStage, createOrder, deleteOrder, fetchInventoryBySku, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Order {
@@ -73,6 +73,32 @@ export default function OrdersScreen() {
     } catch (e: any) {
       Alert.alert("Error", e.message);
     }
+  };
+
+  const confirmDelete = (order: Order) => {
+    Alert.alert("Delete Order", `Delete ${order.id}? This cannot be undone.`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete", style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteOrder(order.id);
+            setOrders(prev => prev.filter(o => o.id !== order.id));
+            if (selected?.id === order.id) setSelected(null);
+          } catch (e: any) { Alert.alert("Error", e.message); }
+        },
+      },
+    ]);
+  };
+
+  const showSkuInfo = async (sku: string) => {
+    try {
+      const { workspaceId } = await getSession();
+      if (!workspaceId) return;
+      const item = await fetchInventoryBySku(workspaceId, sku);
+      if (!item) { Alert.alert("Not Found", `No inventory record for ${sku}.`); return; }
+      Alert.alert("SKU Details", `SKU: ${item.sku}\nName: ${item.name}\nStock: ${item.stockLevel}\nReorder Point: ${item.reorderPoint}\nUnit Cost: $${Number(item.unitCost).toFixed(2)}`);
+    } catch (e: any) { Alert.alert("Error", e.message); }
   };
 
   const confirmAdvance = (order: Order) => {
@@ -149,9 +175,12 @@ export default function OrdersScreen() {
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>{order.customer}</Text>
-                  <Text style={{ fontSize: 12, color: theme.muted, marginTop: 2 }}>
-                    {order.sku} · {order.items} item{order.items !== 1 ? "s" : ""} · ${order.value ? order.value.toLocaleString() : "—"}
-                  </Text>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: 2 }}>
+                    <TouchableOpacity onPress={() => showSkuInfo(order.sku)}>
+                      <Text style={{ fontSize: 12, color: theme.blue, fontWeight: "700", textDecorationLine: "underline" }}>{order.sku}</Text>
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 12, color: theme.muted }}> · {order.items} item{order.items !== 1 ? "s" : ""} · ${order.value ? order.value.toLocaleString() : "—"}</Text>
+                  </View>
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 4 }}>
                   <View style={s.badge(sc.bg, sc.color, sc.border)}>
@@ -162,16 +191,24 @@ export default function OrdersScreen() {
                   </View>
                 </View>
               </View>
-              {hasNext && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: hasNext ? 0 : 10 }}>
+                {hasNext && (
+                  <TouchableOpacity
+                    style={[styles.advBtn, { flex: 1, marginTop: 10 }]}
+                    onPress={() => confirmAdvance(order)}
+                  >
+                    <Text style={{ color: sc.color, fontWeight: "700", fontSize: 12 }}>
+                      → Move to {STAGES[idx + 1]}
+                    </Text>
+                  </TouchableOpacity>
+                )}
                 <TouchableOpacity
-                  style={[styles.advBtn, { backgroundColor: sc.bg, borderColor: sc.border }]}
-                  onPress={() => confirmAdvance(order)}
+                  style={[styles.deleteBtn, !hasNext && { marginTop: 10 }]}
+                  onPress={() => confirmDelete(order)}
                 >
-                  <Text style={{ color: sc.color, fontWeight: "700", fontSize: 12 }}>
-                    → Move to {STAGES[idx + 1]}
-                  </Text>
+                  <Text style={{ color: theme.red, fontWeight: "700", fontSize: 12 }}>🗑</Text>
                 </TouchableOpacity>
-              )}
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -188,9 +225,12 @@ export default function OrdersScreen() {
           {selected && (
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>{selected.customer}</Text>
-              <Text style={{ color: theme.muted, fontSize: 12, marginBottom: 16 }}>
-                {selected.sku} · {selected.items} items · ${selected.value ? selected.value.toLocaleString() : "—"}
-              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}>
+                <TouchableOpacity onPress={() => showSkuInfo(selected.sku)}>
+                  <Text style={{ fontSize: 12, color: theme.blue, fontWeight: "700", textDecorationLine: "underline" }}>{selected.sku}</Text>
+                </TouchableOpacity>
+                <Text style={{ color: theme.muted, fontSize: 12 }}> · {selected.items} items · ${selected.value ? selected.value.toLocaleString() : "—"}</Text>
+              </View>
               <Text style={s.label}>Move to stage</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                 <View style={{ flexDirection: "row", gap: 8 }}>
@@ -266,7 +306,8 @@ const styles = StyleSheet.create({
   chipRow:     { maxHeight: 52, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
   chip:        { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.bg, marginVertical: 8 },
   chipText:    { fontSize: 12, fontWeight: "600", color: theme.muted },
-  advBtn:      { marginTop: 10, padding: 8, borderRadius: 8, borderWidth: 1, alignItems: "center" },
+  advBtn:      { padding: 8, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.bg, alignItems: "center" },
+  deleteBtn:   { padding: 8, borderRadius: 8, borderWidth: 1, borderColor: theme.redBorder, backgroundColor: theme.redBg, alignItems: "center", justifyContent: "center" },
   fab:         { position: "absolute", bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: theme.blue, alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.2, shadowOffset: { width: 0, height: 4 }, shadowRadius: 8, elevation: 6 },
   modalOverlay:{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end" },
   modalCard:   { backgroundColor: theme.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 40 },

@@ -16,7 +16,7 @@ if (Platform.OS !== "web") {
   useCameraPermissions = cam.useCameraPermissions;
   Haptics              = require("expo-haptics");
 }
-import { fetchInventory, updateInventoryItem, createInventoryItem, getSession } from "../lib/api";
+import { fetchInventory, updateInventoryItem, createInventoryItem, autoCreatePurchaseOrder, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface Item {
@@ -160,6 +160,19 @@ export default function InventoryScreen() {
     finally { setCreating(false); }
   };
 
+  const reorderItem = async (item: Item) => {
+    if (!item.supplier || item.supplier === "—") {
+      Alert.alert("No Supplier", "This item has no supplier configured. Add a supplier first.");
+      return;
+    }
+    try {
+      const { workspaceId } = await getSession();
+      if (!workspaceId) { return; }
+      await autoCreatePurchaseOrder(workspaceId, item.id);
+      Alert.alert("Reorder Created", `Purchase order created for ${item.name} (${item.sku}). Check Purchase Orders for details.`);
+    } catch (e: any) { Alert.alert("Error", e.message); }
+  };
+
   if (loading) return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}>
       <ActivityIndicator size="large" color={theme.blue} />
@@ -219,6 +232,12 @@ export default function InventoryScreen() {
                     <Text style={{ fontSize: 12, color: theme.muted }}>{item.supplier}</Text>
                   </View>
                 ) : null}
+                <TouchableOpacity
+                  style={{ marginLeft: "auto", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: theme.amberBorder, backgroundColor: theme.amberBg, alignSelf: "center" }}
+                  onPress={() => reorderItem(item)}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: theme.amber }}>Reorder</Text>
+                </TouchableOpacity>
               </View>
             </TouchableOpacity>
           );
