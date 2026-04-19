@@ -106,6 +106,7 @@ model Customer {
   status      String    @default("active")
   portalCode  String    @default("")
   notes           String    @default("")
+  paymentTerms    String    @default("Net 30")
   orders          Json      @default("[]")
   whatsappPaused  Boolean   @default(false)  // Phase 11
   workspaceId     String

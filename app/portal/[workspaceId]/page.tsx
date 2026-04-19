@@ -482,6 +482,100 @@ function AuthPage({ workspaceId, companyName, onAuth }: {
   );
 }
 
+// ── Edit Profile Modal ────────────────────────────────────────────────────────
+function EditProfileModal({ token, currentAccount, onClose, onSaved }: {
+  token: string;
+  currentAccount: Account;
+  onClose: () => void;
+  onSaved: (name: string) => void;
+}) {
+  const [name,    setName]    = useState(currentAccount.name);
+  const [email,   setEmail]   = useState(currentAccount.email);
+  const [phone,   setPhone]   = useState("");
+  const [address, setAddress] = useState("");
+  const [busy,    setBusy]    = useState(false);
+  const [err,     setErr]     = useState("");
+  const [done,    setDone]    = useState(false);
+
+  // Load current profile on mount
+  useEffect(() => {
+    fetch("/api/portal/profile", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        if (d.phone   !== undefined) setPhone(d.phone);
+        if (d.address !== undefined) setAddress(d.address);
+      })
+      .catch(() => {});
+  }, [token]);
+
+  const save = async () => {
+    if (!name.trim()) { setErr("Name is required."); return; }
+    if (!email.trim() || !email.includes("@")) { setErr("Enter a valid email."); return; }
+    setBusy(true); setErr("");
+    try {
+      const res = await fetch("/api/portal/profile", {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ contactName: name.trim(), email: email.trim(), phone: phone.trim(), address: address.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || "Failed to save."); return; }
+      setDone(true);
+      onSaved(name.trim());
+    } catch { setErr("Network error."); }
+    finally  { setBusy(false); }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
+      <div style={{ background: T.surface, borderRadius: 16, padding: 28, width: "100%", maxWidth: 440, boxShadow: "0 20px 60px rgba(0,0,0,0.15)" }}>
+        {done ? (
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+            <h2 style={{ fontSize: 17, fontWeight: 800, color: T.text, marginBottom: 8 }}>Profile Updated</h2>
+            <p style={{ color: T.muted, fontSize: 14, marginBottom: 20 }}>Your details have been saved. Your supplier has been notified.</p>
+            <button onClick={onClose} style={{ padding: "10px 24px", borderRadius: 10, background: T.blue, border: "none", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Done</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h2 style={{ fontSize: 17, fontWeight: 800, color: T.text }}>Edit Profile</h2>
+              <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, fontSize: 20 }}>✕</button>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={lbl}>Full Name *</label>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Jane Smith" style={inp} />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={lbl}>Email Address *</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@company.com" style={inp} />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={lbl}>Phone</label>
+              <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 312-555-0000" style={inp} />
+            </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={lbl}>Address</label>
+              <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Street, City, State, ZIP" style={inp} />
+            </div>
+            {err && (
+              <div style={{ marginBottom: 14, padding: "9px 12px", background: T.redBg, border: `1px solid ${T.redBorder}`, borderRadius: 8, fontSize: 13, color: T.red }}>{err}</div>
+            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={save} disabled={busy} style={{ flex: 1, padding: "12px", borderRadius: 10, background: busy ? T.border : T.blue, border: "none", color: busy ? T.muted : "#fff", fontSize: 14, fontWeight: 700, cursor: busy ? "not-allowed" : "pointer" }}>
+                {busy ? "Saving…" : "Save Changes"}
+              </button>
+              <button onClick={onClose} style={{ padding: "12px 18px", borderRadius: 10, background: T.bg, border: `1px solid ${T.border}`, color: T.muted, fontSize: 13, cursor: "pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
   workspaceId: string; account: Account; token: string; companyName: string;
@@ -498,6 +592,8 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
   const [payInv,   setPayInv]   = useState<Invoice | null>(null);
   const [showReturn, setShowReturn] = useState(false);
   const [showRequest, setShowRequest] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [accountName, setAccountName] = useState(account.name);
 
   const authHdr = { Authorization: `Bearer ${token}` };
 
@@ -605,6 +701,11 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
           onClose={() => setShowRequest(false)}
           onSaved={() => load("orders")} />
       )}
+      {showProfile && (
+        <EditProfileModal token={token} currentAccount={{ ...account, name: accountName }}
+          onClose={() => setShowProfile(false)}
+          onSaved={name => { setAccountName(name); setShowProfile(false); }} />
+      )}
 
       {/* Top bar */}
       <div style={{ background: T.surface, borderBottom: `1px solid ${T.border}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 56, position: "sticky", top: 0, zIndex: 100 }}>
@@ -612,10 +713,13 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
           <span style={{ fontSize: 18 }}>🏭</span>
           <span style={{ fontSize: 15, fontWeight: 800, color: T.text }}>{companyName || "Customer Portal"}</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 13, color: T.muted }}>
-            <strong style={{ color: T.text }}>{account.name}</strong>
+            <strong style={{ color: T.text }}>{accountName}</strong>
           </span>
+          <button onClick={() => setShowProfile(true)} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${T.blueBorder}`, background: T.blueBg, color: T.blue, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+            Edit Profile
+          </button>
           <button onClick={onSignOut} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, color: T.muted, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
             Sign Out
           </button>

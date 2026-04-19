@@ -102,9 +102,10 @@ export async function POST(req: Request) {
         balanceDue:  body.balanceDue  ?? 0,
         status:      body.status      ?? 'active',
         portalCode,
-        notes:       body.notes       ?? '',
-        orders:      body.orders      ?? [],
-        workspaceId: body.workspaceId,
+        notes:        body.notes        ?? '',
+        paymentTerms: body.paymentTerms ?? 'Net 30',
+        orders:       body.orders       ?? [],
+        workspaceId:  body.workspaceId,
       },
     })
     return NextResponse.json(customer, { headers: CORS })
@@ -145,6 +146,7 @@ export async function PATCH(req: Request) {
         ...(body.status      !== undefined && { status:      body.status      }),
         ...(portalCode       !== undefined && { portalCode }),
         ...(body.notes           !== undefined && { notes:           body.notes           }),
+        ...(body.paymentTerms    !== undefined && { paymentTerms:    body.paymentTerms    }),
         ...(body.orders          !== undefined && { orders:          body.orders          }),
         ...(body.whatsappPaused  !== undefined && { whatsappPaused:  body.whatsappPaused  }),
         ...(body.totalSpend      !== undefined && { totalSpend:      body.totalSpend      }),

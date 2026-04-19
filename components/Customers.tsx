@@ -83,7 +83,7 @@ function dbToCustomer(d: any): Customer {
     accessCode:   d.portalCode   || "",
     orders:       Array.isArray(d.orders) ? d.orders : (typeof d.orders === "string" ? JSON.parse(d.orders || "[]") : []),
     since:        typeof d.createdAt === "string" ? d.createdAt.split("T")[0] : new Date(d.createdAt).toISOString().split("T")[0],
-    paymentTerms:   "Net 30",             // not in DB schema
+    paymentTerms:   d.paymentTerms  || "Net 30",
     notes:          d.notes        || "",
     whatsappPaused: d.whatsappPaused ?? false,  // Phase 11
   };
@@ -118,9 +118,10 @@ async function createCustomerInDb(c: Customer): Promise<void> {
         balanceDue:  c.balance,
         status:      c.status,
         portalCode:  c.accessCode,
-        notes:       c.notes,
-        orders:      c.orders,
-        workspaceId: wid,
+        notes:        c.notes,
+        paymentTerms: c.paymentTerms,
+        orders:       c.orders,
+        workspaceId:  wid,
       }),
     });
   } catch {}
@@ -136,6 +137,7 @@ async function updateCustomerInDb(id: string, c: Partial<Customer>): Promise<voi
         ...(c.status         !== undefined && { status:         c.status }),
         ...(c.balance        !== undefined && { balanceDue:     c.balance }),
         ...(c.creditLimit    !== undefined && { creditLimit:    c.creditLimit }),
+        ...(c.paymentTerms   !== undefined && { paymentTerms:   c.paymentTerms }),
         ...(c.notes          !== undefined && { notes:          c.notes }),
         ...(c.orders         !== undefined && { orders:         c.orders }),
         ...(c.accessCode     !== undefined && { portalCode:     c.accessCode }),   // fix: was never sent
@@ -255,13 +257,14 @@ function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, onEdi
   cust: Customer; onClose: () => void;
   onStatusChange:   (id: string, s: CustStatus) => void;
   onWhatsAppToggle: (id: string, paused: boolean) => void;
-  onEdit:           (id: string, creditLimit: number, notes: string) => void;
+  onEdit:           (id: string, creditLimit: number, paymentTerms: string, notes: string) => void;
   isViewer?: boolean;
 }) {
-  const [showEdit,  setShowEdit]  = useState(false);
-  const [editLimit, setEditLimit] = useState(String(cust.creditLimit));
-  const [editNotes, setEditNotes] = useState(cust.notes);
-  const [saving,    setSaving]    = useState(false);
+  const [showEdit,   setShowEdit]   = useState(false);
+  const [editLimit,  setEditLimit]  = useState(String(cust.creditLimit));
+  const [editTerms,  setEditTerms]  = useState(cust.paymentTerms);
+  const [editNotes,  setEditNotes]  = useState(cust.notes);
+  const [saving,     setSaving]     = useState(false);
 
   const saveEdit = async () => {
     setSaving(true);
@@ -270,9 +273,9 @@ function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, onEdi
       await fetch("/api/customers", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: cust.id, creditLimit, notes: editNotes }),
+        body: JSON.stringify({ id: cust.id, creditLimit, paymentTerms: editTerms, notes: editNotes }),
       });
-      onEdit(cust.id, creditLimit, editNotes);
+      onEdit(cust.id, creditLimit, editTerms, editNotes);
       setShowEdit(false);
     } finally { setSaving(false); }
   };
@@ -303,10 +306,19 @@ function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, onEdi
         {showEdit && (
           <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: "18px 20px", marginBottom: 20 }}>
             <div style={{ fontWeight: 700, fontSize: 13, color: C.text, marginBottom: 14 }}>Edit Customer</div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Credit Limit ($)</label>
-              <input type="number" value={editLimit} onChange={e => setEditLimit(e.target.value)}
-                style={{ width: "100%", padding: "9px 11px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" as const }} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 12px" }}>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Credit Limit ($)</label>
+                <input type="number" value={editLimit} onChange={e => setEditLimit(e.target.value)}
+                  style={{ width: "100%", padding: "9px 11px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" as const }} />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Payment Terms</label>
+                <select value={editTerms} onChange={e => setEditTerms(e.target.value)}
+                  style={{ width: "100%", padding: "9px 11px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, outline: "none", boxSizing: "border-box" as const }}>
+                  {["Net 7","Net 15","Net 30","Net 45","Net 60","Prepaid","COD"].map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
             </div>
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: C.muted, marginBottom: 5, textTransform: "uppercase" as const, letterSpacing: "0.05em" }}>Notes</label>
@@ -532,10 +544,10 @@ export default function Customers({ focusId }: { focusId?: string }) {
     setSelected(prev => prev?.id === id ? { ...prev, status } : prev);
   };
 
-  const editCustomer = (id: string, creditLimit: number, notes: string) => {
-    save(customers.map(c => c.id === id ? { ...c, creditLimit, notes } : c));
-    updateCustomerInDb(id, { creditLimit, notes });
-    setSelected(prev => prev?.id === id ? { ...prev, creditLimit, notes } : prev);
+  const editCustomer = (id: string, creditLimit: number, paymentTerms: string, notes: string) => {
+    save(customers.map(c => c.id === id ? { ...c, creditLimit, paymentTerms, notes } : c));
+    updateCustomerInDb(id, { creditLimit, paymentTerms, notes });
+    setSelected(prev => prev?.id === id ? { ...prev, creditLimit, paymentTerms, notes } : prev);
   };
 
   // Phase 11 — toggle WhatsApp pause per customer
