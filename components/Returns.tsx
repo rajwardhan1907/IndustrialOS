@@ -6,10 +6,9 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Plus, X, ChevronLeft, RotateCcw, CheckCircle, XCircle, Package, RefreshCw, Search } from "lucide-react";
-import SkuPopup from "./SkuPopup";
+import { SkuPopup, SkuLink } from "./SkuPopup";
 import { C } from "@/lib/utils";
 import { useFilterSort, SearchSortBar } from "./useFilterSort";
-import { SkuLink } from "./SkuPopup";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type ReturnStatus  = "requested" | "approved" | "received" | "refunded" | "rejected";

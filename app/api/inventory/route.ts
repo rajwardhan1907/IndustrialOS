@@ -23,6 +23,8 @@ export async function GET(req: Request) {
     if (!workspaceId) {
       return NextResponse.json({ error: 'workspaceId is required' }, { status: 400, headers: CORS })
     }
+    const sku = searchParams.get('sku')
+    const where = sku ? { workspaceId, sku } : { workspaceId }
     const items = await prisma.inventoryItem.findMany({
       where,
       orderBy: { createdAt: 'desc' },
