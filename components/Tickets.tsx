@@ -6,6 +6,12 @@ import { useSession } from "next-auth/react";
 import { Plus, X, ChevronLeft, MessageSquare, Tag, AlertCircle, Search } from "lucide-react";
 import { C } from "@/lib/utils";
 import { useFilterSort, SearchSortBar } from "./useFilterSort";
+import { SkuPopup } from "./SkuPopup";
+
+function extractSku(s: string): string | null {
+  const m = s.match(/[A-Z]{2,}-[\w-]+/i);
+  return m ? m[0].toUpperCase() : null;
+}
 
 type TicketType     = "issue" | "request" | "alert" | "other";
 type TicketPriority = "low" | "medium" | "high" | "urgent";
@@ -346,6 +352,7 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [searchTerm,     setSearchTerm]     = useState("");
   const [skuPopup,  setSkuPopup]  = useState<string | null>(null);
+  const skuWorkspaceId: string = wsId ?? "";
 
   const load = useCallback(async () => {
     if (!wsId) return;
@@ -493,7 +500,7 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
       {showNew && (
         <NewTicketModal users={users} session={session} onSave={addTicket} onClose={() => setShowNew(false)} />
       )}
-      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
+      {skuPopup && <SkuPopup sku={skuPopup} workspaceId={skuWorkspaceId} onClose={() => setSkuPopup(null)} />}
     </div>
   );
 }

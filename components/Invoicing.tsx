@@ -15,6 +15,7 @@ import { C, fmt } from "@/lib/utils";
 import { fmtCurrency, CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
 import { loadWorkspace } from "@/lib/workspace";
 import { useFilterSort, SearchSortBar } from "./useFilterSort";
+import { SkuPopup } from "./SkuPopup";
 
 interface InvoiceItem {
   id:        string;
@@ -210,6 +211,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
   const [payError,   setPayError]   = useState("");
   const [skuPopup,   setSkuPopup]   = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [workspaceId, setWorkspaceId] = useState<string>("");
 
   useEffect(() => {
     const refreshed = invoices.map(inv => ({ ...inv, status: deriveStatus(inv) }));
@@ -232,6 +234,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
     });
     // Phase 12: load pricing rules
     const wid = getWorkspaceId();
+    if (wid) setWorkspaceId(wid);
     if (wid) {
       fetch(`/api/pricing-rules?workspaceId=${wid}`)
         .then(r => r.json())
@@ -432,7 +435,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
   // ── LIST VIEW ──────────────────────────────────────────────────────────────
   if (view === "list") return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
+      {skuPopup && <SkuPopup sku={skuPopup} workspaceId={workspaceId} onClose={() => setSkuPopup(null)} />}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Invoicing &amp; Payments</h1>
@@ -669,7 +672,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 820 }}>
-      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
+      {skuPopup && <SkuPopup sku={skuPopup} workspaceId={workspaceId} onClose={() => setSkuPopup(null)} />}
         <button onClick={() => { setSelected(null); setView("list"); }} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.muted, fontSize: 13, cursor: "pointer", fontWeight: 600, padding: 0 }}>
           &#8592; Back to Invoices
         </button>

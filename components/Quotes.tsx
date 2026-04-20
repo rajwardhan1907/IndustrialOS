@@ -9,7 +9,7 @@ import { downloadCSV } from "@/lib/exportCSV";
 import { loadWorkspace } from "@/lib/workspace";
 import { loadInventory } from "@/lib/inventory";
 import { useFilterSort, SearchSortBar } from "./useFilterSort";
-import { SkuLink } from "./SkuPopup";
+import { SkuLink, SkuPopup } from "./SkuPopup";
 import {
   Plus, Sparkles, ChevronLeft, FileText,
   Clock, CheckCircle, XCircle, Send, Trash2,
@@ -596,7 +596,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
         </Card>
       )}
 
-      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
+      {skuPopup && <SkuPopup sku={skuPopup} workspaceId={workspaceId} onClose={() => setSkuPopup(null)} />}
       {draft && !thinking && (
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -698,7 +698,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
   // ── DETAIL VIEW ────────────────────────────────────────────────────────────
   if (view === "detail" && selected) return (
     <div style={{ display:"flex", flexDirection:"column", gap:20, maxWidth:780 }}>
-      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
+      {skuPopup && <SkuPopup sku={skuPopup} workspaceId={workspaceId} onClose={() => setSkuPopup(null)} />}
       <button onClick={() => { setSelected(null); setView("list"); }} style={{ display:"inline-flex", alignItems:"center", gap:6, background:"none", border:"none", color:C.muted, fontSize:13, cursor:"pointer", fontWeight:600, padding:0 }}>
         &#8592; Back to Quotes
       </button>

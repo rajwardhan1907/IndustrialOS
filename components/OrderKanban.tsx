@@ -15,7 +15,7 @@ import {
 } from "@/lib/orders";
 import { loadInventory } from "@/lib/inventory";
 import { useFilterSort, SearchSortBar } from "./useFilterSort";
-import { SkuLink } from "./SkuPopup";
+import { SkuLink, SkuPopup } from "./SkuPopup";
 
 // ── Stage config ──────────────────────────────────────────────────────────────
 const STAGES: OrderStage[] = ["Placed", "Confirmed", "Picked", "Shipped", "Delivered"];
@@ -196,6 +196,21 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
   const [skuPopup,   setSkuPopup]   = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir } = useFilterSort(orders, {
+    searchFields: (o) => [o.customer, o.sku, o.id, o.notes],
+    sortOptions: [
+      { value: "createdAt", label: "Date",     get: (o) => o.createdAt },
+      { value: "customer",  label: "Customer", get: (o) => o.customer  },
+      { value: "value",     label: "Value",    get: (o) => o.value     },
+      { value: "priority",  label: "Priority", get: (o) => o.priority  },
+      { value: "stage",     label: "Stage",    get: (o) => o.stage     },
+    ],
+    defaultSort: "createdAt",
+    defaultDir: "desc",
+  });
+
+  const workspaceId: string = (typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null) ?? "";
+
   // Load from localStorage immediately (fast), then refresh from DB
   // Also poll every 30s so portal orders appear without manual reload
   useEffect(() => {
@@ -345,7 +360,7 @@ export default function OrderKanban({ onNavigate }: { onNavigate?: (tab: string,
       {showNew && (
         <NewOrderModal onSave={handleNewOrder} onClose={() => setShowNew(false)} />
       )}
-      {skuPopup && <SkuPopup sku={skuPopup} onClose={() => setSkuPopup(null)} />}
+      {skuPopup && <SkuPopup sku={skuPopup} workspaceId={workspaceId} onClose={() => setSkuPopup(null)} />}
 
       {invoiceMsg && (
         <div style={{

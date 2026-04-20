@@ -336,7 +336,7 @@ function CustomerDetail({ cust, onClose, onStatusChange, onWhatsAppToggle, onEdi
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: cust.id, creditLimit, paymentTerms: editTerms, notes: editNotes }),
       });
-      onEdit(cust.id, creditLimit, editTerms, editNotes);
+      onEdit({ ...cust, creditLimit, paymentTerms: editTerms, notes: editNotes });
       setShowEdit(false);
     } finally { setSaving(false); }
   };
