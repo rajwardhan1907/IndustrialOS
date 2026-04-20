@@ -111,7 +111,6 @@ export async function POST(req: Request) {
         creditHoldReason: body.creditHoldReason ?? '',
         portalCode,
         notes:        body.notes        ?? '',
-        paymentTerms: body.paymentTerms ?? 'Net 30',
         orders:       body.orders       ?? [],
         workspaceId:  body.workspaceId,
       },
