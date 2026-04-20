@@ -123,6 +123,7 @@ model Customer {
   totalSpend           Float     @default(0)
   status               String    @default("active")
   portalCode           String    @default("")
+  paymentTerms         String    @default("Net 30")
   notes                String    @default("")
   orders               Json      @default("[]")
   whatsappPaused       Boolean   @default(false)
@@ -461,6 +462,4 @@ model CustomerSession {
   token     String          @unique @default(cuid())
   accountId String
   account   CustomerAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  createdAt DateTime        @default(now())
-}
+  expiresAt DateT
