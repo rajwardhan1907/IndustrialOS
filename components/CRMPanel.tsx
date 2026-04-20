@@ -48,6 +48,20 @@ export default function CRMPanel({ crm, setCrm }: any) {
         </div>
       </div>
 
+      {/* API key required banner */}
+      <div style={{
+        padding: "10px 16px",
+        background: "#fffbeb", border: "1px solid #f59e0b",
+        borderRadius: 10, fontSize: 13, color: "#92400e",
+        display: "flex", alignItems: "center", gap: 8,
+      }}>
+        <span style={{ fontSize: 16 }}>🔑</span>
+        <span>
+          CRM sync requires API keys —{" "}
+          <strong>see documentation</strong> and add them to <code>.env.local</code> before connecting.
+        </span>
+      </div>
+
       {adapters.map(a => {
         const st = crm[a.key] || "disconnected";
         const s  = sc[st] || sc.disconnected;
@@ -76,9 +90,10 @@ export default function CRMPanel({ crm, setCrm }: any) {
                 {isConnected && (
                   <button onClick={() => syncNow(a.key)} style={btn}>Sync Now</button>
                 )}
-                <button onClick={() => toggle(a.key)} style={btn}>
-                  {isConnected ? "Disconnect" : "Connect"}
-                </button>
+                {isConnected
+                  ? <button onClick={() => toggle(a.key)} style={btn}>Disconnect</button>
+                  : <button disabled style={{ ...btn, cursor: "not-allowed", opacity: 0.55, background: "#f3f4f6", color: C.muted }}>Coming Soon</button>
+                }
               </div>
             </div>
 
@@ -122,7 +137,7 @@ export default function CRMPanel({ crm, setCrm }: any) {
                 background: C.amberBg, border: `1px solid ${C.amberBorder}`,
                 borderRadius: 10, fontSize: 13, color: C.amber
               }}>
-                💡 Click <strong>Connect</strong> and add your API key in <code>.env.local</code> to start syncing {a.name} data.
+                💡 Add your API key in <code>.env.local</code> to unlock {a.name} sync.
               </div>
             )}
           </Card>
