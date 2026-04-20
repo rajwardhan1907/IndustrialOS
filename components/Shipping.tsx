@@ -8,7 +8,7 @@ import { useSession } from "next-auth/react";
 import {
   Plus, X, ChevronLeft, ChevronRight,
   Truck, Package, MapPin, AlertTriangle,
-  CheckCircle, Clock,
+  CheckCircle, Clock, Search,
 } from "lucide-react";
 import { C } from "@/lib/utils";
 import {
@@ -204,10 +204,11 @@ function NewShipmentModal({ onSave, onClose }: {
 export default function Shipping({ onNavigate }: { onNavigate?: (tab: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
-  const [shipments, setShipments] = useState<Shipment[]>([]);
-  const [selected,  setSelected]  = useState<Shipment | null>(null);
-  const [showNew,   setShowNew]   = useState(false);
-  const [filter,    setFilter]    = useState<ShipmentStatus | "all">("all");
+  const [shipments,  setShipments]  = useState<Shipment[]>([]);
+  const [selected,   setSelected]   = useState<Shipment | null>(null);
+  const [showNew,    setShowNew]    = useState(false);
+  const [filter,     setFilter]     = useState<ShipmentStatus | "all">("all");
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Load from localStorage immediately, then refresh from DB
   useEffect(() => {
@@ -275,7 +276,14 @@ export default function Shipping({ onNavigate }: { onNavigate?: (tab: string) =>
   };
 
   // ── Filtered list ─────────────────────────────────────────────────────────
-  const filtered = filter === "all" ? shipments : shipments.filter(s => s.status === filter);
+  const filtered = shipments.filter(s => {
+    if (filter !== "all" && s.status !== filter) return false;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      if (!(s.customer?.toLowerCase().includes(term) || s.id?.toLowerCase().includes(term) || s.trackingNumber?.toLowerCase().includes(term) || s.carrier?.toLowerCase().includes(term))) return false;
+    }
+    return true;
+  });
 
   const shipmentSort = useFilterSort(filtered, {
     searchFields: (s) => [s.customer, s.trackingNumber, s.shipmentNumber, s.origin, s.destination],
@@ -311,11 +319,17 @@ export default function Shipping({ onNavigate }: { onNavigate?: (tab: string) =>
           <h1 style={{ fontSize:22, fontWeight:800, color:C.text, marginBottom:4 }}>Shipping & Logistics</h1>
           <p style={{ color:C.muted, fontSize:13 }}>Track shipments, manage carriers and delivery events.</p>
         </div>
-        {!isViewer && (
-        <button onClick={()=>setShowNew(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-          <Plus size={14}/> New Shipment
-        </button>
-        )}
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={14} style={{ position: "absolute", left: 10, color: C.muted, pointerEvents: "none" }} />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search shipments…" style={{ padding: "9px 12px 9px 32px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, outline: "none", width: 190 }} />
+          </div>
+          {!isViewer && (
+          <button onClick={()=>setShowNew(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            <Plus size={14}/> New Shipment
+          </button>
+          )}
+        </div>
       </div>
 
       {/* ── Summary cards ── */}

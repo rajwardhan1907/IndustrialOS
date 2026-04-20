@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, X, ChevronLeft, MessageSquare, Tag, AlertCircle } from "lucide-react";
+import { Plus, X, ChevronLeft, MessageSquare, Tag, AlertCircle, Search } from "lucide-react";
 import { C } from "@/lib/utils";
 import { useFilterSort, SearchSortBar } from "./useFilterSort";
 
@@ -344,6 +344,7 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
   const [showNew,   setShowNew]   = useState(false);
   const [statusFilter,   setStatusFilter]   = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [searchTerm,     setSearchTerm]     = useState("");
   const [skuPopup,  setSkuPopup]  = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -365,6 +366,10 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
   const filtered = tickets.filter(t => {
     if (statusFilter !== "all" && t.status !== statusFilter) return false;
     if (priorityFilter !== "all" && t.priority !== priorityFilter) return false;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      if (!t.title.toLowerCase().includes(term) && !t.ticketNumber.toLowerCase().includes(term)) return false;
+    }
     return true;
   });
 
@@ -416,18 +421,10 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
               filterBtn(l, v, priorityFilter, setPriorityFilter)
             )}
           </div>
-          <SearchSortBar
-            search={ticketSort.search} setSearch={ticketSort.setSearch}
-            sortBy={ticketSort.sortBy} setSortBy={ticketSort.setSortBy}
-            sortDir={ticketSort.sortDir} setSortDir={ticketSort.setSortDir}
-            sortOptions={[
-              { value: "date", label: "Date" },
-              { value: "priority", label: "Priority" },
-              { value: "status", label: "Status" },
-            ]}
-            placeholder="Search tickets…"
-            style={{ marginBottom: 0 }}
-          />
+          <div style={{ position: "relative", marginTop: 8 }}>
+            <Search size={13} style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", color: C.muted, pointerEvents: "none" }} />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search tickets…" style={{ width: "100%", padding: "7px 10px 7px 28px", border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, background: C.bg, color: C.text, outline: "none", boxSizing: "border-box" }} />
+          </div>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>

@@ -14,7 +14,7 @@ import {
   Plus, Sparkles, ChevronLeft, FileText,
   Clock, CheckCircle, XCircle, Send, Trash2,
   Edit3, Package, User, Calendar, Hash,
-  AlertCircle, Loader, Download,
+  AlertCircle, Loader, Download, Search,
 } from "lucide-react";
 
 interface LineItem {
@@ -158,9 +158,10 @@ const Badge = ({ status }: { status: Quote["status"] }) => {
 export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
-  const [view,      setView]     = useState<"list"|"new"|"detail">("list");
-  const [quotes,    setQuotes]   = useState<Quote[]>(() => loadQuotes());
-  const [skuPopup,  setSkuPopup] = useState<string | null>(null);
+  const [view,       setView]      = useState<"list"|"new"|"detail">("list");
+  const [quotes,     setQuotes]    = useState<Quote[]>(() => loadQuotes());
+  const [skuPopup,   setSkuPopup]  = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [prompt,    setPrompt]   = useState("");
   const [thinking,  setThinking] = useState(false);
   const [aiError,   setAiError]  = useState("");
@@ -420,7 +421,11 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
           <h1 style={{ fontSize:22, fontWeight:800, color:C.text, marginBottom:4 }}>Quotes &amp; RFQ</h1>
           <p style={{ color:C.muted, fontSize:13 }}>Generate professional quotes in seconds using plain English.</p>
         </div>
-        <div style={{ display:"flex", gap:8 }}>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={14} style={{ position: "absolute", left: 10, color: C.muted, pointerEvents: "none" }} />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search quotes…" style={{ padding: "9px 12px 9px 32px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, outline: "none", width: 180 }} />
+          </div>
           {/* Phase 17: CSV Export */}
           <button
             onClick={() => downloadCSV(`quotes_${new Date().toISOString().split("T")[0]}`, quotes.map(q => ({
@@ -505,7 +510,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
               </tr>
             </thead>
             <tbody>
-              {filtered.map((q,i) => (
+              {quotes.filter(q => !searchTerm || q.customer.toLowerCase().includes(searchTerm.toLowerCase()) || q.quoteNumber.toLowerCase().includes(searchTerm.toLowerCase())).map((q,i) => (
                 <tr key={q.id} onClick={() => { setSelected(q); setView("detail"); }}
                   style={{ borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none", cursor:"pointer" }}
                   onMouseEnter={e => (e.currentTarget.style.background=C.bg)}

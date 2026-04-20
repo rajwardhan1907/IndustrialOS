@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, X, ChevronLeft, RotateCcw, CheckCircle, XCircle, Package, RefreshCw } from "lucide-react";
+import { Plus, X, ChevronLeft, RotateCcw, CheckCircle, XCircle, Package, RefreshCw, Search } from "lucide-react";
 import SkuPopup from "./SkuPopup";
 import { C } from "@/lib/utils";
 import { useFilterSort, SearchSortBar } from "./useFilterSort";
@@ -228,12 +228,13 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
 
-  const [returns,  setReturns]  = useState<ReturnRecord[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [showNew,  setShowNew]  = useState(false);
-  const [selected, setSelected] = useState<ReturnRecord | null>(null);
-  const [filter,   setFilter]   = useState<ReturnStatus | "all">("all");
-  const [skuPopup, setSkuPopup] = useState<string | null>(null);
+  const [returns,    setReturns]    = useState<ReturnRecord[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [showNew,    setShowNew]    = useState(false);
+  const [selected,   setSelected]   = useState<ReturnRecord | null>(null);
+  const [filter,     setFilter]     = useState<ReturnStatus | "all">("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [skuPopup,   setSkuPopup]   = useState<string | null>(null);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -280,7 +281,14 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
   };
 
   // ── Filtered list ──────────────────────────────────────────────────────────
-  const visible = filter === "all" ? returns : returns.filter(r => r.status === filter);
+  const visible = returns.filter(r => {
+    if (filter !== "all" && r.status !== filter) return false;
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      if (!(r.rmaNumber?.toLowerCase().includes(term) || r.orderId?.toLowerCase().includes(term) || r.customer?.toLowerCase().includes(term))) return false;
+    }
+    return true;
+  });
 
   const workspaceId = typeof window !== "undefined" ? (localStorage.getItem("workspaceDbId") ?? "") : "";
   const returnSort = useFilterSort(visible, {
@@ -314,15 +322,21 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Returns & RMA</h1>
           <p style={{ color: C.muted, fontSize: 13 }}>Manage customer return requests and refunds.</p>
         </div>
-        {!isViewer && (
-          <button onClick={() => setShowNew(true)} style={{
-            display: "flex", alignItems: "center", gap: 7,
-            padding: "9px 18px", borderRadius: 10, background: C.blue,
-            border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
-          }}>
-            <Plus size={14} /> New Return
-          </button>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={14} style={{ position: "absolute", left: 10, color: C.muted, pointerEvents: "none" }} />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search returns…" style={{ padding: "9px 12px 9px 32px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, outline: "none", width: 180 }} />
+          </div>
+          {!isViewer && (
+            <button onClick={() => setShowNew(true)} style={{
+              display: "flex", alignItems: "center", gap: 7,
+              padding: "9px 18px", borderRadius: 10, background: C.blue,
+              border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer",
+            }}>
+              <Plus size={14} /> New Return
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}

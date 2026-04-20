@@ -12,7 +12,7 @@ import {
   Plus, ChevronLeft, X, Star, Package,
   Phone, Mail, Globe, Clock, ChevronRight,
   CheckCircle, Send, FileText, XCircle, Truck,
-  ShieldCheck, ShieldX, AlertTriangle, Download,
+  ShieldCheck, ShieldX, AlertTriangle, Download, Search,
 } from "lucide-react";
 import { downloadCSV } from "@/lib/exportCSV";
 import { C } from "@/lib/utils";
@@ -335,6 +335,7 @@ export default function Suppliers({ focusId }: { focusId?: string }) {
   const [showNewSup, setShowNewSup] = useState(false)
   const [showNewPO,  setShowNewPO]  = useState(false)
   const [subTab,     setSubTab]     = useState<"info"|"pos">("info")
+  const [searchTerm, setSearchTerm] = useState("")
 
   // Phase 13: price comparison toggle
   const [aiPriceCompare, setAiPriceCompare] = useState(false)
@@ -482,7 +483,11 @@ export default function Suppliers({ focusId }: { focusId?: string }) {
           <h1 style={{ fontSize:22, fontWeight:800, color:C.text, marginBottom:4 }}>Suppliers & Procurement</h1>
           <p style={{ color:C.muted, fontSize:13 }}>Manage suppliers, track purchase orders and deliveries.</p>
         </div>
-        <div style={{ display:"flex", gap:10 }}>
+        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={14} style={{ position: "absolute", left: 10, color: C.muted, pointerEvents: "none" }} />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search suppliers…" style={{ padding: "9px 12px 9px 32px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, outline: "none", width: 190 }} />
+          </div>
           {/* Phase 17: CSV Export */}
           <button
             onClick={() => downloadCSV(`suppliers_${new Date().toISOString().split("T")[0]}`, suppliers.map(s => ({
@@ -612,7 +617,7 @@ export default function Suppliers({ focusId }: { focusId?: string }) {
             placeholder="Search suppliers…"
           />
           <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:16 }}>
-            {supplierSort.filtered.map(s => {
+            {suppliers.filter(s => !searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.category?.toLowerCase().includes(searchTerm.toLowerCase()) || s.country?.toLowerCase().includes(searchTerm.toLowerCase())).map(s => {
               const cfg  = SUP_STATUS[s.status]
               const sPOs = supplierPOs(s.id)
               return (

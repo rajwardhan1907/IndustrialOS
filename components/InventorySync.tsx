@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { AlertTriangle, CheckCircle, XCircle, Zap, Package, MapPin, RefreshCw, Plus, X, ScanLine, Brain, TrendingUp } from "lucide-react";
+import { AlertTriangle, CheckCircle, XCircle, Zap, Package, MapPin, RefreshCw, Plus, X, ScanLine, Brain, TrendingUp, Search } from "lucide-react";
 import { C } from "@/lib/utils";
 import { loadWorkspace } from "@/lib/workspace";
 import dynamic from "next/dynamic";
@@ -185,9 +185,10 @@ const StatusBadge = ({ item }: { item: InventoryItem }) => {
 export default function InventorySync({ onNavigate }: { onNavigate?: (tab: string, id?: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
-  const [items,     setItems]     = useState<InventoryItem[]>([]);
-  const [conflicts, setConflicts] = useState<ConflictLog[]>([]);
-  const [view,      setView]      = useState<"stock"|"alerts"|"conflicts"|"pricing">("stock");
+  const [items,      setItems]      = useState<InventoryItem[]>([]);
+  const [conflicts,  setConflicts]  = useState<ConflictLog[]>([]);
+  const [view,       setView]       = useState<"stock"|"alerts"|"conflicts"|"pricing">("stock");
+  const [searchTerm, setSearchTerm] = useState("");
   const [adjustId,  setAdjustId]  = useState<string|null>(null);
   const [adjustVal, setAdjustVal] = useState("");
   const [adjustErr, setAdjustErr] = useState("");
@@ -474,6 +475,10 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
               <Package size={14}/> Reorder All ({alertItems.length})
             </button>
           )}
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={14} style={{ position: "absolute", left: 10, color: C.muted, pointerEvents: "none" }} />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search SKUs…" style={{ padding: "9px 12px 9px 32px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, outline: "none", width: 180 }} />
+          </div>
           {!isViewer && (
           <button onClick={() => setShowAdd(true)} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", borderRadius:10, background:C.blue, border:"none", color:"#fff", fontSize:13, fontWeight:700, cursor:"pointer" }}>
             <Plus size={14}/> Add SKU
@@ -610,7 +615,7 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(item => (
+                {items.filter(item => !searchTerm || item.sku.toLowerCase().includes(searchTerm.toLowerCase()) || item.name.toLowerCase().includes(searchTerm.toLowerCase()) || item.category?.toLowerCase().includes(searchTerm.toLowerCase())).map(item => (
                   <tr key={item.id} style={{ borderBottom:`1px solid ${C.border}` }}>
                     <td style={{ padding:"10px", fontFamily:"monospace", fontSize:11, color:C.blue, whiteSpace:"nowrap" as const }}>{item.sku}</td>
                     <td style={{ padding:"10px", color:C.text, maxWidth:200 }}>{item.name}</td>

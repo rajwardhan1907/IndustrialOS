@@ -9,7 +9,7 @@ import { downloadCSV } from "@/lib/exportCSV";
 import {
   Plus, ChevronLeft, CheckCircle, Clock, AlertCircle,
   XCircle, Trash2, User, Calendar, Hash, DollarSign,
-  FileText, Receipt, CreditCard, RefreshCw, Download,
+  FileText, Receipt, CreditCard, RefreshCw, Download, Search,
 } from "lucide-react";
 import { C, fmt } from "@/lib/utils";
 import { fmtCurrency, CURRENCIES, DEFAULT_CURRENCY } from "@/lib/currencies";
@@ -206,9 +206,10 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
   const [view,     setView]     = useState<"list" | "create" | "detail">("list");
   const [invoices, setInvoices] = useState<Invoice[]>(() => loadInvoices());
   const [selected,  setSelected]  = useState<Invoice | null>(null);
-  const [payAmount, setPayAmount] = useState("");
-  const [payError,  setPayError]  = useState("");
-  const [skuPopup,  setSkuPopup]  = useState<string | null>(null);
+  const [payAmount,  setPayAmount]  = useState("");
+  const [payError,   setPayError]   = useState("");
+  const [skuPopup,   setSkuPopup]   = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   useEffect(() => {
     const refreshed = invoices.map(inv => ({ ...inv, status: deriveStatus(inv) }));
@@ -437,7 +438,11 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
           <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 4 }}>Invoicing &amp; Payments</h1>
           <p style={{ color: C.muted, fontSize: 13 }}>Track payments, manage overdue invoices, record receipts.</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <Search size={14} style={{ position: "absolute", left: 10, color: C.muted, pointerEvents: "none" }} />
+            <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search invoices…" style={{ padding: "9px 12px 9px 32px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 13, outline: "none", width: 190 }} />
+          </div>
           {/* Phase 17: CSV Export */}
           <button
             onClick={() => downloadCSV(`invoices_${new Date().toISOString().split("T")[0]}`, invoices.map(inv => ({
@@ -532,7 +537,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
               </tr>
             </thead>
             <tbody>
-              {invoiceSort.filtered.map((inv, i) => (
+              {invoices.filter(inv => !searchTerm || inv.customer.toLowerCase().includes(searchTerm.toLowerCase()) || inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase())).map((inv, i) => (
                 <tr
                   key={inv.id}
                   onClick={() => { setSelected(inv); setPayAmount(""); setPayError(""); setView("detail"); }}
