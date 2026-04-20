@@ -12,6 +12,7 @@ import { AlertTriangle, CheckCircle, XCircle, Zap, Package, MapPin, RefreshCw, P
 import { C } from "@/lib/utils";
 import { loadWorkspace } from "@/lib/workspace";
 import dynamic from "next/dynamic";
+import { useFilterSort, SearchSortBar } from "./useFilterSort";
 
 const BarcodeScanner = dynamic(() => import("./BarcodeScanner"), { ssr: false });
 import {
@@ -211,6 +212,19 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
   const [reorderMsg,      setReorderMsg]       = useState("");
   const [reorderErr,      setReorderErr]       = useState("");
 
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered } = useFilterSort(items, {
+    searchFields: (i) => [i.sku, i.name, i.category, i.supplier],
+    sortOptions: [
+      { value: "sku",      label: "SKU",         get: (i) => i.sku },
+      { value: "name",     label: "Name",        get: (i) => i.name },
+      { value: "stock",    label: "Stock level", get: (i) => i.stockLevel },
+      { value: "unitCost", label: "Unit cost",   get: (i) => i.unitCost },
+      { value: "category", label: "Category",    get: (i) => i.category },
+    ],
+    defaultSort: "sku",
+    defaultDir: "asc",
+  });
+
   // Phase 22 — Demand Forecast
   const [forecastLoading, setForecastLoading]  = useState(false);
   const [forecastResults, setForecastResults]  = useState<{ sku:string; name:string; forecast30d:number; trend:string; stockoutRisk:string; insight:string }[]>([]);
@@ -323,6 +337,26 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
     saveInventory(updated);
     createInventoryItemInDb(item); // DB write in background
     setShowAdd(false);
+  };
+
+  // ── Per-item Auto-PO: creates a Purchase Order directly (requires linked supplier) ──
+  const createAutoPo = async (item: InventoryItem) => {
+    const wid = typeof window !== "undefined" ? localStorage.getItem("workspaceDbId") : null;
+    if (!wid) { alert("No workspace selected."); return; }
+    if (!confirm(`Create a Purchase Order for ${item.sku} (${item.name})?\n\nSends a PO to the linked supplier for ${item.reorderQty} units.`)) return;
+    try {
+      const res  = await fetch("/api/purchase-orders/auto-create", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ workspaceId: wid, inventoryItemId: item.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data?.error || "Could not create PO."); return; }
+      setReorderDone(`✓ PO created for ${item.sku}. Check the Purchase Orders tab.`);
+      setTimeout(() => setReorderDone(""), 6000);
+    } catch (e: any) {
+      alert(e?.message || "Network error");
+    }
   };
 
   // ── Approve reorder: creates a ticket per unique supplier ────────────────────
@@ -550,6 +584,22 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
       {view === "stock" && (
         <Card>
           <SectionTitle icon={Package}>All SKUs</SectionTitle>
+          <SearchSortBar
+            search={search}
+            setSearch={setSearch}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            sortDir={sortDir}
+            setSortDir={setSortDir}
+            sortOptions={[
+              { value: "sku",      label: "SKU" },
+              { value: "name",     label: "Name" },
+              { value: "stock",    label: "Stock level" },
+              { value: "unitCost", label: "Unit cost" },
+              { value: "category", label: "Category" },
+            ]}
+            placeholder="Search inventory…"
+          />
           <div style={{ overflowX:"auto" }}>
             <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
               <thead>
@@ -560,7 +610,7 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
                 </tr>
               </thead>
               <tbody>
-                {items.map(item => (
+                {filtered.map(item => (
                   <tr key={item.id} style={{ borderBottom:`1px solid ${C.border}` }}>
                     <td style={{ padding:"10px", fontFamily:"monospace", fontSize:11, color:C.blue, whiteSpace:"nowrap" as const }}>{item.sku}</td>
                     <td style={{ padding:"10px", color:C.text, maxWidth:200 }}>{item.name}</td>
@@ -649,9 +699,14 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
                   </div>
                   <StatusBadge item={item}/>
                   {!isViewer && (
-                    <button onClick={() => { setReorderQueue([item]); setShowReorderModal(true); }} style={{ padding:"6px 14px", background:C.amber, border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
-                      Reorder
-                    </button>
+                    <div style={{ display:"flex", gap:6, flexShrink:0 }}>
+                      <button onClick={() => createAutoPo(item)} title="Create PO directly from linked supplier" style={{ padding:"6px 12px", background:C.green, border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                        Auto-PO
+                      </button>
+                      <button onClick={() => { setReorderQueue([item]); setShowReorderModal(true); }} style={{ padding:"6px 14px", background:C.amber, border:"none", borderRadius:8, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                        Reorder
+                      </button>
+                    </div>
                   )}
                 </div>
               );

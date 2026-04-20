@@ -8,7 +8,8 @@ import { PricingRule, applyPricingRules, getRulesSummary } from "@/lib/pricingRu
 import { downloadCSV } from "@/lib/exportCSV";
 import { loadWorkspace } from "@/lib/workspace";
 import { loadInventory } from "@/lib/inventory";
-import SkuPopup from "./SkuPopup";
+import { useFilterSort, SearchSortBar } from "./useFilterSort";
+import { SkuLink } from "./SkuPopup";
 import {
   Plus, Sparkles, ChevronLeft, FileText,
   Clock, CheckCircle, XCircle, Send, Trash2,
@@ -176,6 +177,20 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
   const [negError,         setNegError]         = useState("");
   const textRef = useRef<HTMLTextAreaElement>(null);
 
+  const workspaceId = typeof window !== "undefined" ? (localStorage.getItem("workspaceDbId") ?? "") : "";
+
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered } = useFilterSort(quotes, {
+    searchFields: (q) => [q.customer, q.quoteNumber, q.id, ...(q.items || []).map((it) => it.sku)],
+    sortOptions: [
+      { value: "date",     label: "Date",     get: (q) => q.createdAt },
+      { value: "customer", label: "Customer", get: (q) => q.customer },
+      { value: "total",    label: "Total",    get: (q) => q.total },
+      { value: "status",   label: "Status",   get: (q) => q.status },
+    ],
+    defaultSort: "date",
+    defaultDir: "desc",
+  });
+
   useEffect(() => {
     if (view === "new" && textRef.current) textRef.current.focus();
   }, [view]);
@@ -324,6 +339,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
   };
 
   const deleteQuote = (id: string) => {
+    if (!confirm("Delete this quote? This action cannot be undone.")) return;
     const updated = quotes.filter(q => q.id !== id);
     setQuotes(updated);
     saveQuotes(updated);
@@ -463,7 +479,23 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
           </div>
         </Card>
       ) : (
-        <Card style={{ padding:0, overflow:"hidden" }}>
+        <>
+          <SearchSortBar
+            search={search}
+            setSearch={setSearch}
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            sortDir={sortDir}
+            setSortDir={setSortDir}
+            sortOptions={[
+              { value: "date",     label: "Date" },
+              { value: "customer", label: "Customer" },
+              { value: "total",    label: "Total" },
+              { value: "status",   label: "Status" },
+            ]}
+            placeholder="Search quotes…"
+          />
+          <Card style={{ padding:0, overflow:"hidden" }}>
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
             <thead>
               <tr style={{ background:C.bg, borderBottom:`1px solid ${C.border}` }}>
@@ -473,9 +505,9 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
               </tr>
             </thead>
             <tbody>
-              {quotes.map((q,i) => (
+              {filtered.map((q,i) => (
                 <tr key={q.id} onClick={() => { setSelected(q); setView("detail"); }}
-                  style={{ borderBottom:i<quotes.length-1?`1px solid ${C.border}`:"none", cursor:"pointer" }}
+                  style={{ borderBottom:i<filtered.length-1?`1px solid ${C.border}`:"none", cursor:"pointer" }}
                   onMouseEnter={e => (e.currentTarget.style.background=C.bg)}
                   onMouseLeave={e => (e.currentTarget.style.background="transparent")}>
                   <td style={{ padding:"12px 16px", fontWeight:700, color:C.blue, fontFamily:"monospace" }}>{q.quoteNumber}</td>
@@ -490,6 +522,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
             </tbody>
           </table>
         </Card>
+        </>
       )}
     </div>
   );
@@ -608,7 +641,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
               <tbody>
                 {draft.items.map(item => (
                   <tr key={item.id} style={{ borderTop:`1px solid ${C.border}` }}>
-                    <td style={{ padding:"11px 16px", fontFamily:"monospace", fontWeight:700, color:C.blue }}><span style={{ cursor:"pointer", textDecoration:"underline" }} onClick={() => setSkuPopup(item.sku)}>{item.sku}</span></td>
+                    <td style={{ padding:"11px 16px", fontFamily:"monospace", fontWeight:700, color:C.blue }}><SkuLink sku={item.sku} workspaceId={workspaceId} /></td>
                     <td style={{ padding:"11px 16px", color:C.text }}>{item.desc}</td>
                     <td style={{ padding:"11px 16px", fontWeight:600 }}>{item.qty.toLocaleString()}</td>
                     <td style={{ padding:"11px 16px" }}>{fmtMoney(item.unitPrice)}</td>
@@ -740,7 +773,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
           <tbody>
             {selected.items.map(item => (
               <tr key={item.id} style={{ borderTop:`1px solid ${C.border}` }}>
-                <td style={{ padding:"11px 16px", fontFamily:"monospace", fontWeight:700, color:C.blue }}><span style={{ cursor:"pointer", textDecoration:"underline" }} onClick={() => setSkuPopup(item.sku)}>{item.sku}</span></td>
+                <td style={{ padding:"11px 16px", fontFamily:"monospace", fontWeight:700, color:C.blue }}><SkuLink sku={item.sku} workspaceId={workspaceId} /></td>
                 <td style={{ padding:"11px 16px", color:C.text }}>{item.desc}</td>
                 <td style={{ padding:"11px 16px", fontWeight:600 }}>{item.qty.toLocaleString()}</td>
                 <td style={{ padding:"11px 16px" }}>{fmtMoney(item.unitPrice)}</td>
@@ -795,7 +828,7 @@ export default function Quotes({ onNavigate }: { onNavigate?: (tab: string, id?:
               <div style={{ marginBottom:10 }}>
                 {selected.items.map(item => (
                   <div key={item.id} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
-                    <span style={{ fontFamily:"monospace", fontWeight:700, color:C.blue, minWidth:100, fontSize:13 }}>{item.sku}</span>
+                    <span style={{ fontFamily:"monospace", fontWeight:700, color:C.blue, minWidth:100, fontSize:13 }}><SkuLink sku={item.sku} workspaceId={workspaceId} /></span>
                     <span style={{ fontSize:13, color:C.muted, flex:1 }}>{item.desc}</span>
                     <span style={{ fontSize:12, color:C.muted, marginRight:4 }}>Qty {item.qty} ×</span>
                     <div style={{ display:"flex", alignItems:"center", gap:4 }}>

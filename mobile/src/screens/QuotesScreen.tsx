@@ -8,10 +8,13 @@ import {
 import { theme, s } from "../lib/theme";
 import { fetchQuotes, updateQuoteStatus, createQuote, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
+import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
+import { SkuModal, SkuText } from "./SkuModal";
 
 interface Quote {
   id: string; quoteNumber: string; customer: string; total: number;
-  status: string; validUntil?: string;
+  status: string; validUntil?: string; items?: Array<{ sku?: string }>;
+  createdAt?: string;
 }
 
 function statusColor(st: string) {
@@ -28,6 +31,8 @@ export default function QuotesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [sessionExpired, setSessionExpired] = useState(false);
   const [selected,   setSelected]   = useState<Quote | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string>("");
+  const [skuOpen,    setSkuOpen]    = useState<string | null>(null);
   // New quote state
   const [showNew,    setShowNew]    = useState(false);
   const [newCustomer,setNewCustomer]= useState("");
@@ -43,6 +48,7 @@ export default function QuotesScreen() {
     try {
       const { workspaceId } = await getSession();
       if (!workspaceId) { setSessionExpired(true); return; }
+      setWorkspaceId(workspaceId);
       const data = await fetchQuotes(workspaceId);
       setQuotes(Array.isArray(data) ? data : []);
     } catch (e: any) { Alert.alert("Error", e.message); }
@@ -50,6 +56,18 @@ export default function QuotesScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered } = useFilterSort(quotes, {
+    searchFields: (q) => [q.customer, q.quoteNumber, ...(Array.isArray(q.items) ? q.items.map(it => it?.sku || "") : [])],
+    sortOptions: [
+      { value: "date",     label: "Date",     get: (q) => q.createdAt ?? q.validUntil ?? "" },
+      { value: "customer", label: "Customer", get: (q) => (q.customer || "").toLowerCase() },
+      { value: "total",    label: "Total",    get: (q) => q.total ?? 0 },
+      { value: "status",   label: "Status",   get: (q) => q.status ?? "" },
+    ],
+    defaultSort: "date",
+    defaultDir: "desc",
+  });
 
   if (sessionExpired) return <SessionExpiredView />;
 
@@ -134,12 +152,25 @@ export default function QuotesScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />}
       >
         <Text style={[s.heading, { marginBottom: 16 }]}>Quotes</Text>
-        {quotes.length === 0 ? (
+        <SearchSortBar
+          search={search} setSearch={setSearch}
+          sortBy={sortBy} setSortBy={setSortBy}
+          sortDir={sortDir} setSortDir={setSortDir}
+          sortOptions={[
+            { value: "date",     label: "Date" },
+            { value: "customer", label: "Customer" },
+            { value: "total",    label: "Total" },
+            { value: "status",   label: "Status" },
+          ]}
+          placeholder="Search customer or SKU…"
+        />
+        {filtered.length === 0 ? (
           <View style={[s.card, { alignItems: "center", padding: 32 }]}>
-            <Text style={{ color: theme.muted, fontSize: 13 }}>No quotes yet. Tap + to create one.</Text>
+            <Text style={{ color: theme.muted, fontSize: 13 }}>{quotes.length === 0 ? "No quotes yet. Tap + to create one." : "No quotes match."}</Text>
           </View>
-        ) : quotes.map(q => {
+        ) : filtered.map(q => {
           const st = statusColor(q.status);
+          const firstSku = Array.isArray(q.items) && q.items[0]?.sku ? q.items[0].sku : null;
           return (
             <TouchableOpacity key={q.id} style={[s.card, { marginBottom: 10 }]} onPress={() => setSelected(q)} activeOpacity={0.85}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
@@ -147,6 +178,11 @@ export default function QuotesScreen() {
                 <View style={s.badge(st.bg, st.color, st.border)}><Text style={s.badgeText(st.color)}>{q.status.toUpperCase()}</Text></View>
               </View>
               <Text style={{ fontSize: 14, fontWeight: "700", color: theme.text, marginBottom: 4 }}>{q.customer}</Text>
+              {firstSku ? (
+                <Text style={{ fontSize: 12, color: theme.muted, marginBottom: 4 }}>
+                  SKU: <SkuText sku={firstSku} onPress={() => setSkuOpen(firstSku)} />
+                </Text>
+              ) : null}
               <Text style={{ fontSize: 13, fontWeight: "700", color: theme.green }}>${q.total ? q.total.toLocaleString() : "0"}</Text>
             </TouchableOpacity>
           );
@@ -157,6 +193,8 @@ export default function QuotesScreen() {
       <TouchableOpacity onPress={() => setShowNew(true)} style={styles.fab}>
         <Text style={{ color: "#fff", fontSize: 24, fontWeight: "300" }}>+</Text>
       </TouchableOpacity>
+
+      <SkuModal sku={skuOpen} workspaceId={workspaceId} onClose={() => setSkuOpen(null)} />
 
       {/* Create Quote Modal */}
       <Modal visible={showNew} transparent animationType="slide">

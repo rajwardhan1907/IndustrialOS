@@ -11,6 +11,7 @@ let Haptics: any = null;
 if (Platform.OS !== "web") Haptics = require("expo-haptics");
 import { fetchShipments, updateShipmentStatus, createShipment, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
+import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
 
 interface Shipment {
   id: string; shipmentNumber: string; customer: string; carrier: string;

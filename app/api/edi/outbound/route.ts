@@ -121,7 +121,7 @@ export async function POST(req: Request) {
         shipDate:      ship.createdAt.toISOString().slice(0, 10).replace(/-/g, ""),
         carrier:       ship.carrier,
         trackingNumber:ship.trackingNumber,
-        poNumber:      ship.orderId ?? '',
+        poNumber:      ship.orderId ?? "",
         lines:         [],
       };
     }

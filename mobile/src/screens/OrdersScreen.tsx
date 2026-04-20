@@ -9,8 +9,10 @@ import { theme, s } from "../lib/theme";
 
 let Haptics: any = null;
 if (Platform.OS !== "web") Haptics = require("expo-haptics");
-import { fetchOrders, updateOrderStage, createOrder, deleteOrder, fetchInventoryBySku, getSession } from "../lib/api";
+import { fetchOrders, updateOrderStage, createOrder, deleteOrder, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
+import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
+import { SkuModal, SkuText } from "./SkuModal";
 
 interface Order {
   id: string; customer: string; sku: string; items: number;
@@ -37,6 +39,8 @@ export default function OrdersScreen() {
   const [sessionExpired, setSessionExpired] = useState(false);
   const [filter,      setFilter]      = useState("All");
   const [selected,    setSelected]    = useState<Order | null>(null);
+  const [workspaceId, setWorkspaceId] = useState<string>("");
+  const [skuOpen,     setSkuOpen]     = useState<string | null>(null);
   // Create Order state
   const [showNew,     setShowNew]     = useState(false);
   const [newCustomer, setNewCustomer] = useState("");
@@ -51,6 +55,7 @@ export default function OrdersScreen() {
     try {
       const { workspaceId } = await getSession();
       if (!workspaceId) { setSessionExpired(true); return; }
+      setWorkspaceId(workspaceId);
       const data = await fetchOrders(workspaceId);
       setOrders(data);
     } catch (e: any) {
@@ -133,7 +138,19 @@ export default function OrdersScreen() {
     finally { setCreating(false); }
   };
 
-  const displayed = filter === "All" ? orders : orders.filter(o => o.stage === filter);
+  const stageFiltered = filter === "All" ? orders : orders.filter(o => o.stage === filter);
+  const { search, setSearch, sortBy, setSortBy, sortDir, setSortDir, filtered: displayed } = useFilterSort(stageFiltered, {
+    searchFields: (o) => [o.customer, o.sku, o.id],
+    sortOptions: [
+      { value: "date",     label: "Date",     get: (o) => o.createdAt },
+      { value: "customer", label: "Customer", get: (o) => (o.customer || "").toLowerCase() },
+      { value: "value",    label: "Value",    get: (o) => o.value ?? 0 },
+      { value: "priority", label: "Priority", get: (o) => ({ HIGH: 3, MED: 2, LOW: 1 } as any)[o.priority] ?? 0 },
+      { value: "stage",    label: "Stage",    get: (o) => STAGES.indexOf(o.stage) },
+    ],
+    defaultSort: "date",
+    defaultDir: "desc",
+  });
 
   if (loading) return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.bg }}>
@@ -163,6 +180,19 @@ export default function OrdersScreen() {
           ? <RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={theme.blue} />
           : undefined}
       >
+        <SearchSortBar
+          search={search} setSearch={setSearch}
+          sortBy={sortBy} setSortBy={setSortBy}
+          sortDir={sortDir} setSortDir={setSortDir}
+          sortOptions={[
+            { value: "date", label: "Date" },
+            { value: "customer", label: "Customer" },
+            { value: "value", label: "Value" },
+            { value: "priority", label: "Priority" },
+            { value: "stage", label: "Stage" },
+          ]}
+          placeholder="Search customer, SKU, or order ID…"
+        />
         {displayed.length === 0 && (
           <Text style={{ textAlign: "center", color: theme.muted, marginTop: 40, fontSize: 14 }}>No orders in this stage.</Text>
         )}
@@ -175,12 +205,10 @@ export default function OrdersScreen() {
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontWeight: "700", fontSize: 14, color: theme.text }}>{order.customer}</Text>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", marginTop: 2 }}>
-                    <TouchableOpacity onPress={() => showSkuInfo(order.sku)}>
-                      <Text style={{ fontSize: 12, color: theme.blue, fontWeight: "700", textDecorationLine: "underline" }}>{order.sku}</Text>
-                    </TouchableOpacity>
-                    <Text style={{ fontSize: 12, color: theme.muted }}> · {order.items} item{order.items !== 1 ? "s" : ""} · ${order.value ? order.value.toLocaleString() : "—"}</Text>
-                  </View>
+                  <Text style={{ fontSize: 12, color: theme.muted, marginTop: 2 }}>
+                    <SkuText sku={order.sku} onPress={() => setSkuOpen(order.sku)} />
+                    {` · ${order.items} item${order.items !== 1 ? "s" : ""} · $${order.value ? order.value.toLocaleString() : "—"}`}
+                  </Text>
                 </View>
                 <View style={{ alignItems: "flex-end", gap: 4 }}>
                   <View style={s.badge(sc.bg, sc.color, sc.border)}>
@@ -248,13 +276,42 @@ export default function OrdersScreen() {
                   })}
                 </View>
               </ScrollView>
-              <TouchableOpacity style={styles.closeBtn} onPress={() => setSelected(null)}>
-                <Text style={{ color: theme.muted, fontWeight: "700", fontSize: 14 }}>Close</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity
+                  style={[styles.closeBtn, { flex: 1, borderColor: theme.redBorder, backgroundColor: theme.redBg }]}
+                  onPress={() => {
+                    Alert.alert(
+                      "Delete Order?",
+                      `Delete order ${selected.id} for ${selected.customer}?\n\nLinked invoices, shipments, and returns will also be removed. If the order was Confirmed or later, inventory will be restored. This cannot be undone.`,
+                      [
+                        { text: "Cancel", style: "cancel" },
+                        {
+                          text: "Delete", style: "destructive", onPress: async () => {
+                            try {
+                              await deleteOrder(selected.id);
+                              setOrders(prev => prev.filter(o => o.id !== selected.id));
+                              setSelected(null);
+                            } catch (e: any) {
+                              Alert.alert("Error", e?.message || "Could not delete order.");
+                            }
+                          },
+                        },
+                      ],
+                    );
+                  }}
+                >
+                  <Text style={{ color: theme.red, fontWeight: "700", fontSize: 14 }}>Delete</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.closeBtn, { flex: 1 }]} onPress={() => setSelected(null)}>
+                  <Text style={{ color: theme.muted, fontWeight: "700", fontSize: 14 }}>Close</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         </View>
       </Modal>
+
+      <SkuModal sku={skuOpen} workspaceId={workspaceId} onClose={() => setSkuOpen(null)} />
 
       {/* Create Order Modal */}
       <Modal visible={showNew} transparent animationType="slide">

@@ -16,8 +16,10 @@ interface Customer {
 }
 
 const EMPTY_FORM = { name: "", contactName: "", email: "", phone: "", country: "", creditLimit: "" };
+const EMPTY_EDIT = { creditLimit: "", notes: "" };
 
 type FormState = typeof EMPTY_FORM;
+type EditState  = typeof EMPTY_EDIT;
 
 // IMPORTANT: keep this component OUTSIDE CustomersScreen. If it's defined inside
 // the parent, every keystroke re-creates the component, unmounts TextInputs and
@@ -59,6 +61,36 @@ function CustomerForm({
   );
 }
 
+// Supplier-side edit: only creditLimit + notes are mutable here.
+// Customer-owned fields (name/email/phone) flow in via the customer portal.
+function EditCustomerLimitedForm({
+  form, setForm, submitting, onSubmit,
+}: {
+  form: EditState;
+  setForm: React.Dispatch<React.SetStateAction<EditState>>;
+  submitting: boolean;
+  onSubmit: () => void;
+}) {
+  return (
+    <>
+      <Text style={{ color: theme.muted, fontSize: 11, marginBottom: 14, lineHeight: 16 }}>
+        Only credit limit and notes are editable. Name, email and phone are managed by the customer through their portal.
+      </Text>
+      <Text style={s.label}>CREDIT LIMIT ($)</Text>
+      <TextInput style={styles.input} value={form.creditLimit} onChangeText={v => setForm(p => ({ ...p, creditLimit: v }))}
+        placeholder="0" placeholderTextColor={theme.subtle} keyboardType="numeric" />
+      <Text style={s.label}>NOTES</Text>
+      <TextInput style={[styles.input, { minHeight: 80, textAlignVertical: "top" }]} value={form.notes}
+        onChangeText={v => setForm(p => ({ ...p, notes: v }))}
+        placeholder="Internal notes about this customer…" placeholderTextColor={theme.subtle} multiline />
+      <TouchableOpacity onPress={onSubmit} disabled={submitting}
+        style={{ backgroundColor: theme.blue, borderRadius: 10, padding: 14, alignItems: "center", opacity: submitting ? 0.6 : 1 }}>
+        <Text style={{ color: "#fff", fontWeight: "700", fontSize: 14 }}>{submitting ? "Saving…" : "Save"}</Text>
+      </TouchableOpacity>
+    </>
+  );
+}
+
 export default function CustomersScreen() {
   const [customers,  setCustomers]  = useState<Customer[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -68,6 +100,7 @@ export default function CustomersScreen() {
   const [showNew,    setShowNew]    = useState(false);
   const [showEdit,   setShowEdit]   = useState(false);
   const [form,       setForm]       = useState(EMPTY_FORM);
+  const [editForm,   setEditForm]   = useState(EMPTY_EDIT);
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async (refresh = false) => {
@@ -86,13 +119,9 @@ export default function CustomersScreen() {
   if (sessionExpired) return <SessionExpiredView />;
 
   const openEdit = (c: Customer) => {
-    setForm({
-      name: c.name || "",
-      contactName: c.contactName || "",
-      email: c.email || "",
-      phone: c.phone || "",
-      country: c.country || "",
+    setEditForm({
       creditLimit: c.creditLimit != null ? String(c.creditLimit) : "",
+      notes: c.notes || "",
     });
     setShowEdit(true);
   };
@@ -116,17 +145,18 @@ export default function CustomersScreen() {
     finally { setSubmitting(false); }
   };
 
+  // Supplier-side edit — only creditLimit + notes flow through this path.
   const submitEdit = async () => {
     if (!selected) return;
-    if (!form.name.trim()) { Alert.alert("Required", "Name is required."); return; }
+    const cl = parseFloat(editForm.creditLimit);
+    if (isNaN(cl) || cl < 0) { Alert.alert("Invalid", "Credit limit must be a non-negative number."); return; }
     setSubmitting(true);
     try {
       const updated = await updateCustomer(selected.id, {
-        name: form.name.trim(), contactName: form.contactName.trim(),
-        email: form.email.trim(), phone: form.phone.trim(), country: form.country.trim(),
-        creditLimit: parseFloat(form.creditLimit) || 0,
+        creditLimit: cl,
+        notes: editForm.notes.trim(),
       });
-      const merged = { ...selected, ...updated };
+      const merged = { ...selected, ...updated, creditLimit: cl, notes: editForm.notes.trim() };
       setCustomers(prev => prev.map(c => c.id === selected.id ? merged : c));
       setSelected(merged);
       setShowEdit(false);
@@ -191,7 +221,7 @@ export default function CustomersScreen() {
                     <Text style={{ fontSize: 20, color: theme.muted }}>✕</Text>
                   </TouchableOpacity>
                 </View>
-                <CustomerForm form={form} setForm={setForm} submitting={submitting} onSubmit={submitEdit} submitLabel="Save Changes" />
+                <EditCustomerLimitedForm form={editForm} setForm={setEditForm} submitting={submitting} onSubmit={submitEdit} />
               </View>
             </ScrollView>
           </View>

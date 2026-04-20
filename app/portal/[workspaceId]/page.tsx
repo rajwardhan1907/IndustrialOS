@@ -11,7 +11,7 @@ import { useParams } from "next/navigation";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type AuthView  = "signin" | "signup" | "access_code";
-type PortalTab = "home" | "orders" | "quotes" | "invoices" | "returns" | "request";
+type PortalTab = "home" | "orders" | "quotes" | "invoices" | "returns" | "request" | "profile";
 
 interface Account { id: string; email: string; name: string; workspaceId: string }
 
@@ -577,8 +577,8 @@ function EditProfileModal({ token, currentAccount, onClose, onSaved }: {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
-function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
-  workspaceId: string; account: Account; token: string; companyName: string;
+function Dashboard({ workspaceId, account, setAccount, token, companyName, onSignOut }: {
+  workspaceId: string; account: Account; setAccount: (a: Account) => void; token: string; companyName: string;
   onSignOut: () => void;
 }) {
   const [tab,      setTab]      = useState<PortalTab>("home");
@@ -675,6 +675,7 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
     { id: "invoices", label: "Invoices",    emoji: "💳" },
     { id: "returns",  label: "Returns",     emoji: "↩️" },
     { id: "request",  label: "New Request", emoji: "✏️" },
+    { id: "profile",  label: "Profile",     emoji: "👤" },
   ];
 
   const unpaidTotal = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + (i.total - i.amountPaid), 0);
@@ -1055,6 +1056,95 @@ function Dashboard({ workspaceId, account, token, companyName, onSignOut }: {
           </div>
         )}
 
+        {/* ── PROFILE ─────────────────────────────────────────────────────── */}
+        {tab === "profile" && (
+          <ProfileTab
+            account={account}
+            token={token}
+            onUpdated={(next) => setAccount({ ...account, ...next })}
+          />
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ── Profile tab (portal-side edit) ────────────────────────────────────────────
+// Calls PATCH /api/portal/me which also creates a "Customer Profile Updated"
+// notification in the supplier's workspace.
+function ProfileTab({ account, token, onUpdated }: {
+  account: Account; token: string;
+  onUpdated: (next: { name?: string; email?: string; phone?: string }) => void;
+}) {
+  const [name,  setName]  = useState(account.name  || "");
+  const [email, setEmail] = useState(account.email || "");
+  const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [msg,    setMsg]    = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const save = async () => {
+    setMsg(null);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/portal/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg({ kind: "err", text: data?.error || "Could not save changes." });
+      } else {
+        onUpdated({ name: data.name, email: data.email });
+        setMsg({ kind: "ok", text: "Saved. Your supplier has been notified of the change." });
+      }
+    } catch (e: any) {
+      setMsg({ kind: "err", text: e?.message || "Network error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const label: React.CSSProperties = { display: "block", fontSize: 11, fontWeight: 700, color: T.muted, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" };
+  const input: React.CSSProperties = { width: "100%", padding: "10px 12px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, color: T.text, fontSize: 13, outline: "none", boxSizing: "border-box", fontFamily: "inherit" };
+
+  return (
+    <div>
+      <h2 style={{ fontSize: 18, fontWeight: 800, color: T.text, marginBottom: 4 }}>Your Profile</h2>
+      <p style={{ color: T.muted, fontSize: 13, marginBottom: 20 }}>
+        Keep your contact details up to date. Your supplier will be notified whenever you make a change.
+      </p>
+
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "20px 22px", maxWidth: 520 }}>
+        <div style={{ marginBottom: 14 }}>
+          <label style={label}>Name</label>
+          <input value={name} onChange={e => setName(e.target.value)} style={input} />
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <label style={label}>Email</label>
+          <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={input} />
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <label style={label}>Phone</label>
+          <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="+1 555 123 4567" style={input} />
+        </div>
+
+        {msg && (
+          <div style={{
+            padding: "10px 12px", borderRadius: 8, fontSize: 12, marginBottom: 12,
+            background: msg.kind === "ok" ? T.greenBg : T.redBg,
+            color:      msg.kind === "ok" ? T.green   : T.red,
+            border: `1px solid ${msg.kind === "ok" ? T.greenBorder : T.redBorder}`,
+          }}>
+            {msg.text}
+          </div>
+        )}
+
+        <button onClick={save} disabled={saving}
+          style={{ padding: "10px 22px", borderRadius: 9, background: saving ? T.border : T.blue, border: "none", color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "default" : "pointer" }}>
+          {saving ? "Saving…" : "Save Changes"}
+        </button>
       </div>
     </div>
   );
@@ -1122,6 +1212,7 @@ export default function CustomerPortal() {
     <Dashboard
       workspaceId={workspaceId}
       account={account!}
+      setAccount={setAccount}
       token={token}
       companyName={companyName}
       onSignOut={handleSignOut}

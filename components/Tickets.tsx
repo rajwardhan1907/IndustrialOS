@@ -5,12 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { Plus, X, ChevronLeft, MessageSquare, Tag, AlertCircle } from "lucide-react";
 import { C } from "@/lib/utils";
-import SkuPopup from "./SkuPopup";
-
-function extractSku(s: string) {
-  const m = s.match(/[A-Z]{2,}-[\w-]+/i);
-  return m ? m[0].toUpperCase() : null;
-}
+import { useFilterSort, SearchSortBar } from "./useFilterSort";
 
 type TicketType     = "issue" | "request" | "alert" | "other";
 type TicketPriority = "low" | "medium" | "high" | "urgent";
@@ -373,6 +368,18 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
     return true;
   });
 
+  const PRIORITY_RANK: Record<TicketPriority, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
+  const ticketSort = useFilterSort(filtered, {
+    searchFields: (t) => [t.title, t.description, t.raisedName, t.assignedName, t.linkedLabel, t.ticketNumber],
+    sortOptions: [
+      { value: "date",     label: "Date",     get: (t) => t.createdAt },
+      { value: "priority", label: "Priority", get: (t) => PRIORITY_RANK[t.priority] ?? 0 },
+      { value: "status",   label: "Status",   get: (t) => t.status },
+    ],
+    defaultSort: "date",
+    defaultDir: "desc",
+  });
+
   const addTicket  = (t: Ticket) => setTickets(prev => [t, ...prev]);
   const updateTicket = (t: Ticket) => {
     setTickets(prev => prev.map(x => x.id === t.id ? t : x));
@@ -404,11 +411,23 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
               filterBtn(l, v, statusFilter, setStatusFilter)
             )}
           </div>
-          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
             {[["All Priority","all"],["Urgent","urgent"],["High","high"],["Medium","medium"],["Low","low"]].map(([l,v]) =>
               filterBtn(l, v, priorityFilter, setPriorityFilter)
             )}
           </div>
+          <SearchSortBar
+            search={ticketSort.search} setSearch={ticketSort.setSearch}
+            sortBy={ticketSort.sortBy} setSortBy={ticketSort.setSortBy}
+            sortDir={ticketSort.sortDir} setSortDir={ticketSort.setSortDir}
+            sortOptions={[
+              { value: "date", label: "Date" },
+              { value: "priority", label: "Priority" },
+              { value: "status", label: "Status" },
+            ]}
+            placeholder="Search tickets…"
+            style={{ marginBottom: 0 }}
+          />
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
@@ -416,12 +435,12 @@ export default function Tickets({ workspaceId, session: sessionProp, onNavigate 
             <div style={{ textAlign: "center", padding: 24, color: C.muted, fontSize: 13 }}>Loading tickets…</div>
           ) : error ? (
             <div style={{ color: C.red, fontSize: 13, padding: 16 }}>{error}</div>
-          ) : filtered.length === 0 ? (
+          ) : ticketSort.filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "40px 24px", color: C.subtle, fontSize: 13 }}>
               No tickets found. {tickets.length > 0 ? "Try adjusting filters." : "Create your first ticket above."}
             </div>
           ) : (
-            filtered.map(t => {
+            ticketSort.filtered.map(t => {
               const p  = PRIORITY_CFG[t.priority] ?? PRIORITY_CFG.medium;
               const st = STATUS_CFG[t.status]     ?? STATUS_CFG.open;
               const active = selected?.id === t.id;

@@ -27,23 +27,36 @@ const storage = {
 };
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
-export async function storeSession(token: string, workspaceId: string, role: string, userId: string, email?: string, name?: string) {
+export async function storeSession(
+  token: string,
+  workspaceId: string,
+  role: string,
+  userId: string,
+  email?: string,
+  name?: string,
+  expiresAt?: number,
+) {
   await storage.setItem("auth_token",   token);
   await storage.setItem("workspace_id", workspaceId);
   await storage.setItem("user_role",    role);
   await storage.setItem("user_id",      userId);
   if (email) await storage.setItem("user_email", email);
   if (name)  await storage.setItem("user_name",  name);
+  if (typeof expiresAt === "number") {
+    await storage.setItem("token_expires_at", String(expiresAt));
+  }
 }
 
 export async function getSession() {
-  const token       = await storage.getItem("auth_token");
-  const workspaceId = await storage.getItem("workspace_id");
-  const role        = await storage.getItem("user_role");
-  const userId      = await storage.getItem("user_id");
-  const email       = await storage.getItem("user_email");
-  const name        = await storage.getItem("user_name");
-  return { token, workspaceId, role, userId, email, name };
+  const token        = await storage.getItem("auth_token");
+  const workspaceId  = await storage.getItem("workspace_id");
+  const role         = await storage.getItem("user_role");
+  const userId       = await storage.getItem("user_id");
+  const email        = await storage.getItem("user_email");
+  const name         = await storage.getItem("user_name");
+  const expiresAtRaw = await storage.getItem("token_expires_at");
+  const expiresAt    = expiresAtRaw ? Number(expiresAtRaw) : null;
+  return { token, workspaceId, role, userId, email, name, expiresAt };
 }
 
 export async function clearSession() {
@@ -53,11 +66,80 @@ export async function clearSession() {
   await storage.removeItem("user_id");
   await storage.removeItem("user_email");
   await storage.removeItem("user_name");
+  await storage.removeItem("token_expires_at");
+}
+
+// Decode our base64 token to extract embedded expiry.
+function decodeTokenExpiry(token: string): number | null {
+  try {
+    const raw = typeof atob === "function"
+      ? atob(token)
+      : Buffer.from(token, "base64").toString("utf8");
+    const parts = raw.split("|");
+    if (parts.length < 5) return null;
+    const exp = Number(parts[4]);
+    return Number.isFinite(exp) ? exp : null;
+  } catch {
+    return null;
+  }
+}
+
+// Auto-refresh if token is within 1h of expiring.
+const REFRESH_THRESHOLD_MS = 60 * 60 * 1000;
+let refreshPromise: Promise<string | null> | null = null;
+
+async function maybeRefreshToken(): Promise<string | null> {
+  const { token } = await getSession();
+  if (!token) return null;
+
+  const session = await getSession();
+  const exp = session.expiresAt ?? decodeTokenExpiry(token);
+  if (!exp) return token;
+  const now = Date.now();
+  if (now >= exp) {
+    // Expired — clear session; caller will see 401 and handle logout.
+    await clearSession();
+    return null;
+  }
+  if (exp - now > REFRESH_THRESHOLD_MS) return token;
+
+  // Within threshold — refresh (dedup concurrent callers).
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/api/auth/mobile-refresh`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ token }),
+        });
+        if (!res.ok) return token;
+        const data = await res.json();
+        if (data?.token) {
+          await storeSession(
+            data.token,
+            data.workspaceId,
+            data.role,
+            data.userId,
+            data.email,
+            data.name,
+            data.expiresAt,
+          );
+          return data.token;
+        }
+        return token;
+      } catch {
+        return token;
+      } finally {
+        refreshPromise = null;
+      }
+    })();
+  }
+  return refreshPromise;
 }
 
 // ── Generic fetch wrapper ─────────────────────────────────────────────────────
 async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
-  const { token } = await getSession();
+  const token = await maybeRefreshToken();
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -66,6 +148,10 @@ async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
       ...options.headers,
     },
   });
+  if (res.status === 401) {
+    await clearSession();
+    throw new Error("Session expired — please log in again");
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error ?? `HTTP ${res.status}`);
@@ -107,7 +193,15 @@ export async function updateOrderStage(id: string, stage: string) {
 }
 
 export async function deleteOrder(id: string) {
-  return apiFetch(`/api/orders?id=${id}`, { method: "DELETE" });
+  return apiFetch(`/api/orders?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+// Per-item Auto-PO (mobile)
+export async function createAutoPo(workspaceId: string, inventoryItemId: string) {
+  return apiFetch("/api/purchase-orders/auto-create", {
+    method: "POST",
+    body: JSON.stringify({ workspaceId, inventoryItemId }),
+  });
 }
 
 // ── Shipments ─────────────────────────────────────────────────────────────────

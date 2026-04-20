@@ -1,85 +1,150 @@
 "use client";
-// Shared SKU detail popup — fetches inventory item and shows a small modal.
+import { useEffect, useState } from "react";
 
-import { useState, useEffect } from "react";
-import { X, Package } from "lucide-react";
-import { C } from "@/lib/utils";
-
-interface SkuItem {
-  sku:          string;
-  name:         string;
-  stockLevel:   number;
+interface InvItem {
+  id: string;
+  sku: string;
+  name: string;
+  category: string;
+  stockLevel: number;
   reorderPoint: number;
-  unitCost:     number;
+  reorderQty: number;
+  unitCost: number;
+  warehouse: string;
+  zone: string;
+  binLocation: string;
+  supplier: string;
+  supplierId?: string | null;
 }
 
-interface Props {
-  sku:      string;
-  onClose:  () => void;
-}
-
-function getWorkspaceId() {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("workspaceDbId");
-}
-
-export default function SkuPopup({ sku, onClose }: Props) {
-  const [item,    setItem]    = useState<SkuItem | null>(null);
+export function SkuPopup({
+  sku,
+  workspaceId,
+  onClose,
+}: {
+  sku: string;
+  workspaceId: string;
+  onClose: () => void;
+}) {
+  const [item, setItem] = useState<InvItem | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState("");
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
-    const wid = getWorkspaceId();
-    if (!wid) { setError("No workspace"); setLoading(false); return; }
-    fetch(`/api/inventory?workspaceId=${wid}&sku=${encodeURIComponent(sku)}`)
-      .then(r => r.json())
-      .then(data => { setItem(data); setLoading(false); })
-      .catch(() => { setError("Failed to load item"); setLoading(false); });
-  }, [sku]);
+    let cancelled = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/inventory?workspaceId=${encodeURIComponent(workspaceId)}`);
+        const rows: InvItem[] = await res.json();
+        if (cancelled) return;
+        const hit = rows.find((r) => r.sku === sku) ?? null;
+        setItem(hit);
+        if (!hit) setErr(`No inventory item matches SKU "${sku}"`);
+      } catch (e: any) {
+        if (!cancelled) setErr(e.message ?? "Fetch error");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sku, workspaceId]);
 
-  const fmtMoney = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const Row = ({ label, value }: { label: string; value: any }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <span style={{ color: "#8a93a6", fontSize: 12 }}>{label}</span>
+      <span style={{ color: "#e5e7eb", fontSize: 13, fontWeight: 600 }}>{value ?? "—"}</span>
+    </div>
+  );
 
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 500, padding: 16 }}
       onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.6)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+      }}
     >
       <div
-        style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 22px", width: "100%", maxWidth: 340, boxShadow: "0 16px 48px rgba(0,0,0,0.18)" }}
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(420px, 92vw)",
+          background: "#1a1d24",
+          border: "1px solid #2a2f3a",
+          borderRadius: 12,
+          padding: 20,
+          color: "#e5e7eb",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+        }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <Package size={15} color={C.blue} />
-            <span style={{ fontWeight: 800, fontSize: 14, color: C.text }}>SKU Details</span>
-          </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}>
-            <X size={16} />
+          <div style={{ fontWeight: 800, fontSize: 16 }}>Inventory: {sku}</div>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: "#8a93a6", fontSize: 20, cursor: "pointer", lineHeight: 1 }}
+            aria-label="Close"
+          >
+            ×
           </button>
         </div>
-
-        {loading && <div style={{ fontSize: 13, color: C.muted, textAlign: "center", padding: "16px 0" }}>Loading…</div>}
-        {error   && <div style={{ fontSize: 13, color: C.red }}>{error}</div>}
-        {!loading && !error && !item && (
-          <div style={{ fontSize: 13, color: C.muted, textAlign: "center", padding: "16px 0" }}>No inventory record found for <strong>{sku}</strong>.</div>
-        )}
-        {item && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {[
-              { label: "SKU",           value: item.sku,                     mono: true  },
-              { label: "Name",          value: item.name,                    mono: false },
-              { label: "Stock",         value: String(item.stockLevel),      mono: false },
-              { label: "Reorder Point", value: String(item.reorderPoint),    mono: false },
-              { label: "Unit Cost",     value: fmtMoney(item.unitCost),      mono: false },
-            ].map(({ label, value, mono }) => (
-              <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", background: C.bg, borderRadius: 8, border: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, color: mono ? C.blue : C.text, fontFamily: mono ? "monospace" : "inherit" }}>{value}</span>
-              </div>
-            ))}
+        {loading && <div style={{ padding: 20, textAlign: "center", color: "#8a93a6" }}>Loading…</div>}
+        {err && !loading && <div style={{ padding: 14, color: "#ef8a8a", fontSize: 13 }}>{err}</div>}
+        {item && !loading && (
+          <div>
+            <Row label="Name"        value={item.name} />
+            <Row label="Category"    value={item.category} />
+            <Row label="Stock level" value={item.stockLevel} />
+            <Row label="Reorder at"  value={item.reorderPoint} />
+            <Row label="Reorder qty" value={item.reorderQty} />
+            <Row label="Unit cost"   value={`$${Number(item.unitCost).toFixed(2)}`} />
+            <Row label="Warehouse"   value={item.warehouse || "—"} />
+            <Row label="Zone"        value={item.zone} />
+            <Row label="Bin"         value={item.binLocation || "—"} />
+            <Row label="Supplier"    value={item.supplier || "—"} />
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+// Clickable SKU span — wraps a SKU string with popup handler.
+export function SkuLink({
+  sku,
+  workspaceId,
+  style,
+}: {
+  sku: string;
+  workspaceId: string;
+  style?: React.CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!sku) return <span style={style}>—</span>;
+  return (
+    <>
+      <span
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
+        style={{
+          cursor: "pointer",
+          color: "#5b8de8",
+          textDecoration: "underline",
+          textDecorationStyle: "dotted",
+          ...style,
+        }}
+      >
+        {sku}
+      </span>
+      {open && <SkuPopup sku={sku} workspaceId={workspaceId} onClose={() => setOpen(false)} />}
+    </>
   );
 }

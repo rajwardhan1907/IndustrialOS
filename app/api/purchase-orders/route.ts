@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { updateSupplierScore, validateNonNegative } from '@/lib/automation'
 
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
@@ -41,6 +42,11 @@ export async function POST(req: Request) {
     if (!body.workspaceId) {
       return NextResponse.json({ error: 'workspaceId is required' }, { status: 400, headers: CORS })
     }
+    const vErr =
+      validateNonNegative(body.subtotal, 'subtotal') ??
+      validateNonNegative(body.tax, 'tax') ??
+      validateNonNegative(body.total, 'total')
+    if (vErr) return NextResponse.json({ error: vErr }, { status: 400, headers: CORS })
 
     // Fetch workspace to check the approval threshold
     const workspace = await prisma.workspace.findUnique({
@@ -135,6 +141,13 @@ export async function PATCH(req: Request) {
               data:  { stockLevel: invItem.stockLevel + qty },
             })
           }
+        }
+
+        // Supplier scoring: on-time delivery check
+        if (updated.supplierId) {
+          const expectedDate = updated.expectedDate ? new Date(updated.expectedDate) : null
+          const onTime = !expectedDate || isNaN(expectedDate.getTime()) || new Date() <= expectedDate
+          await updateSupplierScore(tx, updated.supplierId, onTime)
         }
       }
 
