@@ -303,7 +303,7 @@ export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) =
               <StatusBadge status={selected.status} />
             </div>
             <p style={{ color: C.muted, fontSize: 13 }}>
-              {selected.contractNumber} · Customer: <strong style={{ color: C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{selected.customer}</span></strong>
+              {selected.contractNumber} · Customer: <strong style={{ color: C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers", selected.customer)}>{selected.customer}</span></strong>
             </p>
           </div>
           {!isViewer && (
@@ -523,7 +523,7 @@ export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) =
                         <div style={{ width: 28, height: 28, borderRadius: 7, background: C.blueBg, border: `1px solid ${C.blueBorder}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: C.blue, flexShrink: 0 }}>
                           {c.customer.charAt(0)}
                         </div>
-                        <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{c.customer}</span>
+                        <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers", c.customer)}>{c.customer}</span>
                       </div>
                     </td>
                     <td style={{ padding: "12px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(c.value)}</td>

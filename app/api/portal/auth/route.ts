@@ -101,22 +101,21 @@ export async function POST(req: Request) {
       if (!customer) {
         return NextResponse.json({ error: 'Email or access code is incorrect.' }, { status: 401, headers: CORS })
       }
-      // Upsert a CustomerAccount so they can use the new portal
-      let account = await prisma.customerAccount.findUnique({
-        where: { email_workspaceId: { email: customer.email.toLowerCase(), workspaceId } },
+      // Upsert a CustomerAccount so they can use the new portal.
+      // Atomic upsert prevents a race condition where two concurrent access_code
+      // logins both see no account and both try to create one (unique constraint violation).
+      const account = await prisma.customerAccount.upsert({
+        where:  { email_workspaceId: { email: customer.email.toLowerCase(), workspaceId } },
+        update: {},
+        create: { email: customer.email.toLowerCase(), name: customer.name, password: '', workspaceId },
       })
-      if (!account) {
-        account = await prisma.customerAccount.create({
-          data: { email: customer.email.toLowerCase(), name: customer.name, password: '', workspaceId },
-        })
-      }
       return issueSession(account)
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400, headers: CORS })
   } catch (err: any) {
-    console.error('Portal auth error:', err)
-    return NextResponse.json({ error: 'Server error' }, { status: 500, headers: CORS })
+    console.error('Portal auth error:', err?.code, err?.message, err)
+    return NextResponse.json({ error: 'Server error', detail: err?.message }, { status: 500, headers: CORS })
   }
 }
 

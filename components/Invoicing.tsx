@@ -549,7 +549,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
                   onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
                 >
                   <td style={{ padding: "13px 16px", fontWeight: 700, color: C.blue, fontFamily: "monospace" }}>{inv.invoiceNumber}</td>
-                  <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={e => { e.stopPropagation(); onNavigate?.("customers"); }}>{inv.customer}</span></td>
+                  <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={e => { e.stopPropagation(); onNavigate?.("customers", inv.customer); }}>{inv.customer}</span></td>
                   <td style={{ padding: "13px 16px", fontWeight: 700, color: C.text }}>{fmtMoney(inv.total, inv.currency)}</td>
                   <td style={{ padding: "13px 16px", color: inv.amountPaid > 0 ? C.green : C.subtle }}>
                     {inv.amountPaid > 0 ? fmtMoney(inv.amountPaid, inv.currency) : "—"}
@@ -684,7 +684,7 @@ export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) =
               <Badge status={selected.status} />
             </div>
             <p style={{ color: C.muted, fontSize: 13 }}>
-              Issued {fmtDate(selected.issueDate)} · Customer: <strong style={{ color: C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{selected.customer}</span></strong>
+              Issued {fmtDate(selected.issueDate)} · Customer: <strong style={{ color: C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers", selected.customer)}>{selected.customer}</span></strong>
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

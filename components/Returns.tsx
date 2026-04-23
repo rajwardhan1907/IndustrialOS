@@ -514,7 +514,7 @@ export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => 
                       onClick={() => setSelected(ret)}>
                       <td style={{ padding: "13px 16px", fontWeight: 700, color: C.blue, fontFamily: "monospace" }}>{ret.rmaNumber}</td>
                       <td style={{ padding: "13px 16px", fontWeight: 600, color: C.text }}>
-                        <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{ret.customer}</span>
+                        <span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers", ret.customer)}>{ret.customer}</span>
                         {ret.customerEmail && (
                           <span style={{ marginLeft: 7, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 999, background: C.purpleBg, color: C.purple, border: `1px solid ${C.purpleBorder}` }}>
                             Via Portal

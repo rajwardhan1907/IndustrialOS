@@ -17,6 +17,7 @@ import { SkuModal, SkuText } from "./SkuModal";
 interface Order {
   id: string; customer: string; sku: string; items: number;
   value: number; stage: string; priority: string; createdAt: string;
+  notes?: string; source?: string;
 }
 
 const STAGES = ["Placed", "Confirmed", "Picked", "Shipped", "Delivered"];
@@ -258,7 +259,11 @@ export default function OrdersScreen() {
                   <Text style={{ fontSize: 12, color: theme.blue, fontWeight: "700", textDecorationLine: "underline" }}>{selected.sku}</Text>
                 </TouchableOpacity>
                 <Text style={{ color: theme.muted, fontSize: 12 }}> · {selected.items} items · ${selected.value ? selected.value.toLocaleString() : "—"}</Text>
+                {selected.source ? <Text style={{ color: theme.muted, fontSize: 12 }}> · {selected.source}</Text> : null}
               </View>
+              {selected.notes ? (
+                <Text style={{ fontSize: 12, color: theme.muted, marginBottom: 12, fontStyle: "italic" }}>{selected.notes}</Text>
+              ) : null}
               <Text style={s.label}>Move to stage</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                 <View style={{ flexDirection: "row", gap: 8 }}>

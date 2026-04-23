@@ -35,10 +35,13 @@ export function SkuPopup({
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/inventory?workspaceId=${encodeURIComponent(workspaceId)}`);
-        const rows: InvItem[] = await res.json();
+        if (!workspaceId) { setErr("Workspace not available"); return; }
+        const res = await fetch(
+          `/api/inventory?workspaceId=${encodeURIComponent(workspaceId)}&sku=${encodeURIComponent(sku)}`
+        );
+        if (!res.ok) { setErr(`Could not load inventory (${res.status})`); return; }
+        const hit: InvItem | null = await res.json();
         if (cancelled) return;
-        const hit = rows.find((r) => r.sku === sku) ?? null;
         setItem(hit);
         if (!hit) setErr(`No inventory item matches SKU "${sku}"`);
       } catch (e: any) {

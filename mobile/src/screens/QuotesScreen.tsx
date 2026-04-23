@@ -11,9 +11,12 @@ import { SessionExpiredView } from "../lib/sessionGuard";
 import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
 import { SkuModal, SkuText } from "./SkuModal";
 
+interface QuoteItem { sku?: string; desc?: string; qty?: number; unitPrice?: number; total?: number }
 interface Quote {
-  id: string; quoteNumber: string; customer: string; total: number;
-  status: string; validUntil?: string; items?: Array<{ sku?: string }>;
+  id: string; quoteNumber: string; customer: string;
+  subtotal: number; discountAmt: number; tax: number; total: number;
+  status: string; validUntil?: string; paymentTerms?: string; notes?: string;
+  items?: QuoteItem[];
   createdAt?: string;
 }
 
@@ -117,13 +120,61 @@ export default function QuotesScreen() {
         <ScrollView contentContainerStyle={{ padding: 16 }}>
           <View style={s.card}>
             <Text style={{ fontSize: 11, color: theme.muted, fontWeight: "700", marginBottom: 4 }}>{selected.quoteNumber}</Text>
-            <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text, marginBottom: 12 }}>{selected.customer}</Text>
-            <Text style={{ fontSize: 20, fontWeight: "800", color: theme.blue, marginBottom: 12 }}>${selected.total ? selected.total.toLocaleString() : "0"}</Text>
-            <View style={s.badge(st.bg, st.color, st.border)}><Text style={s.badgeText(st.color)}>{selected.status.toUpperCase()}</Text></View>
+            <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text, marginBottom: 8 }}>{selected.customer}</Text>
+            <View style={s.badge(st.bg, st.color, st.border)}>
+              <Text style={s.badgeText(st.color)}>{selected.status.toUpperCase()}</Text>
+            </View>
             {selected.validUntil ? (
               <Text style={{ fontSize: 12, color: theme.muted, marginTop: 10 }}>Valid until {new Date(selected.validUntil).toLocaleDateString()}</Text>
             ) : null}
+            {selected.paymentTerms ? (
+              <Text style={{ fontSize: 12, color: theme.muted, marginTop: 4 }}>Terms: {selected.paymentTerms}</Text>
+            ) : null}
           </View>
+
+          {/* Financial breakdown */}
+          <View style={s.card}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text, marginBottom: 10 }}>Financial Breakdown</Text>
+            {[
+              { label: "Subtotal",  value: selected.subtotal  ?? 0 },
+              { label: "Discount",  value: -(selected.discountAmt ?? 0), neg: true },
+              { label: "Tax",       value: selected.tax        ?? 0 },
+            ].map(row => (
+              <View key={row.label} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                <Text style={{ fontSize: 13, color: theme.muted }}>{row.label}</Text>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: (row as any).neg && row.value < 0 ? theme.amber : theme.text }}>
+                  {(row as any).neg && (selected.discountAmt ?? 0) > 0 ? "-" : ""}${Math.abs(row.value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+              </View>
+            ))}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: 8 }}>
+              <Text style={{ fontSize: 15, fontWeight: "800", color: theme.text }}>Total</Text>
+              <Text style={{ fontSize: 15, fontWeight: "800", color: theme.blue }}>${(selected.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+            </View>
+          </View>
+
+          {/* Line items */}
+          {Array.isArray(selected.items) && selected.items.length > 0 && (
+            <View style={s.card}>
+              <Text style={{ fontSize: 13, fontWeight: "700", color: theme.text, marginBottom: 10 }}>Line Items</Text>
+              {selected.items.map((item, idx) => (
+                <View key={idx} style={{ paddingVertical: 6, borderBottomWidth: idx < selected.items!.length - 1 ? 1 : 0, borderBottomColor: theme.border }}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text, flex: 1 }}>{item.desc || item.sku || "—"}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: "700", color: theme.blue }}>${(item.total ?? 0).toLocaleString()}</Text>
+                  </View>
+                  {item.sku ? <Text style={{ fontSize: 11, color: theme.muted, marginTop: 2 }}>{item.sku} · qty {item.qty ?? 1} @ ${item.unitPrice ?? 0}</Text> : null}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {selected.notes ? (
+            <View style={s.card}>
+              <Text style={{ fontSize: 12, fontWeight: "700", color: theme.muted, marginBottom: 4 }}>NOTES</Text>
+              <Text style={{ fontSize: 13, color: theme.text }}>{selected.notes}</Text>
+            </View>
+          ) : null}
           <Text style={[s.heading, { marginTop: 16, marginBottom: 10 }]}>Actions</Text>
           {selected.status === "draft" ? (
             <TouchableOpacity onPress={() => updateStatus("sent")} style={[s.card, { backgroundColor: theme.blueBg, borderColor: theme.blueBorder, borderWidth: 1, marginBottom: 8 }]}>

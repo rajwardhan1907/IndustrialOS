@@ -416,7 +416,7 @@ export default function Shipping({ onNavigate }: { onNavigate?: (tab: string) =>
               {shipmentSort.filtered.map((s,i)=>(
                 <tr key={s.id} onClick={()=>setSelected(s)} style={{ borderBottom:i<shipmentSort.filtered.length-1?`1px solid ${C.border}`:"none", cursor:"pointer" }}>
                   <td style={{ padding:"13px 16px", fontWeight:700, color:C.blue, fontFamily:"monospace" }}>{s.shipmentNumber}</td>
-                  <td style={{ padding:"13px 16px", fontWeight:600, color:C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={() => onNavigate?.("customers")}>{s.customer}</span></td>
+                  <td style={{ padding:"13px 16px", fontWeight:600, color:C.text }}><span style={{ color: C.blue, cursor: "pointer", textDecoration: "underline" }} onClick={e => { e.stopPropagation(); onNavigate?.("customers", s.customer); }}>{s.customer}</span></td>
                   <td style={{ padding:"13px 16px" }}><CarrierBadge carrier={s.carrier}/></td>
                   <td style={{ padding:"13px 16px", fontFamily:"monospace", fontSize:11, color:C.muted }}>{s.trackingNumber}</td>
                   <td style={{ padding:"13px 16px", fontSize:12, color:C.muted }}>
