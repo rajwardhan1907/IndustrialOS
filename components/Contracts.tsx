@@ -217,7 +217,7 @@ function NewContractModal({ onSave, onClose }: {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function Contracts({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+export default function Contracts({ onNavigate }: { onNavigate?: (tab: string, id?: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
 

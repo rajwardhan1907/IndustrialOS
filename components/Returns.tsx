@@ -224,7 +224,7 @@ function NewReturnModal({ onSave, onClose }: {
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export default function Returns({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+export default function Returns({ onNavigate }: { onNavigate?: (tab: string, id?: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
 

@@ -201,7 +201,7 @@ const Input = ({ label, value, onChange, type = "text", placeholder = "" }: any)
   </div>
 );
 
-export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string) => void }) {
+export default function Invoicing({ onNavigate }: { onNavigate?: (tab: string, id?: string) => void }) {
   const { data: session } = useSession();
   const isViewer = session?.user?.role === "viewer";
   const [view,     setView]     = useState<"list" | "create" | "detail">("list");
