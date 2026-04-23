@@ -397,3 +397,25 @@ export async function autoCreatePurchaseOrder(workspaceId: string, inventoryItem
 export async function createContract(data: object) {
   return apiFetch("/api/contracts", { method: "POST", body: JSON.stringify(data) });
 }
+
+// ── AI Insights ───────────────────────────────────────────────────────────────
+export async function fetchAIForecast(workspaceId: string) {
+  return apiFetch("/api/ai/forecast", { method: "POST", body: JSON.stringify({ workspaceId }) });
+}
+
+export async function fetchAIReorder(workspaceId: string) {
+  return apiFetch("/api/ai/reorder", { method: "POST", body: JSON.stringify({ workspaceId }) });
+}
+
+export async function fetchAINegotiate(workspaceId: string) {
+  return apiFetch("/api/ai/negotiate", { method: "POST", body: JSON.stringify({ workspaceId }) });
+}
+
+export async function fetchAIPriceCompare(workspaceId: string) {
+  return apiFetch("/api/ai/price-compare", { method: "POST", body: JSON.stringify({ workspaceId }) });
+}
+
+// ── Accounting ────────────────────────────────────────────────────────────────
+export async function fetchAccountingStatus(workspaceId: string) {
+  return apiFetch(`/api/accounting?action=status&workspaceId=${workspaceId}`);
+}

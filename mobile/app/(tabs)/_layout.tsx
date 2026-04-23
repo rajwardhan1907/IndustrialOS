@@ -42,7 +42,10 @@ const TAB_MAP: { name: string; feature: string; title: string; emoji: string }[]
   { name: "invoicing",       feature: "Invoicing",      title: "Invoicing",  emoji: "🧾" },
   { name: "analytics",       feature: "Analytics",      title: "Analytics",  emoji: "📊" },
   { name: "contracts",       feature: "Contracts",      title: "Contracts",  emoji: "📄" },
-  { name: "profile",         feature: "Profile",        title: "Profile",    emoji: "👤" },
+  { name: "ai-insights",    feature: "AI Insights",    title: "AI",         emoji: "✨" },
+  { name: "system-health",  feature: "System Health",  title: "Health",     emoji: "🖥️" },
+  { name: "accounting",     feature: "Accounting",     title: "Accounting", emoji: "💼" },
+  { name: "profile",        feature: "Profile",        title: "Profile",    emoji: "👤" },
 ];
 
 export default function TabLayout() {
