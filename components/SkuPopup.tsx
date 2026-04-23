@@ -36,12 +36,12 @@ export function SkuPopup({
       try {
         setLoading(true);
         if (!workspaceId) { setErr("Workspace not available"); return; }
-        const res = await fetch(
-          `/api/inventory?workspaceId=${encodeURIComponent(workspaceId)}&sku=${encodeURIComponent(sku)}`
-        );
+        const res = await fetch(`/api/inventory?workspaceId=${encodeURIComponent(workspaceId)}`);
         if (!res.ok) { setErr(`Could not load inventory (${res.status})`); return; }
-        const hit: InvItem | null = await res.json();
+        const rows = await res.json();
         if (cancelled) return;
+        if (!Array.isArray(rows)) { setErr("Unexpected inventory response"); return; }
+        const hit: InvItem | null = rows.find((r: InvItem) => r.sku === sku) ?? null;
         setItem(hit);
         if (!hit) setErr(`No inventory item matches SKU "${sku}"`);
       } catch (e: any) {
