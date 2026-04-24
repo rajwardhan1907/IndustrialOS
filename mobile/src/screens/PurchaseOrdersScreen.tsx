@@ -6,7 +6,7 @@ import {
   RefreshControl, ActivityIndicator, Alert, Modal, TextInput,
 } from "react-native";
 import { theme, s } from "../lib/theme";
-import { fetchPurchaseOrders, updatePOApproval, createPurchaseOrder, getSession } from "../lib/api";
+import { fetchPurchaseOrders, updatePOApproval, createPurchaseOrder, fetchSuppliers, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
 
 interface PurchaseOrder {
@@ -62,9 +62,20 @@ export default function PurchaseOrdersScreen() {
     try {
       const { workspaceId } = await getSession();
       if (!workspaceId) { setSessionExpired(true); return; }
+
+      // Resolve supplierId by looking up the supplier by name so automation works.
+      let supplierId = "";
+      try {
+        const supplierList: { id: string; name: string }[] = await fetchSuppliers(workspaceId);
+        const match = supplierList.find(
+          s => s.name.toLowerCase() === newSupplier.trim().toLowerCase()
+        );
+        if (match) supplierId = match.id;
+      } catch { /* non-fatal: proceed with empty supplierId */ }
+
       const poNumber = "PO-" + Date.now();
       const po = await createPurchaseOrder({
-        workspaceId, poNumber, supplierName: newSupplier.trim(), supplierId: "",
+        workspaceId, poNumber, supplierName: newSupplier.trim(), supplierId,
         items: [{ sku: newSku.trim(), qty, unitPrice: price }],
         subtotal: total, total,
         expectedDate: newExpected.trim() || undefined,

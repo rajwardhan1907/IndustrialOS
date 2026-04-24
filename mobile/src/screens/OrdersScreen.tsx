@@ -9,7 +9,7 @@ import { theme, s } from "../lib/theme";
 
 let Haptics: any = null;
 if (Platform.OS !== "web") Haptics = require("expo-haptics");
-import { fetchOrders, updateOrderStage, createOrder, deleteOrder, getSession } from "../lib/api";
+import { fetchOrders, updateOrderStage, createOrder, deleteOrder, fetchInventoryBySku, getSession } from "../lib/api";
 import { SessionExpiredView } from "../lib/sessionGuard";
 import { useFilterSort, SearchSortBar } from "../lib/useFilterSort";
 import { SkuModal, SkuText } from "./SkuModal";

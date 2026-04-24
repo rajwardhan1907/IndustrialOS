@@ -24,6 +24,7 @@ interface Item {
   id: string; sku: string; name: string; category: string;
   stockLevel: number; reorderPoint: number; warehouse: string;
   zone: string; binLocation: string; supplier: string;
+  supplierId?: string | null;
 }
 
 function stockBadge(item: Item) {
@@ -161,14 +162,14 @@ export default function InventoryScreen() {
   };
 
   const reorderItem = async (item: Item) => {
-    if (!item.supplier || item.supplier === "—") {
-      Alert.alert("No Supplier", "This item has no supplier configured. Add a supplier first.");
+    if (!item.supplierId) {
+      Alert.alert("No Supplier Linked", "Link a supplier to this item first in the web app.");
       return;
     }
     try {
       const { workspaceId } = await getSession();
       if (!workspaceId) { return; }
-      await autoCreatePurchaseOrder(workspaceId, item.id);
+      await createAutoPo(workspaceId, item.id);
       Alert.alert("Reorder Created", `Purchase order created for ${item.name} (${item.sku}). Check Purchase Orders for details.`);
     } catch (e: any) { Alert.alert("Error", e.message); }
   };
