@@ -128,3 +128,46 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS "PaymentRecord_invoiceId_idx"   ON "PaymentRecord"("invoiceId");
 CREATE INDEX IF NOT EXISTS "PaymentRecord_workspaceId_idx" ON "PaymentRecord"("workspaceId");
+
+-- ── NotificationPreference: per-user alert routing (table was never created) ──
+CREATE TABLE IF NOT EXISTS "NotificationPreference" (
+  "id"               TEXT NOT NULL,
+  "workspaceId"      TEXT NOT NULL,
+  "userId"           TEXT NOT NULL,
+  "alertOrdersAbove" DOUBLE PRECISION NOT NULL DEFAULT 0,
+  "sendEmail"        BOOLEAN NOT NULL DEFAULT false,
+  "sendSms"          BOOLEAN NOT NULL DEFAULT false,
+  "useDigest"        BOOLEAN NOT NULL DEFAULT false,
+  "digestTime"       TEXT NOT NULL DEFAULT '09:00',
+  "createdAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt"        TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  CONSTRAINT "NotificationPreference_pkey" PRIMARY KEY ("id")
+);
+
+DO $$
+BEGIN
+  ALTER TABLE "NotificationPreference"
+    ADD CONSTRAINT "NotificationPreference_workspaceId_fkey"
+    FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id")
+    ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$
+BEGIN
+  ALTER TABLE "NotificationPreference"
+    ADD CONSTRAINT "NotificationPreference_userId_fkey"
+    FOREIGN KEY ("userId") REFERENCES "User"("id")
+    ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Unique: one preference row per user per workspace
+DO $$
+BEGIN
+  ALTER TABLE "NotificationPreference"
+    ADD CONSTRAINT "NotificationPreference_workspaceId_userId_key"
+    UNIQUE ("workspaceId", "userId");
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
