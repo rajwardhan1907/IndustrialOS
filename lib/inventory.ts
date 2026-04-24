@@ -19,6 +19,9 @@ export interface InventoryItem {
   binLocation:  string;
   lastSynced:   string;
   supplier:     string;
+  supplierId?:  string | null;
+  lastPoDate?:  string;
+  autoPoCount?: number;
 }
 
 export interface ConflictLog {

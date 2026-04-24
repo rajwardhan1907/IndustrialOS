@@ -298,8 +298,8 @@ export default function InventorySync({ onNavigate }: { onNavigate?: (tab: strin
   // ── Per-item Reorder ─────────────────────────────────────────────────────
   const [reorderItemMsg, setReorderItemMsg] = useState<Record<string, string>>({});
   const reorderItem = async (item: InventoryItem) => {
-    if (!item.supplier || item.supplier === "—") {
-      setReorderItemMsg(prev => ({ ...prev, [item.id]: "No supplier configured." }));
+    if (!item.supplierId) {
+      setReorderItemMsg(prev => ({ ...prev, [item.id]: "Link a supplier to this item first." }));
       setTimeout(() => setReorderItemMsg(prev => { const n = { ...prev }; delete n[item.id]; return n; }), 4000);
       return;
     }
