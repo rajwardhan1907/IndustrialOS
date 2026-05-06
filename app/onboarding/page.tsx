@@ -122,6 +122,7 @@ export default function OnboardingPage() {
       aiPriceCompare:      false,   // Phase 13
       quickbooksConnected: false,   // Phase 17
       xeroConnected:       false,   // Phase 17
+      paymentProvider:     "stripe",
     };
 
     // Save to localStorage (keeps app working as before)
