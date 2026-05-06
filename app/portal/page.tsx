@@ -37,6 +37,7 @@ interface PortalCustomer {
   id: string; name: string; contactName: string; email: string;
   portalCode: string; workspaceId: string; creditLimit: number;
   balanceDue: number; status: string; notes: string;
+  paymentProvider: string; // "stripe" | "paddle"
 }
 
 const ORDER_STAGES: OrderStage[] = ["Placed", "Confirmed", "Picked", "Shipped", "Delivered"];
@@ -113,7 +114,7 @@ export default function PortalPage() {
   const [reqSending,  setReqSending]  = useState(false);
   const [reqError,    setReqError]    = useState("");
 
-  // Phase 14 — Stripe Pay Now
+  // Phase 14 — Pay Now (Stripe or Paddle)
   const [payingInvoice, setPayingInvoice] = useState<string | null>(null);
   const [paymentMsg,    setPaymentMsg]    = useState<{ type: "success" | "cancelled"; invoice: string } | null>(null);
 
@@ -136,9 +137,12 @@ export default function PortalPage() {
   }, []);
 
   const handlePayNow = async (invoiceId: string) => {
+    if (!customer) return;
     setPayingInvoice(invoiceId);
+    const provider = customer.paymentProvider || "stripe";
+    const endpoint = provider === "paddle" ? "/api/paddle/checkout" : "/api/stripe/checkout";
     try {
-      const res = await fetch("/api/stripe/checkout", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ invoiceId }),
@@ -553,9 +557,13 @@ export default function PortalPage() {
                           cursor: payingInvoice === inv.id ? "not-allowed" : "pointer",
                         }}
                       >
-                        {payingInvoice === inv.id ? "Redirecting to Stripe…" : `💳 Pay Now — ${fmtMoney(remaining, inv.currency)}`}
+                        {payingInvoice === inv.id
+                          ? `Redirecting to ${customer?.paymentProvider === "paddle" ? "Paddle" : "Stripe"}…`
+                          : `💳 Pay Now — ${fmtMoney(remaining, inv.currency)}`}
                       </button>
-                      <span style={{ fontSize: 11, color: P.muted }}>Secure payment via Stripe</span>
+                      <span style={{ fontSize: 11, color: P.muted }}>
+                        Secure payment via {customer?.paymentProvider === "paddle" ? "Paddle" : "Stripe"}
+                      </span>
                     </div>
                   )}
                 </Card>

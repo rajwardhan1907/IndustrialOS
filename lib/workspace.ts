@@ -66,6 +66,8 @@ export interface WorkspaceConfig {
   // Phase 17 (roadmap) — Accounting integrations
   quickbooksConnected: boolean;
   xeroConnected:       boolean;
+  // Payment provider
+  paymentProvider:     string;  // "stripe" | "paddle"
 }
 
 export const DEFAULT_WORKSPACE: WorkspaceConfig = {
@@ -85,6 +87,7 @@ export const DEFAULT_WORKSPACE: WorkspaceConfig = {
   aiPriceCompare:      false,
   quickbooksConnected: false,
   xeroConnected:       false,
+  paymentProvider:     "stripe",
 };
 
 export const PLANS = {
@@ -145,6 +148,7 @@ export function loadWorkspace(): WorkspaceConfig | null {
     if (parsed.aiPriceCompare      === undefined) parsed.aiPriceCompare      = false;
     if (parsed.quickbooksConnected === undefined) parsed.quickbooksConnected = false;
     if (parsed.xeroConnected       === undefined) parsed.xeroConnected       = false;
+    if (parsed.paymentProvider     === undefined) parsed.paymentProvider     = "stripe";
     if (!parsed.modules.includes("tickets")) parsed.modules.push("tickets");
     if (!parsed.modules.includes("ai"))      parsed.modules.push("ai");
     return parsed;

@@ -32,6 +32,12 @@ export async function POST(req: Request) {
       )
     }
 
+    // Fetch workspace to get paymentProvider
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: customer.workspaceId },
+      select: { paymentProvider: true },
+    })
+
     // Fetch their orders from the Order table
     const orders = await prisma.order.findMany({
       where: {
@@ -64,16 +70,17 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       customer: {
-        id:          customer.id,
-        name:        customer.name,
-        contactName: customer.contactName,
-        email:       customer.email,
-        portalCode:  customer.portalCode,
-        workspaceId: customer.workspaceId,
-        creditLimit: customer.creditLimit,
-        balanceDue:  customer.balanceDue,
-        status:      customer.status,
-        notes:       customer.notes,
+        id:              customer.id,
+        name:            customer.name,
+        contactName:     customer.contactName,
+        email:           customer.email,
+        portalCode:      customer.portalCode,
+        workspaceId:     customer.workspaceId,
+        creditLimit:     customer.creditLimit,
+        balanceDue:      customer.balanceDue,
+        status:          customer.status,
+        notes:           customer.notes,
+        paymentProvider: workspace?.paymentProvider ?? "stripe",
       },
       orders,
       invoices,

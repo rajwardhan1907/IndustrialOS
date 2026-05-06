@@ -48,6 +48,7 @@ export async function PATCH(req: Request) {
         ...(body.whatsappStages      !== undefined && { whatsappStages:      body.whatsappStages      }),  // Phase 11
         ...(body.returnAddress       !== undefined && { returnAddress:       body.returnAddress       }),  // Portal returns
         ...(body.returnInstructions  !== undefined && { returnInstructions:  body.returnInstructions  }),  // Portal returns
+        ...(body.paymentProvider     !== undefined && { paymentProvider:     body.paymentProvider     }),  // Payment provider
       },
     })
     return NextResponse.json(workspace, { headers: CORS })

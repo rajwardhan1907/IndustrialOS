@@ -79,6 +79,9 @@ export default function Settings({ workspace, onUpdate }: {
   // ── Phase 15 — Currency ────────────────────────────────────────────────────
   const [currency, setCurrency] = useState(workspace.currency ?? "USD");
 
+  // ── Payment Provider ────────────────────────────────────────────────────────
+  const [paymentProvider, setPaymentProvider] = useState(workspace.paymentProvider ?? "stripe");
+
   // ── Portal Returns — ship-to address + instructions ────────────────────────
   const [returnAddress,      setReturnAddress]      = useState((workspace as any).returnAddress      ?? "");
   const [returnInstructions, setReturnInstructions] = useState((workspace as any).returnInstructions ?? "");
@@ -175,6 +178,7 @@ export default function Settings({ workspace, onUpdate }: {
       customTabs,
       poApprovalThreshold: cleanThreshold,
       currency,                          // Phase 15
+      paymentProvider,                   // Payment provider
       whatsappEnabled:  waEnabled,             // Phase 11
       whatsappStages:   waStages.join(","),    // Phase 11
       aiNegotiation,                           // Phase 13
@@ -195,6 +199,7 @@ export default function Settings({ workspace, onUpdate }: {
         body: JSON.stringify({
           id: wid,
           currency,
+          paymentProvider,
           poApprovalThreshold: cleanThreshold,
           whatsappEnabled: waEnabled,        // Phase 11
           whatsappStages:  waStages.join(","),// Phase 11
@@ -298,6 +303,48 @@ export default function Settings({ workspace, onUpdate }: {
         </select>
         <div style={{ marginTop: 10, fontSize: 12, color: C.muted }}>
           Currently set to <strong>{currency}</strong>. This is used as the default on invoices, quotes, and customer profiles.
+        </div>
+      </Section>
+
+      {/* ── Payment Provider ── */}
+      <Section title="Payment Provider">
+        <p style={{ fontSize: 13, color: C.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          Choose which payment processor your customers use when paying invoices from the portal.
+          Make sure the corresponding API key is set in <code>.env.local</code> before switching.
+        </p>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" as const }}>
+          {[
+            { value: "stripe", label: "Stripe",  icon: "💳", desc: "STRIPE_SECRET_KEY" },
+            { value: "paddle", label: "Paddle",  icon: "🏓", desc: "PADDLE_API_KEY"    },
+          ].map(opt => {
+            const active = paymentProvider === opt.value;
+            return (
+              <div
+                key={opt.value}
+                onClick={() => setPaymentProvider(opt.value)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "12px 18px", borderRadius: 10, cursor: "pointer",
+                  background: active ? C.blueBg  : C.bg,
+                  border:     active ? `2px solid ${C.blue}` : `1px solid ${C.border}`,
+                  minWidth: 180, transition: "all 0.15s",
+                }}
+              >
+                <span style={{ fontSize: 22 }}>{opt.icon}</span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: active ? C.blue : C.text }}>{opt.label}</div>
+                  <div style={{ fontSize: 11, color: C.muted, fontFamily: "monospace" }}>{opt.desc}</div>
+                </div>
+                {active && (
+                  <div style={{ marginLeft: "auto", width: 10, height: 10, borderRadius: "50%", background: C.blue, flexShrink: 0 }} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ marginTop: 12, fontSize: 12, color: C.muted }}>
+          Currently set to <strong>{paymentProvider === "paddle" ? "Paddle" : "Stripe"}</strong>.
+          Changes take effect for new portal payment sessions after saving.
         </div>
       </Section>
 

@@ -22,6 +22,7 @@ model Workspace {
   xeroConnected       Boolean  @default(false) // Phase 17
   returnAddress       String   @default("")
   returnInstructions  String   @default("")
+  paymentProvider     String   @default("stripe") // "stripe" | "paddle"
 
   users                   User[]
   orders                  Order[]
