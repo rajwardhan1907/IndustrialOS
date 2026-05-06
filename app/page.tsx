@@ -220,11 +220,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, [session]);
 
-  const [crm,  setCrm]  = useState({
-    salesforce: "disconnected",
-    hubspot:    "disconnected",
-    zoho:       "disconnected",
-  });
+
   const [health] = useState([
     { name: "PostgreSQL",     status: "unknown", lat: 0, up: 0 },
     { name: "Redis Cache",    status: "unknown", lat: 0, up: 0 },
@@ -303,7 +299,7 @@ export default function App() {
       );
       case "crm":       return (
         <ErrorBoundary label="CRM failed to load">
-          <CRMPanel crm={crm} setCrm={setCrm} />
+          <CRMPanel />
         </ErrorBoundary>
       );
       case "health":    return (
